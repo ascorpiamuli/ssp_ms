@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>TUMCATHCOM Members Directory</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 1.5cm;
+    }
+
+    body {
+      font-family: 'DejaVu Sans', 'Helvetica', 'Arial', sans-serif;
+      font-size: 10px;
+      line-height: 1.4;
+      color: #1F2937;
+      background: white;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Clean Header - No background color */
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 3px solid #6B21A5;
+    }
+
+    .header-logo {
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+
+    .header-logo img {
+      width: 70px;
+      height: 70px;
+      object-fit: contain;
+    }
+
+    .university-name {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: #6B21A5;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .main-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: #4C1D7A;
+      letter-spacing: 3px;
+      margin: 8px 0;
+      text-transform: uppercase;
+    }
+
+    .community-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6B21A5;
+      margin-top: 5px;
+    }
+
+    .motto {
+      font-size: 9px;
+      color: #6B7280;
+      font-style: italic;
+      margin-top: 5px;
+    }
+
+    /* QR Code in header */
+    .qr-header {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-align: center;
+    }
+
+    .qr-header img {
+      width: 60px;
+      height: 60px;
+    }
+
+    .qr-header-label {
+      font-size: 7px;
+      color: #6B7280;
+    }
+
+    /* Info Bar */
+    .info-bar {
+      display: flex;
+      justify-content: space-between;
+      margin: 15px 0;
+      padding: 8px 12px;
+      background: #FAF5FF;
+      border-radius: 8px;
+      border-left: 4px solid #6B21A5;
+      font-size: 9px;
+    }
+
+    /* Statistics Cards */
+    .stats {
+      display: flex;
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat-box {
+      flex: 1;
+      text-align: center;
+      padding: 12px 10px;
+      background: linear-gradient(135deg, #6B21A5 0%, #4C1D7A 100%);
+      border-radius: 10px;
+      color: white;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Table Container */
+    .table-container {
+      margin: 20px 0;
+      border-radius: 10px;
+      border: 1px solid #C084FC;
+      overflow: hidden;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+    }
+
+    .data-table th {
+      background: linear-gradient(135deg, #6B21A5 0%, #4C1D7A 100%);
+      color: white;
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+
+    .data-table td {
+      border: 1px solid #E5E7EB;
+      padding: 8px;
+      vertical-align: middle;
+    }
+
+    .data-table tr:nth-child(even) {
+      background-color: #FAF5FF;
+    }
+
+    /* Status Badges */
+    .status-active {
+      color: #10B981;
+      font-weight: bold;
+    }
+
+    .status-inactive {
+      color: #EF4444;
+      font-weight: bold;
+    }
+
+    .status-suspended {
+      color: #F59E0B;
+      font-weight: bold;
+    }
+
+    .role-badge {
+      background: #6B21A5;
+      color: white;
+      padding: 3px 10px;
+      border-radius: 20px;
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 600;
+    }
+
+    .member-id {
+      font-family: monospace;
+      font-weight: 600;
+      color: #6B21A5;
+    }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 8px;
+      color: #6B7280;
+      padding: 8px 0;
+      background: white;
+      border-top: 1px solid #E5E7EB;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- QR Code at Top Right -->
+  <div class="qr-header">
+    @if(isset($qr_code_base64) && $qr_code_base64)
+    <img src="{{ $qr_code_base64 }}" alt="QR">
+    <div class="qr-header-label">Scan to Verify</div>
+    @endif
+  </div>
+
+  <!-- Clean Header -->
+  <div class="header">
+    @if(file_exists(public_path('images/logo.png')))
+    <div class="header-logo">
+      <img src="{{ public_path('images/logo.png') }}" alt="TUM Catholic Logo">
+    </div>
+    @endif
+    <div class="university-name">TECHNICAL UNIVERSITY OF KENYA</div>
+    <div class="main-title">TUMCATHCOM MEMBERS DIRECTORY</div>
+    <div class="community-name">⚜️ TUM CATHOLIC COMMUNITY ⚜️</div>
+    <div class="motto">"Faith, Unity, and Service in Christ"</div>
+  </div>
+
+  <!-- Info Bar -->
+  <div class="info-bar">
+    <div class="generated-date">
+      📅 Generated: {{ $generated_at ?? now()->format('F d, Y H:i:s') }}
+    </div>
+    <div class="generated-by">
+      👤 Generated by: {{ $generatedBy ?? 'System' }}
+    </div>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="stats">
+    <div class="stat-box">
+      <div class="stat-value">{{ $stats['total'] ?? 0 }}</div>
+      <div class="stat-label">TOTAL MEMBERS</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">{{ $stats['active'] ?? 0 }}</div>
+      <div class="stat-label">ACTIVE</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">{{ $stats['inactive'] ?? 0 }}</div>
+      <div class="stat-label">INACTIVE</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">{{ $stats['suspended'] ?? 0 }}</div>
+      <div class="stat-label">SUSPENDED</div>
+    </div>
+  </div>
+
+  <!-- Members Table -->
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th width="10%">MEMBER ID</th>
+          <th width="18%">FULL NAME</th>
+          <th width="22%">EMAIL ADDRESS</th>
+          <th width="12%">PHONE</th>
+          <th width="12%">ROLE</th>
+          <th width="10%">STATUS</th>
+          <th width="16%">JOINED DATE</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse($members ?? [] as $member)
+        <tr>
+          <td class="member-id"><strong>{{ $member['member_id'] }}</strong></td>
+          <td>{{ $member['full_name'] }}</td>
+          <td>{{ $member['email'] }}</td>
+          <td>{{ $member['phone'] ?? 'N/A' }}</td>
+          <td><span class="role-badge">{{ ucfirst($member['role'] ?? 'Member') }}</span></td>
+          <td class="status-{{ $member['status'] ?? 'active' }}">{{ ucfirst($member['status'] ?? 'Active') }}</td>
+          <td>{{ isset($member['created_at']) ? \Carbon\Carbon::parse($member['created_at'])->format('d M Y') : 'N/A' }}</td>
+        </tr>
+        @empty
+        <tr>
+          <td colspan="7" class="text-center" style="padding: 40px;">No members found matching the criteria</td>
+        </tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    TUM Catholic Community - Official Members Directory | Page {PAGE_NUM} of {PAGE_COUNT} | Confidential Document
+  </div>
+
+  <!-- Watermark -->
+  @if(file_exists(public_path('images/logo.png')))
+  <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg); opacity: 0.05; z-index: -1;">
+    <img src="{{ public_path('images/logo.png') }}" style="width: 350px; height: auto;">
+  </div>
+  @endif
+
+</body>
+
+</html>

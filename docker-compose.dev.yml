@@ -1,0 +1,121 @@
+version: "3.9"
+
+services:
+  # Nginx for Laravel
+  nginx:
+    image: nginx:alpine
+    container_name: sspms_nginx
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+      - ./nginx/backend.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - proxy
+      - internal
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sspms_api.rule=Host(`api.sspms.internal`)"
+      - "traefik.http.routers.sspms_api.entrypoints=websecure"
+      - "traefik.http.routers.sspms_api.tls=true"
+      - "traefik.http.services.sspms_api.loadbalancer.server.port=80"
+
+  # Laravel PHP-FPM Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sspms_backend
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=https://api.sspms.internal
+      - DB_HOST=dev-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=sspms
+      - DB_USERNAME=root
+      - DB_PASSWORD=Pasbest@2025
+      - REDIS_HOST=dev-redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - PHP_UPLOAD_MAX_FILESIZE=20M
+      - PHP_POST_MAX_SIZE=20M
+      - PHP_MEMORY_LIMIT=256M
+      - PHP_MAX_EXECUTION_TIME=300
+      - PHP_MAX_INPUT_TIME=300
+    networks:
+      - proxy
+      - internal
+    expose:
+      - 9000
+
+  # Queue Worker
+  queue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sspms_queue
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_HOST=dev-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=sspms
+      - DB_USERNAME=root
+      - DB_PASSWORD=Pasbest@2025
+      - REDIS_HOST=dev-redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - PHP_UPLOAD_MAX_FILESIZE=20M
+      - PHP_POST_MAX_SIZE=20M
+      - PHP_MEMORY_LIMIT=256M
+    networks:
+      - internal
+      - proxy
+    command: php artisan queue:work --sleep=3 --tries=3
+
+  # Frontend (Next.js)
+  frontend:
+    image: node:20-alpine
+    container_name: sspms_frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=https://api.sspms.internal
+      - NEXT_PUBLIC_APP_URL=https://app.sspms.internal
+      - NEXT_PUBLIC_MAX_UPLOAD_SIZE=20
+      - NEXT_PUBLIC_SESSION_TIMEOUT=3600
+    networks:
+      - proxy
+      - internal
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      # Main application domain
+      - "traefik.http.routers.sspms_office.rule=Host(`app.sspms.internal`)"
+      - "traefik.http.routers.sspms_office.entrypoints=websecure"
+      - "traefik.http.routers.sspms_office.tls=true"
+      # Supplier portal domain
+      - "traefik.http.routers.sspms_supplier.rule=Host(`supplier.sspms.internal`)"
+      - "traefik.http.routers.sspms_supplier.entrypoints=websecure"
+      - "traefik.http.routers.sspms_supplier.tls=true"
+      - "traefik.http.services.sspms.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true
+  internal:
+    driver: bridge

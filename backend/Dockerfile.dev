@@ -1,0 +1,48 @@
+# Use PHP 8.4 with FPM
+FROM php:8.4-fpm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+  git \
+  curl \
+  libpng-dev \
+  libonig-dev \
+  libxml2-dev \
+  zip \
+  unzip \
+  nodejs \
+  npm \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy application files
+COPY . /var/www/html
+
+# ============================================
+# INCREASE PHP UPLOAD LIMITS
+# ============================================
+RUN echo "upload_max_filesize = 20M" > /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "post_max_size = 20M" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "max_input_time = 300" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "max_file_uploads = 20" >> /usr/local/etc/php/conf.d/99-uploads.ini
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+  && chmod -R 755 /var/www/html/storage \
+  && chmod -R 755 /var/www/html/bootstrap/cache
+
+# Expose port 9000 for PHP-FPM
+EXPOSE 9000
+
+# Default command (PHP-FPM only)
+CMD ["php-fpm"]
