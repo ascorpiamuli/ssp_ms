@@ -82,6 +82,7 @@ services:
       - proxy
     command: php artisan queue:work --sleep=3 --tries=3
 
+
   # Frontend (Next.js)
   frontend:
     image: node:20-alpine
