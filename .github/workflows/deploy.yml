@@ -95,3 +95,6 @@ jobs:
           fi
           docker image prune -f
           docker compose ps
+
+
+          
