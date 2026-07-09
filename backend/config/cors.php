@@ -29,13 +29,19 @@ return [
   'allowed_methods' => ['*'],
 
   'allowed_origins' => [
-    // SSPMS Application
+    // Production Domains
+    'https://sspmis.pasbestventures.com',
+    'https://www.sspmis.pasbestventures.com',
+    'https://api.sspmis.pasbestventures.com',
+    'https://app.sspmis.pasbestventures.com',
+
+    // Internal/Development Domains
     'https://app.sspms.internal',
     'https://app.sspms.local',
     'https://office.sspms.internal',
     'https://office.sspms.local',
 
-    // SSPMS Supplier Portal
+    // Supplier Portal
     'https://supplier.sspms.internal',
     'https://supplier.sspms.local',
 
@@ -46,16 +52,18 @@ return [
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
 
-    // SSPMS API
-    'https://api.sspms.internal',
-    'https://api.sspms.local',
+    // Docker internal network
+    'http://sspmis_frontend:3000',
+    'http://frontend:3000',
   ],
 
   'allowed_origins_patterns' => [
+    '/^https?:\/\/.*\.pasbestventures\.com$/',
     '/^https?:\/\/.*\.sspms\.internal$/',
     '/^https?:\/\/.*\.sspms\.local$/',
     '/^http:\/\/localhost:\d+$/',
     '/^http:\/\/127\.0\.0\.1:\d+$/',
+    '/^http:\/\/[a-zA-Z0-9_-]+:\d+$/',
   ],
 
   'allowed_headers' => [
