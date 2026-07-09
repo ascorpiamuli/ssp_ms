@@ -4,7 +4,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosR
 import { ApiResponse } from '../types/auth.types';
 
 // Get API URL from environment variable
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'abc';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ;
 const API_VERSION = 'v1';
 
 // ─── Token Management ───
