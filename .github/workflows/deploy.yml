@@ -6,15 +6,6 @@ on:
       - main
       - master
   workflow_dispatch:  # Allow manual trigger
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - staging
 
 # Grant permissions for GITHUB_TOKEN
 permissions:
@@ -25,7 +16,6 @@ env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/sspmis-backend
   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/sspmis-frontend
-  DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
 
 jobs:
   build-and-push:
@@ -50,22 +40,12 @@ jobs:
     - name: Get version
       id: version
       run: |
-        # Get commit hash for short version
         SHORT_SHA=$(git rev-parse --short=7 HEAD)
         DATE_VERSION=$(date +'%Y%m%d')
         RUN_NUMBER=${{ github.run_number }}
-
-        # Create version from date and run number
         VERSION="${DATE_VERSION}.${RUN_NUMBER}"
-
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
-        echo "DATE_VERSION=$DATE_VERSION" >> $GITHUB_OUTPUT
-        echo "RUN_NUMBER=$RUN_NUMBER" >> $GITHUB_OUTPUT
-
-        echo "Version: $VERSION"
-        echo "Short SHA: $SHORT_SHA"
-        echo "Date version: $DATE_VERSION"
 
     - name: Build and push Backend
       uses: docker/build-push-action@v4
@@ -76,68 +56,22 @@ jobs:
         tags: |
           ${{ env.BACKEND_IMAGE }}:latest
           ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-          ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.DATE_VERSION }}
           ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.SHORT_SHA }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Build and push Frontend with env vars
+    - name: Build and push Frontend
       uses: docker/build-push-action@v4
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
         push: true
-        build-args: |
-          NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_WEBSITE_URL=${{ secrets.NEXT_PUBLIC_WEBSITE_URL }}
-          NEXT_PUBLIC_FRONTEND_URL=${{ secrets.NEXT_PUBLIC_FRONTEND_URL }}
-          NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-          NEXT_PUBLIC_ENV=${{ env.DEPLOY_ENV }}
-          NEXT_PUBLIC_APP_ENV=${{ env.DEPLOY_ENV }}
-          NEXT_PUBLIC_ENABLE_2FA=${{ secrets.NEXT_PUBLIC_ENABLE_2FA || 'true' }}
-          NEXT_PUBLIC_ENABLE_REGISTRATION=${{ secrets.NEXT_PUBLIC_ENABLE_REGISTRATION || 'true' }}
-          NEXT_PUBLIC_ENABLE_SUPPLIER_MODULE=${{ secrets.NEXT_PUBLIC_ENABLE_SUPPLIER_MODULE || 'true' }}
-          NEXT_PUBLIC_ENABLE_INVENTORY_MODULE=${{ secrets.NEXT_PUBLIC_ENABLE_INVENTORY_MODULE || 'true' }}
-          NEXT_PUBLIC_ENABLE_PROCUREMENT_MODULE=${{ secrets.NEXT_PUBLIC_ENABLE_PROCUREMENT_MODULE || 'true' }}
-          NEXT_PUBLIC_ENABLE_FINANCE_MODULE=${{ secrets.NEXT_PUBLIC_ENABLE_FINANCE_MODULE || 'true' }}
-          NEXT_PUBLIC_ENABLE_HR_MODULE=${{ secrets.NEXT_PUBLIC_ENABLE_HR_MODULE || 'true' }}
-          NEXT_PUBLIC_SESSION_TIMEOUT=${{ secrets.NEXT_PUBLIC_SESSION_TIMEOUT || '3600' }}
         tags: |
           ${{ env.FRONTEND_IMAGE }}:latest
           ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-          ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.DATE_VERSION }}
           ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.SHORT_SHA }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
-    - name: Create and push git tag
-      if: success() && github.ref == 'refs/heads/main'
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        TAG="v${{ steps.version.outputs.VERSION }}"
-        git tag $TAG
-        git push origin $TAG
-      continue-on-error: true
-
-    - name: Create deployment manifest
-      id: manifest
-      run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        SHORT_SHA="${{ steps.version.outputs.SHORT_SHA }}"
-
-        cat > deploy.env << EOF
-        # Deployment Environment Variables
-        VERSION=${VERSION}
-        SHORT_SHA=${SHORT_SHA}
-        DEPLOY_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${VERSION}
-        FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${VERSION}
-        EOF
-
-        echo "Deployment manifest created:"
-        cat deploy.env
 
     - name: Deploy to VPS
       uses: appleboy/ssh-action@v0.1.5
@@ -148,84 +82,16 @@ jobs:
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
           cd ~/sspmis
-
-          echo "🔄 Starting deployment..."
-          echo "Deploying version: ${{ steps.version.outputs.VERSION }}"
-          echo "Deploying to: ${{ env.DEPLOY_ENV }}"
-
-          # Pull latest images
-          echo "📦 Pulling latest images..."
           docker compose pull
-
-          # Stop and remove old containers
-          echo "🛑 Stopping old containers..."
           docker compose down
-
-          # Start new containers
-          echo "🚀 Starting new containers..."
           docker compose up -d
-
-          # Wait for containers to be ready
-          echo "⏳ Waiting for containers to be ready..."
-          sleep 15
-
-          # Run migrations and clear cache
+          sleep 10
           if docker ps | grep -q sspmis_backend; then
-            echo "📊 Running migrations..."
             docker exec sspmis_backend php artisan migrate --force || true
-
-            echo "🧹 Clearing and caching configuration..."
             docker exec sspmis_backend php artisan config:clear
             docker exec sspmis_backend php artisan config:cache
             docker exec sspmis_backend php artisan route:cache
             docker exec sspmis_backend php artisan view:cache || true
-
-            echo "🔧 Setting permissions..."
-            docker exec sspmis_backend chown -R www-data:www-data storage bootstrap/cache || true
-
-            echo "🔄 Restarting queue workers..."
-            docker exec sspmis_backend php artisan queue:restart || true
           fi
-
-          # Check if frontend is running
-          if docker ps | grep -q sspmis_frontend; then
-            echo "🌐 Frontend is running..."
-          fi
-
-          # Clean up old images
-          echo "🧹 Cleaning up old images..."
           docker image prune -f
-
-          # Show running containers
-          echo "📊 Running containers:"
           docker compose ps
-
-          # Health check
-          echo "🏥 Performing health check..."
-          sleep 5
-          if curl -s -o /dev/null -w "%{http_code}" https://api.sspmis.pasbestventures.com/api/v1/health | grep -q "200"; then
-            echo "✅ Health check passed!"
-          else
-            echo "⚠️  Health check failed! Check logs: docker compose logs"
-          fi
-
-    - name: Notify deployment status
-      if: always()
-      run: |
-        STATUS="${{ job.status }}"
-        if [ "$STATUS" == "success" ]; then
-          echo "✅ Deployment successful!"
-          echo "Version: ${{ steps.version.outputs.VERSION }}"
-          echo "Environment: ${{ env.DEPLOY_ENV }}"
-        else
-          echo "❌ Deployment failed!"
-          exit 1
-        fi
-
-    - name: Rollback on failure
-      if: failure()
-      run: |
-        echo "❌ Deployment failed! Manual rollback required."
-        echo "To rollback, run:"
-        echo "cd ~/sspmis && docker compose down && docker compose up -d"
-        echo "Or use the previous version by specifying the image tag in docker-compose.yml"
