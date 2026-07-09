@@ -20,11 +20,13 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useAuthContext } from '@/contexts/AuthContext'
 
 // Create a separate component that uses useSearchParams
 function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { resetPassword } = useAuthContext()
 
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -42,7 +44,7 @@ function ResetPasswordForm() {
   const email = searchParams.get('email')
   const token = searchParams.get('token')
 
-  // Validate token on mount (simulated)
+  // Validate token on mount
   useEffect(() => {
     const validateToken = async () => {
       if (!email || !token) {
@@ -52,17 +54,31 @@ function ResetPasswordForm() {
         return
       }
 
-      // Simulate token validation
-      setTimeout(() => {
-        // For demo purposes, accept any token with length > 10
-        if (token.length > 10) {
+      try {
+        // Call the API to validate the token
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/validate-reset-token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, token }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
           setIsValidToken(true)
         } else {
           setIsValidToken(false)
-          setApiError('Invalid or expired reset link')
+          setApiError(data.message || 'Invalid or expired reset link')
         }
+      } catch (error) {
+        console.error('Token validation error:', error)
+        setIsValidToken(false)
+        setApiError('Failed to validate reset link. Please try again.')
+      } finally {
         setIsValidating(false)
-      }, 1500)
+      }
     }
 
     validateToken()
@@ -89,7 +105,7 @@ function ResetPasswordForm() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!validateForm()) return
@@ -97,11 +113,28 @@ function ResetPasswordForm() {
     setIsLoading(true)
     setApiError('')
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const result = await resetPassword({
+        email: email!,
+        token: token!,
+        password: formData.password,
+        password_confirmation: formData.confirmPassword
+      })
+
+      if (result?.success) {
+        setIsSuccess(true)
+        // Redirect to login after 3 seconds
+        setTimeout(() => {
+          router.push('/login?reset=true')
+        }, 3000)
+      } else {
+        setApiError(result?.message || 'Failed to reset password. Please try again.')
+      }
+    } catch (err: any) {
+      setApiError(err?.response?.data?.message || err?.message || 'Failed to reset password. Please try again.')
+    } finally {
       setIsLoading(false)
-      setIsSuccess(true)
-    }, 2000)
+    }
   }
 
   const getPasswordStrength = () => {
@@ -134,7 +167,7 @@ function ResetPasswordForm() {
       <div className="text-center space-y-6 py-8 max-w-md mx-auto">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
         <div className="flex justify-center">
           <Loader2 className="h-12 w-12 text-blue-600 dark:text-blue-400 animate-spin" />
@@ -153,7 +186,7 @@ function ResetPasswordForm() {
       <div className="text-center space-y-6 max-w-md mx-auto">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
 
         <div className="flex justify-center">
@@ -216,7 +249,7 @@ function ResetPasswordForm() {
       <div className="text-center space-y-6 max-w-md mx-auto">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
 
         <div className="flex justify-center">
@@ -284,7 +317,7 @@ function ResetPasswordForm() {
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-800/20 rounded-full flex items-center justify-center">
@@ -299,7 +332,7 @@ function ResetPasswordForm() {
         </p>
         {email && (
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            for <span className="font-medium text-blue-600 dark:text-blue-400">{email}</span>
+            for <span className="font-medium text-blue-600 dark:text-blue-400">{decodeURIComponent(email)}</span>
           </p>
         )}
       </div>
@@ -534,7 +567,7 @@ export default function ResetPasswordPage() {
       <div className="text-center space-y-6 py-8 max-w-md mx-auto">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
         <Loader2 className="h-12 w-12 text-blue-600 dark:text-blue-400 mx-auto animate-spin" />
         <p className="text-slate-600 dark:text-slate-400">Loading...</p>

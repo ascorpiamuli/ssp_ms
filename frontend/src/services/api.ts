@@ -4,20 +4,37 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosR
 import { ApiResponse } from '../types/auth.types';
 
 // Get API URL from environment variable
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.sspmis.pasbestventures.com'; // Default to localhost if not set
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.sspmis.pasbestventures.com';
 const API_VERSION = 'v1';
 
 // ─── Token Management ───
 const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem('token') || localStorage.getItem('token');
-};
 
+  // Check both storages
+  let token = localStorage.getItem('token');
+  if (token) {
+    return token;
+  }
+
+  token = sessionStorage.getItem('token');
+  if (token) {
+    return token;
+  }
+
+  return null;
+};
 
 const setToken = (token: string, rememberMe: boolean = false): void => {
   if (typeof window === 'undefined') return;
-  const storage = rememberMe ? localStorage : sessionStorage;
-  storage.setItem('token', token);
+
+  try {
+    // Always save to both storages for redundancy
+    localStorage.setItem('token', token);
+    sessionStorage.setItem('token', token);
+  } catch (error) {
+    console.error('❌ Failed to save token:', error);
+  }
 };
 
 const removeToken = (): void => {
@@ -107,35 +124,58 @@ publicApiClient.interceptors.response.use(
   async (error) => Promise.reject(error)
 );
 
-// ─── Helper ───
-function extractData<T>(response: ApiResponse<T>): T {
-  if (!response.success) {
-    throw new Error(response.message || 'API request failed');
+// services/api.ts - Fix extractData
+
+function extractData<T>(response: any): T {
+  console.log('🔍 extractData input:', response);
+
+  // If response has data property, unwrap it
+  if (response && typeof response === 'object' && 'data' in response) {
+    const data = response.data;
+    // If the data also has data property (nested), unwrap again
+    if (data && typeof data === 'object' && 'data' in data) {
+      console.log('🔍 extractData: Double nested, returning inner data');
+      return data.data as T;
+    }
+    console.log('🔍 extractData: Single nested, returning data');
+    return data as T;
   }
-  return response.data;
+
+  // If response is already the data with success property
+  if (response && typeof response === 'object' && 'success' in response) {
+    return response as T;
+  }
+
+  // If response is undefined or null
+  if (!response) {
+    return {} as T;
+  }
+
+  // Default - return as-is
+  return response as T;
 }
 
 // ─── Private API Methods ───
 export const privateApi = {
   get: async <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await privateApiClient.get<ApiResponse<T>>(url, config);
-    return extractData(response.data);
+    const response = await privateApiClient.get(url, config);
+    return extractData<T>(response.data);
   },
   post: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await privateApiClient.post<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await privateApiClient.post(url, data, config);
+    return extractData<T>(response.data);
   },
   put: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await privateApiClient.put<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await privateApiClient.put(url, data, config);
+    return extractData<T>(response.data);
   },
   patch: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await privateApiClient.patch<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await privateApiClient.patch(url, data, config);
+    return extractData<T>(response.data);
   },
   delete: async <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await privateApiClient.delete<ApiResponse<T>>(url, config);
-    return extractData(response.data);
+    const response = await privateApiClient.delete(url, config);
+    return extractData<T>(response.data);
   },
   upload: async <T = any>(url: string, file: File, fieldName: string = 'file', config?: AxiosRequestConfig): Promise<T> => {
     const formData = new FormData();
@@ -144,8 +184,8 @@ export const privateApi = {
       ...config,
       headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' },
     };
-    const response = await privateApiClient.post<ApiResponse<T>>(url, formData, uploadConfig);
-    return extractData(response.data);
+    const response = await privateApiClient.post(url, formData, uploadConfig);
+    return extractData<T>(response.data);
   },
   getClient: (): AxiosInstance => privateApiClient,
 };
@@ -153,24 +193,24 @@ export const privateApi = {
 // ─── Public API Methods ───
 export const publicApi = {
   get: async <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await publicApiClient.get<ApiResponse<T>>(url, config);
-    return extractData(response.data);
+    const response = await publicApiClient.get(url, config);
+    return extractData<T>(response.data);
   },
   post: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await publicApiClient.post<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await publicApiClient.post(url, data, config);
+    return extractData<T>(response.data);
   },
   put: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await publicApiClient.put<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await publicApiClient.put(url, data, config);
+    return extractData<T>(response.data);
   },
   patch: async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await publicApiClient.patch<ApiResponse<T>>(url, data, config);
-    return extractData(response.data);
+    const response = await publicApiClient.patch(url, data, config);
+    return extractData<T>(response.data);
   },
   delete: async <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await publicApiClient.delete<ApiResponse<T>>(url, config);
-    return extractData(response.data);
+    const response = await publicApiClient.delete(url, config);
+    return extractData<T>(response.data);
   },
   getClient: (): AxiosInstance => publicApiClient,
 };

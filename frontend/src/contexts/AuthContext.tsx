@@ -17,6 +17,10 @@ interface AuthContextType {
   logout: () => Promise<void>
   register: (userData: any) => Promise<void>
 
+  // Password reset methods
+  forgotPassword: (data: { email: string }) => Promise<any>
+  resetPassword: (data: { email: string; token: string; password: string; password_confirmation: string }) => Promise<any>
+
   // Profile methods
   updateProfile: (data: UpdateProfileRequest) => Promise<void>
   uploadAvatar: (file: File) => Promise<void>
@@ -72,6 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: loginMutation,
     logout: logoutMutation,
     register: registerMutation,
+
+    // Password reset methods
+    forgotPassword: forgotPasswordMutation,
+    resetPassword: resetPasswordMutation,
 
     // Profile
     updateProfile: updateProfileMutation,
@@ -162,6 +170,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await registerMutation(userData)
   }, [registerMutation])
 
+  const forgotPassword = useCallback(async (data: { email: string }) => {
+    return await forgotPasswordMutation(data)
+  }, [forgotPasswordMutation])
+
+  const resetPassword = useCallback(async (data: { email: string; token: string; password: string; password_confirmation: string }) => {
+    return await resetPasswordMutation(data)
+  }, [resetPasswordMutation])
+
   const updateProfile = useCallback(async (data: UpdateProfileRequest) => {
     await updateProfileMutation(data)
   }, [updateProfileMutation])
@@ -193,6 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     register,
+
+    // Password reset methods
+    forgotPassword,
+    resetPassword,
 
     // Profile methods
     updateProfile,

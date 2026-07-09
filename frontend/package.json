@@ -24,6 +24,7 @@
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
+    "js-cookie": "^3.0.8",
     "kenya-administrative-divisions": "^1.0.0",
     "lucide-react": "^0.577.0",
     "next": "16.1.7",
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
+    "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

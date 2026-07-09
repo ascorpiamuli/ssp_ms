@@ -1,3 +1,5 @@
+// types/auth.types.ts
+
 // ============================================
 // REQUEST TYPES
 // ============================================
@@ -92,9 +94,10 @@ export interface User {
   first_name: string;
   last_name: string;
   full_name: string;
+  initials?: string;
   email: string;
   phone: string;
-  role: string;
+  role: string | null;
   department_id?: number;
   department?: {
     id: number;
@@ -104,10 +107,16 @@ export interface User {
   is_active: boolean;
   is_approved: boolean;
   approved_at?: string;
+  approved_by?: number | null;
+  rejection_reason?: string | null;
   last_login_at?: string;
   timezone: string;
   created_at: string;
   updated_at: string;
+  profile_photo?: string | null;
+  avatar_url?: string | null;
+  id_number?: string | null;
+  date_of_birth?: string | null;
   profile?: {
     id: number;
     avatar?: string;

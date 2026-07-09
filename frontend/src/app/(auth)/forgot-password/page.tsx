@@ -2,17 +2,39 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Mail, AlertCircle, ArrowLeft, Send, CheckCircle, Key, Clock, Shield, Building2 } from 'lucide-react'
+import { Mail, AlertCircle, ArrowLeft, Send, CheckCircle, Key, Clock, Shield, Building2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useAuthContext } from '@/contexts/AuthContext'
 
 export default function ForgotPasswordPage() {
+  const { user, forgotPassword, isLoading: authLoading } = useAuthContext()
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [attemptCount, setAttemptCount] = useState(0)
+  const [rateLimited, setRateLimited] = useState(false)
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      window.location.href = '/dashboard'
+    }
+  }, [user])
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(prev => prev - 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [resendCooldown])
 
   const validateEmail = () => {
     if (!email) {
@@ -30,26 +52,97 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (rateLimited) {
+      setError('Too many attempts. Please try again later.')
+      return
+    }
+
     if (!validateEmail()) return
 
     setIsLoading(true)
     setError('')
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
+    try {
+      // The hook handles the toast - we just handle UI state
+      await forgotPassword({ email })
+
+      // If we get here without error, it was successful
       setIsSubmitted(true)
-    }, 2000)
+      setAttemptCount(prev => prev + 1)
+
+      // If multiple attempts, add cooldown
+      if (attemptCount >= 2) {
+        setResendCooldown(60)
+        setRateLimited(true)
+        setTimeout(() => setRateLimited(false), 5 * 60 * 1000)
+      }
+    } catch (err: any) {
+      // The hook already shows a toast for errors
+      // We just show inline error for UI feedback
+      const errorMessage = err?.response?.data?.message ||
+        err?.message ||
+        'Failed to send reset link. Please try again.'
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    if (resendCooldown > 0) return
+
+    setError('')
+    setIsLoading(true)
+
+    try {
+      // Hook handles toast
+      await forgotPassword({ email })
+      setResendCooldown(60)
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message ||
+        err?.message ||
+        'Failed to resend. Please try again.'
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleTryAnother = () => {
     setIsSubmitted(false)
     setEmail('')
     setError('')
+    setAttemptCount(0)
+    setRateLimited(false)
+    setResendCooldown(0)
   }
 
   function cn(...classes: any[]) {
     return classes.filter(Boolean).join(' ')
+  }
+
+  // Loading state
+  if (isLoading && !isSubmitted) {
+    return (
+      <div className="space-y-8 animate-fade-in max-w-md mx-auto text-center">
+        <div className="relative inline-block">
+          <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-full flex items-center justify-center shadow-xl">
+            <Loader2 className="h-10 w-10 text-white animate-spin" />
+          </div>
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Sending Reset Link</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Please wait while we process your request...</p>
+        </div>
+        <div className="flex justify-center">
+          <div className="flex space-x-2">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (isSubmitted) {
@@ -138,24 +231,37 @@ export default function ForgotPasswordPage() {
 
           <Link
             href="/login"
-            className="block text-center text-sm text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors"
+            className="block text-center text-sm text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors group"
           >
             <ArrowLeft className="inline h-4 w-4 mr-1 transition-transform group-hover:-translate-x-1" />
             Back to login
           </Link>
         </div>
 
-        {/* Resend */}
+        {/* Resend - NO TOAST HERE, just UI */}
         <p className="text-center text-xs text-slate-500 dark:text-slate-400">
           Didn't receive the email?{' '}
           <button
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline transition-colors"
+            onClick={handleResend}
+            disabled={isLoading || resendCooldown > 0}
+            className={cn(
+              "text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline transition-colors",
+              (isLoading || resendCooldown > 0) && "opacity-50 cursor-not-allowed hover:no-underline"
+            )}
           >
-            Click here to resend
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Click here to resend'}
           </button>
         </p>
+
+        {/* Inline error - displayed when hook throws */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-800">
+            <p className="text-xs text-red-600 dark:text-red-400 flex items-center">
+              <AlertCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+              {error}
+            </p>
+          </div>
+        )}
       </div>
     )
   }
@@ -166,7 +272,7 @@ export default function ForgotPasswordPage() {
       <div className="text-center space-y-3">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
           <Building2 className="h-5 w-5" />
-          <span className="text-xs font-bold tracking-wider uppercase">SSPMS</span>
+          <span className="text-xs font-bold tracking-wider uppercase">SSPMIS</span>
         </div>
 
         <div className="relative inline-block">
@@ -208,8 +314,9 @@ export default function ForgotPasswordPage() {
               onChange={(e) => {
                 setEmail(e.target.value)
                 if (error) setError('')
+                if (rateLimited) setRateLimited(false)
               }}
-              disabled={isLoading}
+              disabled={isLoading || authLoading}
               autoComplete="email"
             />
           </div>
@@ -250,12 +357,17 @@ export default function ForgotPasswordPage() {
         <Button
           type="submit"
           className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
-          disabled={isLoading}
+          disabled={isLoading || rateLimited || authLoading}
         >
           {isLoading ? (
             <div className="flex items-center justify-center">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
               Sending reset link...
+            </div>
+          ) : rateLimited ? (
+            <div className="flex items-center justify-center">
+              <Clock className="h-4 w-4 mr-2" />
+              Too many attempts. Try again later.
             </div>
           ) : (
             <div className="flex items-center justify-center">
@@ -323,6 +435,15 @@ export default function ForgotPasswordPage() {
           75% { transform: translateX(5px); }
         }
 
+        @keyframes bounce {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
         .animate-fade-in {
           animation: fade-in 0.5s ease-out forwards;
         }
@@ -337,6 +458,10 @@ export default function ForgotPasswordPage() {
 
         .animate-shake {
           animation: shake 0.3s ease-in-out;
+        }
+
+        .animate-bounce {
+          animation: bounce 0.8s ease-in-out infinite;
         }
       `}</style>
     </div>

@@ -37,42 +37,102 @@ export class AuthService {
   // ============================================
 
   static async register(data: RegisterRequest): Promise<AuthResponse> {
-    const result = await publicApi.post<AuthData>('/auth/register', data);
-    return {
-      success: true,
-      message: 'Registration successful',
-      data: result,
-    };
+    try {
+      const result = await publicApi.post<AuthData>('/auth/register', data);
+      return {
+        success: true,
+        message: 'Registration successful',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async login(data: LoginRequest): Promise<AuthResponse> {
-    const result = await publicApi.post<AuthData>('/auth/login', data);
-    return {
-      success: true,
-      message: 'Login successful',
-      data: result,
-    };
+    try {
+      const result = await publicApi.post<AuthData>('/auth/login', data);
+      return {
+        success: true,
+        message: 'Login successful',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async forgotPassword(data: ForgotPasswordRequest): Promise<SimpleResponse> {
-    return publicApi.post<SimpleResponse>('/auth/forgot-password', data);
+    try {
+      const result = await publicApi.post<SimpleResponse>('/auth/forgot-password', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Password reset link sent',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async resetPassword(data: ResetPasswordRequest): Promise<SimpleResponse> {
-    return publicApi.post<SimpleResponse>('/auth/reset-password', data);
+    try {
+      const result = await publicApi.post<SimpleResponse>('/auth/reset-password', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Password reset successful',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async validateResetToken(data: ValidateTokenRequest): Promise<SimpleResponse> {
-    return publicApi.post<SimpleResponse>('/auth/validate-reset-token', data);
+    try {
+      const result = await publicApi.post<SimpleResponse>('/auth/validate-reset-token', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Token is valid',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async refreshToken(): Promise<RefreshTokenResponse> {
-    const result = await publicApi.post<RefreshTokenData>('/auth/refresh');
-    return {
-      success: true,
-      message: 'Token refreshed',
-      data: result,
-    };
+    try {
+      const result = await publicApi.post<RefreshTokenData>('/auth/refresh');
+      return {
+        success: true,
+        message: 'Token refreshed',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   // ============================================
@@ -80,80 +140,128 @@ export class AuthService {
   // ============================================
 
   static async logout(): Promise<SimpleResponse> {
-    return privateApi.post<SimpleResponse>('/auth/logout');
+    try {
+      const result = await privateApi.post<SimpleResponse>('/auth/logout');
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Logged out successfully',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async getMe(): Promise<UserResponse> {
-    const result = await privateApi.get<UserData>('/auth/me');
-    return {
-      success: true,
-      message: 'User retrieved',
-      data: result,
-    };
+    try {
+      const result = await privateApi.get<UserData>('/auth/me');
+      return {
+        success: true,
+        message: 'User retrieved',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async getPermissions(): Promise<PermissionsResponse> {
-    const result = await privateApi.get<PermissionsData>('/auth/permissions');
-    return {
-      success: true,
-      message: 'Permissions retrieved',
-      data: result,
-    };
+    try {
+      const result = await privateApi.get<PermissionsData>('/auth/permissions');
+      return {
+        success: true,
+        message: 'Permissions retrieved',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async updateProfile(data: UpdateProfileRequest): Promise<AuthResponse> {
-    // If avatar is included, use FormData
-    if (data.profile?.avatar) {
-      const formData = new FormData();
+    try {
+      // If avatar is included, use FormData
+      if (data.profile?.avatar) {
+        const formData = new FormData();
 
-      Object.entries(data).forEach(([key, value]) => {
-        if (key !== 'profile' && value !== undefined) {
-          formData.append(key, value as string);
-        }
-      });
-
-      if (data.profile) {
-        Object.entries(data.profile).forEach(([key, value]) => {
-          if (key !== 'avatar' && value !== undefined) {
-            formData.append(`profile[${key}]`, value as string);
+        Object.entries(data).forEach(([key, value]) => {
+          if (key !== 'profile' && value !== undefined) {
+            formData.append(key, value as string);
           }
         });
-        if (data.profile.avatar) {
-          formData.append('avatar', data.profile.avatar);
+
+        if (data.profile) {
+          Object.entries(data.profile).forEach(([key, value]) => {
+            if (key !== 'avatar' && value !== undefined) {
+              formData.append(`profile[${key}]`, value as string);
+            }
+          });
+          if (data.profile.avatar) {
+            formData.append('avatar', data.profile.avatar);
+          }
         }
+
+        const result = await privateApi.post<AuthData>('/auth/profile', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        return {
+          success: true,
+          message: 'Profile updated',
+          data: result,
+        };
       }
 
-      const result = await privateApi.post<AuthData>('/auth/profile', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const result = await privateApi.put<AuthData>('/auth/profile', data);
       return {
         success: true,
         message: 'Profile updated',
         data: result,
       };
+    } catch (error) {
+      throw error;
     }
-
-    const result = await privateApi.put<AuthData>('/auth/profile', data);
-    return {
-      success: true,
-      message: 'Profile updated',
-      data: result,
-    };
   }
 
   static async uploadAvatar(file: File): Promise<AvatarResponse> {
-    const result = await privateApi.upload<AvatarData>('/auth/profile/avatar', file, 'avatar');
-    return {
-      success: true,
-      message: 'Avatar uploaded',
-      data: result,
-    };
+    try {
+      const result = await privateApi.upload<AvatarData>('/auth/profile/avatar', file, 'avatar');
+      return {
+        success: true,
+        message: 'Avatar uploaded',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async changePassword(data: ChangePasswordRequest): Promise<SimpleResponse> {
-    return privateApi.post<SimpleResponse>('/auth/change-password', data);
+    try {
+      const result = await privateApi.post<SimpleResponse>('/auth/change-password', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Password changed successfully',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   // ============================================
@@ -161,42 +269,102 @@ export class AuthService {
   // ============================================
 
   static async enableTwoFactor(data: TwoFactorEnableRequest): Promise<TwoFactorResponse> {
-    const result = await privateApi.post<TwoFactorData>('/auth/2fa/enable', data);
-    return {
-      success: true,
-      message: '2FA enabled',
-      data: result,
-    };
+    try {
+      const result = await privateApi.post<TwoFactorData>('/auth/2fa/enable', data);
+      return {
+        success: true,
+        message: '2FA enabled',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async disableTwoFactor(): Promise<SimpleResponse> {
-    return privateApi.post<SimpleResponse>('/auth/2fa/disable');
+    try {
+      const result = await privateApi.post<SimpleResponse>('/auth/2fa/disable');
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || '2FA disabled successfully',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async verifyTwoFactor(data: TwoFactorVerifyRequest): Promise<SimpleResponse> {
-    return privateApi.post<SimpleResponse>('/auth/2fa/verify', data);
+    try {
+      const result = await privateApi.post<SimpleResponse>('/auth/2fa/verify', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || '2FA code verified',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async generateRecoveryCodes(): Promise<RecoveryCodesResponse> {
-    const result = await privateApi.post<RecoveryCodesData>('/auth/2fa/recovery-codes');
-    return {
-      success: true,
-      message: 'Recovery codes generated',
-      data: result,
-    };
+    try {
+      const result = await privateApi.post<RecoveryCodesData>('/auth/2fa/recovery-codes');
+      return {
+        success: true,
+        message: 'Recovery codes generated',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async verifyRecoveryCode(data: TwoFactorRecoveryRequest): Promise<SimpleResponse> {
-    return privateApi.post<SimpleResponse>('/auth/2fa/verify-recovery', data);
+    try {
+      const result = await privateApi.post<SimpleResponse>('/auth/2fa/verify-recovery', data);
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Recovery code verified',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async getTwoFactorStatus(): Promise<TwoFactorStatusResponse> {
-    const result = await privateApi.get<TwoFactorStatusData>('/auth/2fa/status');
-    return {
-      success: true,
-      message: '2FA status retrieved',
-      data: result,
-    };
+    try {
+      const result = await privateApi.get<TwoFactorStatusData>('/auth/2fa/status');
+      return {
+        success: true,
+        message: '2FA status retrieved',
+        data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

@@ -1,5 +1,7 @@
 <?php
 
+// bootstrap/app.php
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,14 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
     health: '/up',
   )
   ->withMiddleware(function (Middleware $middleware) {
-    // Middleware Aliases
+    // Middleware Aliases - UNCOMMENT THIS LINE
     $middleware->alias([
-      //  'auth' => \App\Http\Middleware\Authenticate::class,
+      'auth' => \App\Http\Middleware\Authenticate::class,  // <-- UNCOMMENT THIS
       'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
       'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
       'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
       'can' => \Illuminate\Auth\Middleware\Authorize::class,
-      //  'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
+      'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,  // <-- UNCOMMENT THIS TOO
       'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
       'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
       'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,

@@ -166,5 +166,3 @@ Frontend builds are deployed to Vercel or static hosting.
 ## 📄 License
 
 Private system – internal school use only.
-
----

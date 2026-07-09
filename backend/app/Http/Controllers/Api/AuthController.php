@@ -31,25 +31,14 @@ class AuthController extends Controller
     try {
       $result = $this->authService->register($request->validated());
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Registration successful. Please wait for admin approval.',
-        'data' => [
-          'user' => new UserResource($result['user']),
-          'requires_approval' => $result['requires_approval'],
-        ]
-      ], 201);
+      return $this->created([
+        'user' => new UserResource($result['user']),
+        'requires_approval' => $result['requires_approval'],
+      ], 'Registration successful. Please wait for admin approval.');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Registration failed: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Registration failed: ' . $e->getMessage(), 500);
     }
   }
 
@@ -62,27 +51,17 @@ class AuthController extends Controller
       $result = $this->authService->login($request->validated());
 
       if (!$result['success']) {
-        return response()->json([
-          'success' => false,
-          'message' => $result['message'],
-        ], 401);
+        return $this->error($result['message'], 401);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Login successful',
-        'data' => [
-          'user' => new UserResource($result['data']['user']),
-          'permissions' => $result['data']['permissions'],
-          'token' => $result['data']['token'],
-          'token_type' => $result['data']['token_type'],
-        ]
-      ]);
+      return $this->success([
+        'user' => new UserResource($result['data']['user']),
+        'permissions' => $result['data']['permissions'],
+        'token' => $result['data']['token'],
+        'token_type' => $result['data']['token_type'],
+      ], 'Login successful');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Login failed: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Login failed: ' . $e->getMessage(), 500);
     }
   }
 
@@ -98,39 +77,41 @@ class AuthController extends Controller
         $request->userAgent()
       );
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Logged out successfully',
-      ]);
+      return $this->success(null, 'Logged out successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Logout failed: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Logout failed: ' . $e->getMessage(), 500);
     }
   }
 
   /**
    * Get authenticated user.
    */
+  // app/Http/Controllers/Api/AuthController.php
+
   public function me(Request $request)
   {
     try {
+      // Debug the user
+      \Log::info('AuthController::me - Request details', [
+        'user_id' => $request->user()?->id,
+        'user_email' => $request->user()?->email,
+        'headers' => $request->headers->all(),
+        'token' => $request->bearerToken(),
+      ]);
+
       $data = $this->authService->getAuthUserData($request->user());
 
-      return response()->json([
-        'success' => true,
-        'data' => [
-          'user' => new UserResource($data['user']),
-          'permissions' => $data['permissions'],
-          'roles' => $data['roles'],
-        ]
-      ]);
+      return $this->success([
+        'user' => new UserResource($data['user']),
+        'permissions' => $data['permissions'],
+        'roles' => $data['roles'],
+      ], 'User retrieved successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to get user: ' . $e->getMessage(),
-      ], 500);
+      \Log::error('AuthController::me - Error', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+      return $this->error('Failed to get user: ' . $e->getMessage(), 500);
     }
   }
 
@@ -142,15 +123,9 @@ class AuthController extends Controller
     try {
       $data = $this->authService->getUserPermissions($request->user());
 
-      return response()->json([
-        'success' => true,
-        'data' => $data,
-      ]);
+      return $this->success($data, 'Permissions retrieved successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to get permissions: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to get permissions: ' . $e->getMessage(), 500);
     }
   }
 
@@ -162,24 +137,13 @@ class AuthController extends Controller
     try {
       $user = $this->authService->updateProfile($request->user(), $request->validated());
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Profile updated successfully',
-        'data' => [
-          'user' => new UserResource($user),
-        ],
-      ]);
+      return $this->success([
+        'user' => new UserResource($user),
+      ], 'Profile updated successfully');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to update profile: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to update profile: ' . $e->getMessage(), 500);
     }
   }
 
@@ -196,21 +160,11 @@ class AuthController extends Controller
         $request->userAgent()
       );
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Password changed successfully',
-      ]);
+      return $this->success(null, 'Password changed successfully');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to change password: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to change password: ' . $e->getMessage(), 500);
     }
   }
 
@@ -227,27 +181,14 @@ class AuthController extends Controller
       );
 
       if (!$result['success']) {
-        return response()->json([
-          'success' => false,
-          'message' => $result['message'],
-        ], 400);
+        return $this->error($result['message'], 400);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => $result['message'],
-      ]);
+      return $this->success(null, $result['message']);
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to send reset link: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to send reset link: ' . $e->getMessage(), 500);
     }
   }
 
@@ -260,27 +201,14 @@ class AuthController extends Controller
       $result = $this->authService->resetPassword($request->validated());
 
       if (!$result['success']) {
-        return response()->json([
-          'success' => false,
-          'message' => $result['message'],
-        ], 400);
+        return $this->error($result['message'], 400);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => $result['message'],
-      ]);
+      return $this->success(null, $result['message']);
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to reset password: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to reset password: ' . $e->getMessage(), 500);
     }
   }
 
@@ -301,27 +229,14 @@ class AuthController extends Controller
       );
 
       if (!$result['success']) {
-        return response()->json([
-          'success' => false,
-          'message' => $result['message'],
-        ], 400);
+        return $this->error($result['message'], 400);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => $result['message'],
-      ]);
+      return $this->success(null, $result['message']);
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to validate token: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to validate token: ' . $e->getMessage(), 500);
     }
   }
 
@@ -334,19 +249,12 @@ class AuthController extends Controller
       $user = $request->user();
       $token = $user->createToken('auth_token')->plainTextToken;
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Token refreshed successfully',
-        'data' => [
-          'token' => $token,
-          'token_type' => 'Bearer',
-        ],
-      ]);
+      return $this->success([
+        'token' => $token,
+        'token_type' => 'Bearer',
+      ], 'Token refreshed successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to refresh token: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to refresh token: ' . $e->getMessage(), 500);
     }
   }
 
@@ -373,25 +281,14 @@ class AuthController extends Controller
 
       $recoveryCodes = $this->authService->generateRecoveryCodes();
 
-      return response()->json([
-        'success' => true,
-        'message' => '2FA enabled successfully',
-        'data' => [
-          'secret_key' => $secretKey,
-          'recovery_codes' => $recoveryCodes,
-        ],
-      ]);
+      return $this->success([
+        'secret_key' => $secretKey,
+        'recovery_codes' => $recoveryCodes,
+      ], '2FA enabled successfully');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to enable 2FA: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to enable 2FA: ' . $e->getMessage(), 500);
     }
   }
 
@@ -403,15 +300,9 @@ class AuthController extends Controller
     try {
       $this->authService->disableTwoFactor($request->user());
 
-      return response()->json([
-        'success' => true,
-        'message' => '2FA disabled successfully',
-      ]);
+      return $this->success(null, '2FA disabled successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to disable 2FA: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to disable 2FA: ' . $e->getMessage(), 500);
     }
   }
 
@@ -431,27 +322,14 @@ class AuthController extends Controller
       );
 
       if (!$isValid) {
-        return response()->json([
-          'success' => false,
-          'message' => 'Invalid 2FA code',
-        ], 400);
+        return $this->error('Invalid 2FA code', 400);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => '2FA verified successfully',
-      ]);
+      return $this->success(null, '2FA verified successfully');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to verify 2FA: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to verify 2FA: ' . $e->getMessage(), 500);
     }
   }
 
@@ -463,18 +341,11 @@ class AuthController extends Controller
     try {
       $recoveryCodes = $this->authService->generateRecoveryCodes();
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Recovery codes generated successfully',
-        'data' => [
-          'recovery_codes' => $recoveryCodes,
-        ],
-      ]);
+      return $this->success([
+        'recovery_codes' => $recoveryCodes,
+      ], 'Recovery codes generated successfully');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to generate recovery codes: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to generate recovery codes: ' . $e->getMessage(), 500);
     }
   }
 
@@ -494,27 +365,14 @@ class AuthController extends Controller
       );
 
       if (!$isValid) {
-        return response()->json([
-          'success' => false,
-          'message' => 'Invalid recovery code',
-        ], 400);
+        return $this->error('Invalid recovery code', 400);
       }
 
-      return response()->json([
-        'success' => true,
-        'message' => 'Recovery code verified successfully',
-      ]);
+      return $this->success(null, 'Recovery code verified successfully');
     } catch (ValidationException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Validation failed',
-        'errors' => $e->errors(),
-      ], 422);
+      return $this->validationError($e);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to verify recovery code: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to verify recovery code: ' . $e->getMessage(), 500);
     }
   }
 
@@ -526,16 +384,9 @@ class AuthController extends Controller
     try {
       $status = $this->authService->getTwoFactorStatus($request->user());
 
-      return response()->json([
-        'success' => true,
-        'message' => '2FA status retrieved',
-        'data' => $status,
-      ]);
+      return $this->success($status, '2FA status retrieved');
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Failed to get 2FA status: ' . $e->getMessage(),
-      ], 500);
+      return $this->error('Failed to get 2FA status: ' . $e->getMessage(), 500);
     }
   }
 }

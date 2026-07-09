@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Notifications\CustomResetPasswordNotification; // Add this
+use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable
 {
@@ -69,9 +71,9 @@ class User extends Authenticatable
     return strtoupper($this->first_name[0] . $this->last_name[0]);
   }
 
-    // ============================================
-    // RELATIONSHIPS
-    // ============================================
+  // ============================================
+  // RELATIONSHIPS
+  // ============================================
 
   /**
    * Department relationship.
@@ -137,9 +139,9 @@ class User extends Authenticatable
     return $this->hasOne(TwoFactorAuthentication::class);
   }
 
-    // ============================================
-    // SCOPES
-    // ============================================
+  // ============================================
+  // SCOPES
+  // ============================================
 
   /**
    * Scope for active users.
@@ -165,9 +167,9 @@ class User extends Authenticatable
     return $query->where('is_approved', false)->where('is_active', true);
   }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
+  // ============================================
+  // HELPER METHODS
+  // ============================================
 
   /**
    * Check if user is a specific role.
@@ -199,5 +201,21 @@ class User extends Authenticatable
   public function canLogin(): bool
   {
     return $this->is_active && $this->is_approved;
+  }
+
+  // ============================================
+  // PASSWORD RESET NOTIFICATION - ADD THIS
+  // ============================================
+
+  /**
+   * Send the password reset notification.
+   * Overrides the default Laravel notification to use custom URL.
+   *
+   * @param  string  $token
+   * @return void
+   */
+  public function sendPasswordResetNotification($token)
+  {
+    $this->notify(new ResetPasswordNotification($token));
   }
 }

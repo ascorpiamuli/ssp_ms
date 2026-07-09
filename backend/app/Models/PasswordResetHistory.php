@@ -2,21 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PasswordResetHistory extends Model
 {
-  use HasFactory;
-
   protected $fillable = [
     'user_id',
+    'email', // Add this
     'ip_address',
     'user_agent',
     'requested_at',
-    'completed_at',
     'is_successful',
-    'failure_reason',
+    'error_message',
+    'completed_at',
   ];
 
   protected $casts = [
@@ -25,10 +24,7 @@ class PasswordResetHistory extends Model
     'is_successful' => 'boolean',
   ];
 
-  /**
-   * Get the user that owns the password reset history.
-   */
-  public function user()
+  public function user(): BelongsTo
   {
     return $this->belongsTo(User::class);
   }

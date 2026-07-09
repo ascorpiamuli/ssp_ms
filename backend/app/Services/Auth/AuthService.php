@@ -59,6 +59,8 @@ class AuthService extends BaseService
     }
   }
 
+// app/Services/Auth/AuthService.php
+
   /**
    * Login a user.
    */
@@ -80,12 +82,15 @@ class AuthService extends BaseService
           'user_id' => $result['data']['user']->id ?? null,
           'token_generated' => isset($result['data']['token']),
         ]);
-      } else {
-        Log::warning('AuthService::login failed', [
-          'email' => $credentials['email'] ?? null,
-          'message' => $result['message'] ?? 'Unknown error',
-        ]);
+
+        // The LoginService already returns the token, just pass it through
+        return $result;
       }
+
+      Log::warning('AuthService::login failed', [
+        'email' => $credentials['email'] ?? null,
+        'message' => $result['message'] ?? 'Unknown error',
+      ]);
 
       return $result;
     } catch (\Exception $e) {
@@ -132,10 +137,6 @@ class AuthService extends BaseService
    */
   public function sendPasswordResetLink(string $email, string $ip, string $userAgent): array
   {
-    Log::info('AuthService::sendPasswordResetLink called', [
-      'email' => $email,
-      'ip' => $ip,
-    ]);
 
     try {
       $result = $this->passwordResetService->sendResetLink($email, $ip, $userAgent);
