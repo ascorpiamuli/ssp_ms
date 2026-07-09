@@ -4,7 +4,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosR
 import { ApiResponse } from '../types/auth.types';
 
 // Get API URL from environment variable
-const API_URL = process.env.NEXT_PUBLIC_API_URL ;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.sspmis.pasbestventures.com'; // Default to localhost if not set
 const API_VERSION = 'v1';
 
 // ─── Token Management ───
@@ -12,6 +12,7 @@ const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
   return sessionStorage.getItem('token') || localStorage.getItem('token');
 };
+
 
 const setToken = (token: string, rememberMe: boolean = false): void => {
   if (typeof window === 'undefined') return;
