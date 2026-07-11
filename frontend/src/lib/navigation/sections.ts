@@ -60,7 +60,6 @@ import {
   ShieldCheck,
   UserCheck,
   UserPlus,
-  Permissions,
   UserMinus,
   Users2,
   Wallet,

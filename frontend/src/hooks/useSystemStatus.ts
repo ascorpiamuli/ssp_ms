@@ -112,6 +112,8 @@ export function useSystemStatus() {
     })
   }
 
+  // hooks/useSystemStatus.ts - Fixed useHistory function
+
   /**
    * Get system status history
    */
@@ -128,27 +130,36 @@ export function useSystemStatus() {
       queryKey: ['system-status', 'history', JSON.stringify(filters)],
       queryFn: async () => {
         console.log('🔄 [useSystemStatus] Fetching history...', filters)
-        const response = await SystemStatusService.getHistory(filters)
+        const response: any = await SystemStatusService.getHistory(filters)
         console.log('📦 [useSystemStatus] History raw response:', response)
 
-        // History response has { success, data, meta } structure
-        // But extractData might have already unwrapped it
-        if (response && typeof response === 'object') {
-          // Check if it's the full response with data and meta
-          if ('data' in response && 'meta' in response) {
-            return {
-              data: response.data || [],
-              meta: response.meta || { count: 0, components: [], statuses: [] },
-            }
-          }
-          // If it's already unwrapped
-          if (Array.isArray(response)) {
-            return {
-              data: response,
-              meta: { count: response.length, components: [], statuses: [] },
-            }
+        // Handle null or undefined response
+        if (!response) {
+          return { data: [], meta: { count: 0, components: [], statuses: [] } }
+        }
+
+        // If response is already an array
+        if (Array.isArray(response)) {
+          return {
+            data: response,
+            meta: { count: response.length, components: [], statuses: [] },
           }
         }
+
+        // If response is an object with data property
+        if (response && typeof response === 'object' && 'data' in response) {
+          const data = Array.isArray(response.data) ? response.data : []
+          return {
+            data: data,
+            meta: {
+              count: data.length,
+              components: [],
+              statuses: [],
+            },
+          }
+        }
+
+        // Fallback
         return { data: [], meta: { count: 0, components: [], statuses: [] } }
       },
       enabled,

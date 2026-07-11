@@ -355,6 +355,7 @@ const ViewBackupModal = ({
   const statusColor = getStatusColor(backup.status)
   const statusLabel = getStatusLabel(backup.status)
   const typeLabel = getTypeLabel(backup.type)
+  const isRunning = backup.status === 'running'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
@@ -382,7 +383,7 @@ const ViewBackupModal = ({
               </h3>
               <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                 <Badge variant={statusColor as any} className="flex items-center gap-1">
-                  <StatusIcon className={cn("h-3 w-3", statusColor === 'running' && "animate-spin")} />
+                  <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} />
                   {statusLabel}
                 </Badge>
                 <Badge variant="secondary">{typeLabel}</Badge>
@@ -465,7 +466,6 @@ const ViewBackupModal = ({
     </div>
   )
 }
-
 // ============================================
 // STATS CARDS
 // ============================================
