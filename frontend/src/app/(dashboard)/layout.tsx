@@ -54,7 +54,6 @@ function DashboardContent({
     }
   }, [isLoading, isAuthenticated, router])
 
-
   // Show loading while checking auth
   if (isLoading) {
     console.log('⏳ DashboardLayout - Loading...')

@@ -56,6 +56,9 @@ interface AuthContextType {
   isUpdatingProfile: boolean
   isChangingPassword: boolean
   isUploadingAvatar: boolean
+
+  // Refetch user data
+  refetchUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -117,22 +120,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isChangingPassword,
     isUploadingAvatar,
 
-    refetchUser,
+    refetchUser: refetchUserRaw,
   } = useAuth()
 
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Check auth on mount
   useEffect(() => {
     const checkAuth = async () => {
       const token = tokenManager.get()
       if (token) {
-        await refetchUser()
+        await refetchUserRaw()
       }
       setIsInitialized(true)
     }
     checkAuth()
-  }, [refetchUser])
+  }, [refetchUserRaw])
 
   // Handle redirects based on auth state
   useEffect(() => {
@@ -195,6 +199,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refetchCompletionStatusRaw()
   }, [refetchCompletionStatusRaw])
 
+  // Wrap refetchUser with loading state
+  const refetchUser = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await refetchUserRaw()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [refetchUserRaw])
+
   // ============================================
   // CONTEXT VALUE
   // ============================================
@@ -202,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextType = {
     // User state
     user,
-    isLoading: isLoading || !isInitialized,
+    isLoading: isLoading || !isInitialized || isRefreshing,
     isAuthenticated,
 
     // Auth methods
@@ -249,6 +263,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isUpdatingProfile,
     isChangingPassword,
     isUploadingAvatar,
+
+    // Refetch user data
+    refetchUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

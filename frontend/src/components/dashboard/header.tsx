@@ -82,15 +82,16 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
       'from-cyan-500 to-cyan-600',
       'from-amber-500 to-amber-600',
     ]
-    // Use the name to pick a consistent color
     const index = fullName.length % colors.length
     return colors[index]
   }
 
-  // Get user role badge color
+  // Get user role badge color - FIXED to handle roles array
   const getRoleColor = () => {
-    const role = user?.role?.toLowerCase()
-    switch (role) {
+    const roles = user?.roles || []
+    const primaryRole = roles.length > 0 ? roles[0].toLowerCase() : ''
+
+    switch (primaryRole) {
       case 'admin': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
       case 'super_admin': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
       case 'hod': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
@@ -105,10 +106,12 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
     }
   }
 
-  // Get user role display name
+  // Get user role display name - FIXED to handle roles array
   const getRoleDisplayName = () => {
-    const role = user?.role?.toLowerCase()
-    switch (role) {
+    const roles = user?.roles || []
+    const primaryRole = roles.length > 0 ? roles[0].toLowerCase() : ''
+
+    switch (primaryRole) {
       case 'admin': return 'Administrator'
       case 'staff': return 'Staff'
       case 'hod': return 'Head of Department'
@@ -118,8 +121,30 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
       case 'procurement': return 'Procurement Officer'
       case 'supplier': return 'Supplier'
       case 'auditor': return 'Auditor'
-      default: return user?.role || 'User'
+      case 'super_admin': return 'Super Administrator'
+      default: return roles.length > 0 ? roles[0] : 'User'
     }
+  }
+
+  // Get all roles for display
+  const getAllRoles = () => {
+    const roles = user?.roles || []
+    if (roles.length === 0) return ['User']
+    return roles.map(role => {
+      switch (role.toLowerCase()) {
+        case 'admin': return 'Administrator'
+        case 'staff': return 'Staff'
+        case 'hod': return 'Head of Department'
+        case 'accountant': return 'Accountant'
+        case 'principal': return 'Head of Institution'
+        case 'final_approver': return 'Final Approver'
+        case 'procurement': return 'Procurement Officer'
+        case 'supplier': return 'Supplier'
+        case 'auditor': return 'Auditor'
+        case 'super_admin': return 'Super Administrator'
+        default: return role
+      }
+    })
   }
 
   const handleLogout = async () => {
@@ -133,6 +158,9 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   const avatarColors = getAvatarColors()
+  const roles = user?.roles || []
+  const primaryRole = roles.length > 0 ? roles[0] : 'User'
+  const allRoles = getAllRoles()
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white/95 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95 px-4 shadow-sm">
@@ -148,6 +176,12 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             <Menu className="h-5 w-5" />
           </Button>
         )}
+        {/* Brand name - visible on larger screens */}
+        <div className="hidden sm:block">
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            SSPMS
+          </span>
+        </div>
       </div>
 
       {/* Right section - Actions */}
@@ -180,10 +214,10 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
               <>
                 <div className="hidden sm:block text-left">
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[120px]">
-                    {user?.full_name  || 'User'}
+                    {user?.full_name || 'User'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
-                    {user?.email || 'user@example.com'}
+                    {getRoleDisplayName()}
                   </p>
                 </div>
                 <ChevronDown className="hidden sm:block h-4 w-4 text-gray-400" />
@@ -209,15 +243,20 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                      {user?.full_name  || 'User'}
+                      {user?.full_name || 'User'}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       {user?.email || 'user@example.com'}
                     </p>
-                    <div className="mt-1.5">
-                      <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", getRoleColor())}>
-                        {getRoleDisplayName()}
-                      </span>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {allRoles.map((role, index) => (
+                        <span
+                          key={index}
+                          className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", getRoleColor())}
+                        >
+                          {role}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>

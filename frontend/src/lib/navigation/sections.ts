@@ -60,14 +60,13 @@ import {
   ShieldCheck,
   UserCheck,
   UserPlus,
+  Permissions,
   UserMinus,
   Users2,
   Wallet,
   Watch,
   Timer,
   Target,
-  Telescope,
-  Ticket,
   type LucideIcon
 } from 'lucide-react'
 import { NavigationSection } from '@/lib/types/navigation.types'
@@ -138,9 +137,7 @@ const iconMap: Record<string, LucideIcon> = {
   Wallet,
   Watch,
   Timer,
-  Target,
-  Telescope,
-  Ticket
+  Target
 }
 
 // Helper to get icon component
@@ -171,20 +168,77 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'accountant', 'principal', 'auditor']
       },
       {
-        id: 'activity_feed',
-        name: 'Activity Feed',
+        id: 'activity',
+        name: 'Activity & Notifications',
         href: '/dashboard/activity',
-        icon: getIcon('Activity'),
-        description: 'Recent system activity',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
+        icon: getIcon('Bell'),
+        description: 'Recent activity and notifications',
+        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
+      }
+    ]
+  },
+  // 9. ADMINISTRATION
+  {
+    id: 'administration',
+    title: 'Administration',
+    icon: getIcon('Settings'),
+    defaultOpen: false,
+    items: [
+      {
+        id: 'users',
+        name: 'User Management',
+        href: '/admin/users',
+        icon: getIcon('Users'),
+        description: 'Manage users',
+        roles: ['admin']
       },
       {
-        id: 'notifications_center',
-        name: 'Notifications',
-        href: '/dashboard/notifications',
-        icon: getIcon('Bell'),
-        description: 'View all notifications',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
+        id: 'permissions',
+        name: 'Permission Matrix',
+        href: '/admin/permissions',
+        icon: getIcon('Shield'),
+        description: 'Manage user permissions',
+        roles: ['admin']
+      },
+      {
+        id: 'departments',
+        name: 'Departments',
+        href: '/admin/departments',
+        icon: getIcon('Building2'),
+        description: 'Manage departments',
+        roles: ['admin']
+      },
+      {
+        id: 'system_settings',
+        name: 'System Settings',
+        href: '/admin/settings',
+        icon: getIcon('Settings'),
+        description: 'Configure system settings and reference formats',
+        roles: ['admin']
+      },
+      {
+        id: 'audit_logs',
+        name: 'Audit Logs',
+        href: '/admin/audit',
+        icon: getIcon('Shield'),
+        description: 'System audit logs',
+        roles: ['admin', 'auditor']
+      },
+      {
+        id: 'system_status',
+        name: 'System Status',
+        href: '/admin/status',
+        icon: getIcon('Activity'),
+        description: 'System health monitoring',
+        roles: ['admin']
+      },
+      {
+        id: 'backup_restore',
+        name: 'Backup & Restore',
+        href: '/admin/backup',
+        icon: getIcon('Database'),
+        description: 'System backup and restore',
+        roles: ['admin']
       }
     ]
   },
@@ -205,55 +259,23 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
       },
       {
-        id: 'my_requisitions',
-        name: 'My Requisitions',
-        href: '/requisitions/my',
+        id: 'requisitions_list',
+        name: 'All Requisitions',
+        href: '/requisitions',
         icon: getIcon('FileCheck'),
-        description: 'View your requisitions',
+        description: 'View, manage, and track all requisitions',
         roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
-        id: 'department_requisitions',
-        name: 'Department Requisitions',
-        href: '/requisitions/department',
-        icon: getIcon('Users'),
-        description: 'View department requisitions',
-        roles: ['hod', 'accountant', 'principal', 'final_approver', 'procurement', 'admin']
       },
       {
         id: 'pending_approvals',
         name: 'Pending Approvals',
         href: '/requisitions/pending',
         icon: getIcon('ClipboardList'),
-        description: 'Requisitions awaiting approval',
+        description: 'Requisitions awaiting your approval',
         roles: ['hod', 'accountant', 'principal', 'final_approver'],
         badge: '0',
         badgeColor: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
         isDynamic: true
-      },
-      {
-        id: 'all_requisitions',
-        name: 'All Requisitions',
-        href: '/requisitions/all',
-        icon: getIcon('FileCheck'),
-        description: 'View all requisitions',
-        roles: ['admin', 'accountant', 'principal', 'final_approver', 'auditor']
-      },
-      {
-        id: 'draft_requisitions',
-        name: 'Drafts',
-        href: '/requisitions/drafts',
-        icon: getIcon('FileText'),
-        description: 'Draft requisitions',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
-      },
-      {
-        id: 'archived_requisitions',
-        name: 'Archived',
-        href: '/requisitions/archived',
-        icon: getIcon('Archive'),
-        description: 'Archived requisitions',
-        roles: ['admin', 'accountant', 'auditor']
       }
     ]
   },
@@ -278,7 +300,7 @@ export const navigationSections: NavigationSection[] = [
         name: 'Accountant Approvals',
         href: '/approvals/accountant',
         icon: getIcon('CreditCard'),
-        description: 'Funds verification approvals (Level 2)',
+        description: 'Funds verification (Level 2)',
         roles: ['accountant']
       },
       {
@@ -286,7 +308,7 @@ export const navigationSections: NavigationSection[] = [
         name: 'Principal Approvals',
         href: '/approvals/principal',
         icon: getIcon('Building2'),
-        description: 'Head of institution approvals (Level 3)',
+        description: 'Institutional approvals (Level 3)',
         roles: ['principal']
       },
       {
@@ -294,23 +316,15 @@ export const navigationSections: NavigationSection[] = [
         name: 'Final Approvals',
         href: '/approvals/final',
         icon: getIcon('Shield'),
-        description: 'Final authorization approvals (Level 4)',
+        description: 'Final authorization (Level 4)',
         roles: ['final_approver']
-      },
-      {
-        id: 'all_pending_approvals',
-        name: 'All Pending',
-        href: '/approvals/pending',
-        icon: getIcon('Clock'),
-        description: 'View all pending approvals',
-        roles: ['admin', 'principal', 'accountant']
       },
       {
         id: 'approval_history',
         name: 'Approval History',
         href: '/approvals/history',
         icon: getIcon('Timer'),
-        description: 'Approval history and timelines',
+        description: 'View approval history and timelines',
         roles: ['admin', 'accountant', 'principal', 'hod', 'auditor']
       }
     ]
@@ -328,39 +342,15 @@ export const navigationSections: NavigationSection[] = [
         name: 'Suppliers',
         href: '/procurement/suppliers',
         icon: getIcon('Users'),
-        description: 'Manage suppliers',
+        description: 'Manage suppliers and blacklist',
         roles: ['admin', 'procurement', 'accountant', 'principal']
-      },
-      {
-        id: 'supplier_blacklist',
-        name: 'Blacklisted Suppliers',
-        href: '/procurement/blacklist',
-        icon: getIcon('UserMinus'),
-        description: 'View blacklisted suppliers',
-        roles: ['admin', 'procurement']
       },
       {
         id: 'quotations',
         name: 'Quotations',
         href: '/procurement/quotations',
         icon: getIcon('FileText'),
-        description: 'Manage quotations',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'request_quotations',
-        name: 'Request Quotations',
-        href: '/procurement/request-quotes',
-        icon: getIcon('Send'),
-        description: 'Send quotation requests to suppliers',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'quotation_responses',
-        name: 'Quotation Responses',
-        href: '/procurement/responses',
-        icon: getIcon('Mail'),
-        description: 'View supplier quotation responses',
+        description: 'Manage quotations, requests, and responses',
         roles: ['admin', 'procurement', 'accountant']
       },
       {
@@ -398,52 +388,12 @@ export const navigationSections: NavigationSection[] = [
     defaultOpen: false,
     items: [
       {
-        id: 'view_orders',
-        name: 'LPO/LSO',
+        id: 'orders',
+        name: 'Manage Orders',
         href: '/orders',
         icon: getIcon('ShoppingCart'),
-        description: 'Purchase and service orders',
-        roles: ['admin', 'procurement', 'accountant', 'principal', 'final_approver', 'auditor']
-      },
-      {
-        id: 'create_lpo',
-        name: 'Generate LPO',
-        href: '/orders/lpo/create',
-        icon: getIcon('FileText'),
-        description: 'Create local purchase order',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'create_lso',
-        name: 'Generate LSO',
-        href: '/orders/lso/create',
-        icon: getIcon('FileText'),
-        description: 'Create local service order',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'grn_san',
-        name: 'GRN/SAN',
-        href: '/orders/grn',
-        icon: getIcon('Truck'),
-        description: 'Goods received / service acknowledgment',
-        roles: ['admin', 'procurement', 'accountant', 'staff', 'hod', 'principal']
-      },
-      {
-        id: 'create_grn',
-        name: 'Create GRN',
-        href: '/orders/grn/create',
-        icon: getIcon('Check'),
-        description: 'Create goods received note',
-        roles: ['admin', 'procurement', 'accountant', 'staff', 'hod']
-      },
-      {
-        id: 'create_san',
-        name: 'Create SAN',
-        href: '/orders/san/create',
-        icon: getIcon('Check'),
-        description: 'Create service acknowledgment note',
-        roles: ['admin', 'procurement', 'accountant', 'staff', 'hod']
+        description: 'Create and manage LPO/LSO, GRN/SAN',
+        roles: ['admin', 'procurement', 'accountant', 'principal', 'final_approver', 'staff', 'hod', 'auditor']
       },
       {
         id: 'track_orders',
@@ -476,88 +426,32 @@ export const navigationSections: NavigationSection[] = [
         name: 'Invoices',
         href: '/invoices',
         icon: getIcon('Receipt'),
-        description: 'View and verify invoices',
+        description: 'View, verify, and manage invoices',
         roles: ['admin', 'accountant', 'procurement', 'auditor']
-      },
-      {
-        id: 'verify_invoices',
-        name: 'Verify Invoices',
-        href: '/invoices/verify',
-        icon: getIcon('ShieldCheck'),
-        description: 'Three-way invoice verification',
-        roles: ['admin', 'accountant']
-      },
-      {
-        id: 'pending_invoices',
-        name: 'Pending Invoices',
-        href: '/invoices/pending',
-        icon: getIcon('Clock'),
-        description: 'Invoices awaiting verification',
-        roles: ['admin', 'accountant', 'procurement']
       },
       {
         id: 'payment_vouchers',
         name: 'Payment Vouchers',
         href: '/payments/vouchers',
         icon: getIcon('FileCheck'),
-        description: 'Payment vouchers',
+        description: 'Create, manage, and endorse payment vouchers',
         roles: ['admin', 'accountant', 'principal']
       },
       {
-        id: 'create_payment_voucher',
-        name: 'Create Payment Voucher',
-        href: '/payments/vouchers/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Generate payment voucher',
-        roles: ['admin', 'accountant']
-      },
-      {
-        id: 'endorse_vouchers',
-        name: 'Endorse Vouchers',
-        href: '/payments/endorse',
-        icon: getIcon('UserCheck'),
-        description: 'Endorse payment vouchers',
-        roles: ['principal']
-      },
-      {
-        id: 'cheque_tracking',
-        name: 'Cheque Tracking',
+        id: 'cheque_management',
+        name: 'Cheque Management',
         href: '/payments/cheques',
         icon: getIcon('Wallet'),
-        description: 'Track issued cheques',
+        description: 'Track and record cheques',
         roles: ['admin', 'accountant']
       },
       {
-        id: 'record_cheque',
-        name: 'Record Cheque',
-        href: '/payments/cheques/record',
-        icon: getIcon('Edit'),
-        description: 'Record cheque number',
-        roles: ['admin', 'accountant']
-      },
-      {
-        id: 'payment_history',
-        name: 'Payment History',
-        href: '/payments/history',
-        icon: getIcon('Timer'),
-        description: 'Payment history',
+        id: 'payment_analytics',
+        name: 'Payment Analytics',
+        href: '/payments/analytics',
+        icon: getIcon('TrendingUp'),
+        description: 'Payment history, reconciliation, and outstanding payments',
         roles: ['admin', 'accountant', 'auditor', 'principal']
-      },
-      {
-        id: 'reconciliation',
-        name: 'Reconciliation',
-        href: '/payments/reconciliation',
-        icon: getIcon('RefreshCw'),
-        description: 'Payment reconciliation',
-        roles: ['admin', 'accountant', 'auditor']
-      },
-      {
-        id: 'outstanding_payments',
-        name: 'Outstanding Payments',
-        href: '/payments/outstanding',
-        icon: getIcon('AlertCircle'),
-        description: 'Outstanding payments report',
-        roles: ['admin', 'accountant', 'principal']
       }
     ]
   },
@@ -572,9 +466,9 @@ export const navigationSections: NavigationSection[] = [
       {
         id: 'budget_overview',
         name: 'Budget Overview',
-        href: '/budget/overview',
+        href: '/budget',
         icon: getIcon('PieChart'),
-        description: 'Budget allocation and tracking',
+        description: 'Budget allocation, planning, and utilization',
         roles: ['admin', 'accountant', 'principal']
       },
       {
@@ -584,22 +478,6 @@ export const navigationSections: NavigationSection[] = [
         icon: getIcon('TrendingUp'),
         description: 'Track expenditures',
         roles: ['admin', 'accountant', 'principal', 'hod', 'auditor']
-      },
-      {
-        id: 'budget_planning',
-        name: 'Budget Planning',
-        href: '/budget/planning',
-        icon: getIcon('Calendar'),
-        description: 'Plan and forecast budgets',
-        roles: ['admin', 'accountant']
-      },
-      {
-        id: 'budget_utilization',
-        name: 'Budget Utilization',
-        href: '/budget/utilization',
-        icon: getIcon('Target'),
-        description: 'Budget consumption trends',
-        roles: ['admin', 'accountant', 'principal']
       }
     ]
   },
@@ -612,60 +490,12 @@ export const navigationSections: NavigationSection[] = [
     defaultOpen: false,
     items: [
       {
-        id: 'requisition_reports',
-        name: 'Requisition Reports',
-        href: '/reports/requisitions',
+        id: 'reports',
+        name: 'All Reports',
+        href: '/reports',
         icon: getIcon('FileText'),
-        description: 'Requisition analytics',
-        roles: ['admin', 'accountant', 'principal', 'hod', 'auditor']
-      },
-      {
-        id: 'approval_tracking',
-        name: 'Approval Tracking',
-        href: '/reports/approvals',
-        icon: getIcon('Timer'),
-        description: 'Track approval timelines',
-        roles: ['admin', 'accountant', 'principal', 'auditor']
-      },
-      {
-        id: 'spending_reports',
-        name: 'Spending Reports',
-        href: '/reports/spending',
-        icon: getIcon('TrendingUp'),
-        description: 'Department spending reports',
-        roles: ['admin', 'accountant', 'principal', 'auditor']
-      },
-      {
-        id: 'supplier_reports',
-        name: 'Supplier Reports',
-        href: '/reports/suppliers',
-        icon: getIcon('Users'),
-        description: 'Supplier performance reports',
-        roles: ['admin', 'procurement', 'auditor']
-      },
-      {
-        id: 'audit_trail',
-        name: 'Audit Trail',
-        href: '/reports/audit',
-        icon: getIcon('Shield'),
-        description: 'System audit logs',
-        roles: ['admin', 'auditor']
-      },
-      {
-        id: 'financial_reports',
-        name: 'Financial Reports',
-        href: '/reports/financial',
-        icon: getIcon('DollarSign'),
-        description: 'Financial analytics',
-        roles: ['admin', 'accountant', 'principal', 'auditor']
-      },
-      {
-        id: 'budget_reports',
-        name: 'Budget Reports',
-        href: '/reports/budget',
-        icon: getIcon('PieChart'),
-        description: 'Budget vs actual reports',
-        roles: ['admin', 'accountant', 'principal']
+        description: 'Requisition, approval, spending, supplier, audit, and financial reports',
+        roles: ['admin', 'accountant', 'principal', 'hod', 'procurement', 'auditor']
       },
       {
         id: 'custom_reports',
@@ -674,171 +504,11 @@ export const navigationSections: NavigationSection[] = [
         icon: getIcon('Filter'),
         description: 'Build custom reports',
         roles: ['admin', 'accountant', 'auditor']
-      },
-      {
-        id: 'lpo_lso_register',
-        name: 'LPO/LSO Register',
-        href: '/reports/orders',
-        icon: getIcon('Package'),
-        description: 'All issued purchase/service orders',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'grn_san_register',
-        name: 'GRN/SAN Register',
-        href: '/reports/grn',
-        icon: getIcon('Truck'),
-        description: 'All received goods/services',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'payment_register',
-        name: 'Payment Register',
-        href: '/reports/payments',
-        icon: getIcon('Wallet'),
-        description: 'All payments with voucher and cheque details',
-        roles: ['admin', 'accountant', 'auditor']
-      },
-      {
-        id: 'tender_register',
-        name: 'Tender Register',
-        href: '/reports/tenders',
-        icon: getIcon('AlertTriangle'),
-        description: 'All tender-related requisitions',
-        roles: ['admin', 'procurement', 'auditor']
-      },
-      {
-        id: 'rejected_requisitions',
-        name: 'Rejected Requisitions',
-        href: '/reports/rejected',
-        icon: getIcon('X'),
-        description: 'List of declined requisitions',
-        roles: ['admin', 'hod', 'accountant']
-      },
-      {
-        id: 'emergency_reports',
-        name: 'Emergency/Fast Track',
-        href: '/reports/emergency',
-        icon: getIcon('AlertCircle'),
-        description: 'All emergency requisitions',
-        roles: ['admin', 'principal', 'auditor']
-      },
-      {
-        id: 'average_approval_time',
-        name: 'Approval Time Analysis',
-        href: '/reports/approval-time',
-        icon: getIcon('Watch'),
-        description: 'Average time from submission to final approval',
-        roles: ['admin', 'principal']
       }
     ]
   },
 
-  // 9. ADMINISTRATION
-  {
-    id: 'administration',
-    title: 'Administration',
-    icon: getIcon('Settings'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'users',
-        name: 'Users',
-        href: '/admin/users',
-        icon: getIcon('Users'),
-        description: 'Manage users',
-        roles: ['admin']
-      },
-      {
-        id: 'create_user',
-        name: 'Create User',
-        href: '/admin/users/create',
-        icon: getIcon('UserPlus'),
-        description: 'Add new user',
-        roles: ['admin']
-      },
-      {
-        id: 'departments',
-        name: 'Departments',
-        href: '/admin/departments',
-        icon: getIcon('Building2'),
-        description: 'Manage departments',
-        roles: ['admin']
-      },
-      {
-        id: 'create_department',
-        name: 'Create Department',
-        href: '/admin/departments/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Add new department',
-        roles: ['admin']
-      },
-      {
-        id: 'system_settings',
-        name: 'System Settings',
-        href: '/admin/settings',
-        icon: getIcon('Settings'),
-        description: 'Configure system settings',
-        roles: ['admin']
-      },
-      {
-        id: 'reference_formats',
-        name: 'Reference Formats',
-        href: '/admin/reference-formats',
-        icon: getIcon('FileText'),
-        description: 'Configure reference number formats',
-        roles: ['admin']
-      },
-      {
-        id: 'audit_logs',
-        name: 'Audit Logs',
-        href: '/admin/audit',
-        icon: getIcon('Shield'),
-        description: 'System audit logs',
-        roles: ['admin', 'auditor']
-      },
-      {
-        id: 'roles_permissions',
-        name: 'Roles & Permissions',
-        href: '/admin/roles',
-        icon: getIcon('Lock'),
-        description: 'Manage roles and permissions',
-        roles: ['admin']
-      },
-      {
-        id: 'system_status',
-        name: 'System Status',
-        href: '/admin/status',
-        icon: getIcon('Activity'),
-        description: 'System health monitoring',
-        roles: ['admin']
-      },
-      {
-        id: 'acting_hod',
-        name: 'Acting HOD',
-        href: '/admin/acting-hod',
-        icon: getIcon('UserCheck'),
-        description: 'Assign acting HOD temporarily',
-        roles: ['admin']
-      },
-      {
-        id: 'backup_restore',
-        name: 'Backup & Restore',
-        href: '/admin/backup',
-        icon: getIcon('Database'),
-        description: 'System backup and restore',
-        roles: ['admin']
-      },
-      {
-        id: 'email_settings',
-        name: 'Email Settings',
-        href: '/admin/email',
-        icon: getIcon('Mail'),
-        description: 'Configure email settings',
-        roles: ['admin']
-      }
-    ]
-  },
+
 
   // 10. COMMUNICATION
   {
@@ -864,36 +534,12 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
       },
       {
-        id: 'send_message',
-        name: 'Send Message',
-        href: '/messages/send',
-        icon: getIcon('Send'),
-        description: 'Send internal message',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
-      },
-      {
-        id: 'alerts',
-        name: 'Alerts',
-        href: '/alerts',
-        icon: getIcon('AlertTriangle'),
-        description: 'System alerts',
-        roles: ['admin', 'accountant', 'principal', 'auditor']
-      },
-      {
         id: 'announcements',
         name: 'Announcements',
         href: '/announcements',
         icon: getIcon('Megaphone'),
-        description: 'View announcements',
+        description: 'View and create announcements',
         roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
-        id: 'create_announcement',
-        name: 'Create Announcement',
-        href: '/announcements/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Post new announcement',
-        roles: ['admin', 'principal']
       }
     ]
   },
@@ -914,27 +560,11 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
       },
       {
-        id: 'settings',
-        name: 'Settings',
+        id: 'account_settings',
+        name: 'Account Settings',
         href: '/profile/settings',
         icon: getIcon('Settings'),
-        description: 'Account settings',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
-        id: 'security',
-        name: 'Security',
-        href: '/profile/security',
-        icon: getIcon('Key'),
-        description: 'Security settings and 2FA',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
-        id: 'preferences',
-        name: 'Preferences',
-        href: '/profile/preferences',
-        icon: getIcon('Sliders'),
-        description: 'App preferences',
+        description: 'Account settings, security, and preferences',
         roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
       }
     ]
@@ -948,22 +578,6 @@ export const navigationSections: NavigationSection[] = [
     defaultOpen: false,
     items: [
       {
-        id: 'documentation',
-        name: 'Documentation',
-        href: '/help/docs',
-        icon: getIcon('BookOpen'),
-        description: 'User documentation',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
-        id: 'faq',
-        name: 'FAQ',
-        href: '/help/faq',
-        icon: getIcon('HelpCircle'),
-        description: 'Frequently asked questions',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
-      },
-      {
         id: 'support_tickets',
         name: 'Support Tickets',
         href: '/help/tickets',
@@ -972,19 +586,11 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
       },
       {
-        id: 'create_ticket',
-        name: 'Create Ticket',
-        href: '/help/tickets/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Create support ticket',
-        roles: ['admin', 'hod', 'accountant', 'principal', 'procurement', 'staff']
-      },
-      {
         id: 'knowledge_base',
         name: 'Knowledge Base',
-        href: '/help/knowledge-base',
-        icon: getIcon('Book'),
-        description: 'Knowledge base articles',
+        href: '/help',
+        icon: getIcon('BookOpen'),
+        description: 'Documentation, FAQ, and knowledge base',
         roles: ['admin', 'hod', 'accountant', 'principal', 'final_approver', 'procurement', 'staff', 'auditor']
       }
     ]
@@ -998,52 +604,20 @@ export const navigationSections: NavigationSection[] = [
     defaultOpen: false,
     items: [
       {
-        id: 'staff_directory',
-        name: 'Staff Directory',
-        href: '/hr/staff',
+        id: 'staff',
+        name: 'Staff Management',
+        href: '/hr',
         icon: getIcon('Users'),
-        description: 'View staff members',
-        roles: ['admin', 'hod', 'principal']
-      },
-      {
-        id: 'attendance',
-        name: 'Attendance',
-        href: '/hr/attendance',
-        icon: getIcon('Clock'),
-        description: 'Track attendance',
-        roles: ['admin', 'hod']
-      },
-      {
-        id: 'leave_management',
-        name: 'Leave Management',
-        href: '/hr/leave',
-        icon: getIcon('CalendarDays'),
-        description: 'Manage leave requests',
-        roles: ['admin', 'hod', 'staff']
-      },
-      {
-        id: 'apply_leave',
-        name: 'Apply Leave',
-        href: '/hr/leave/apply',
-        icon: getIcon('PlusCircle'),
-        description: 'Submit leave request',
-        roles: ['admin', 'hod', 'staff']
+        description: 'Staff directory, attendance, and leave management',
+        roles: ['admin', 'hod', 'principal', 'staff']
       },
       {
         id: 'performance',
-        name: 'Performance Reviews',
+        name: 'Performance & Training',
         href: '/hr/performance',
         icon: getIcon('Award'),
-        description: 'Performance reviews',
-        roles: ['admin', 'principal']
-      },
-      {
-        id: 'training',
-        name: 'Training Programs',
-        href: '/hr/training',
-        icon: getIcon('GraduationCap'),
-        description: 'Training programs',
-        roles: ['admin', 'hod']
+        description: 'Performance reviews and training programs',
+        roles: ['admin', 'principal', 'hod']
       }
     ]
   },
@@ -1057,43 +631,11 @@ export const navigationSections: NavigationSection[] = [
     items: [
       {
         id: 'assets',
-        name: 'Assets',
+        name: 'Assets & Inventory',
         href: '/assets',
         icon: getIcon('Briefcase'),
-        description: 'Manage assets',
-        roles: ['admin', 'accountant', 'procurement']
-      },
-      {
-        id: 'create_asset',
-        name: 'Create Asset',
-        href: '/assets/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Add new asset',
-        roles: ['admin', 'procurement']
-      },
-      {
-        id: 'inventory',
-        name: 'Inventory',
-        href: '/assets/inventory',
-        icon: getIcon('Box'),
-        description: 'Inventory management',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-      {
-        id: 'asset_audit',
-        name: 'Asset Audit',
-        href: '/assets/audit',
-        icon: getIcon('ClipboardList'),
-        description: 'Asset audit trail',
-        roles: ['admin', 'auditor']
-      },
-      {
-        id: 'maintenance',
-        name: 'Maintenance',
-        href: '/assets/maintenance',
-        icon: getIcon('Wrench'),
-        description: 'Asset maintenance',
-        roles: ['admin', 'procurement']
+        description: 'Manage assets, inventory, and maintenance',
+        roles: ['admin', 'accountant', 'procurement', 'auditor']
       }
     ]
   },
@@ -1107,43 +649,11 @@ export const navigationSections: NavigationSection[] = [
     items: [
       {
         id: 'facilities',
-        name: 'Facilities',
+        name: 'Facilities & Rooms',
         href: '/facilities',
         icon: getIcon('Building2'),
-        description: 'Manage facilities',
-        roles: ['admin', 'principal']
-      },
-      {
-        id: 'rooms',
-        name: 'Room Management',
-        href: '/facilities/rooms',
-        icon: getIcon('DoorOpen'),
-        description: 'Room booking',
-        roles: ['admin', 'hod', 'staff']
-      },
-      {
-        id: 'book_room',
-        name: 'Book Room',
-        href: '/facilities/rooms/book',
-        icon: getIcon('PlusCircle'),
-        description: 'Book a room',
-        roles: ['admin', 'hod', 'staff']
-      },
-      {
-        id: 'maintenance_requests',
-        name: 'Maintenance Requests',
-        href: '/facilities/maintenance',
-        icon: getIcon('Wrench'),
-        description: 'Facility maintenance',
-        roles: ['admin', 'staff']
-      },
-      {
-        id: 'create_maintenance',
-        name: 'Create Maintenance Request',
-        href: '/facilities/maintenance/create',
-        icon: getIcon('PlusCircle'),
-        description: 'Submit maintenance request',
-        roles: ['admin', 'staff']
+        description: 'Manage facilities, rooms, and maintenance',
+        roles: ['admin', 'principal', 'hod', 'staff']
       }
     ]
   },
@@ -1156,43 +666,11 @@ export const navigationSections: NavigationSection[] = [
     defaultOpen: false,
     items: [
       {
-        id: 'pending_quotations',
-        name: 'Pending Quotations',
-        href: '/supplier/quotations',
-        icon: getIcon('FileText'),
-        description: 'View pending quotation requests',
-        roles: ['supplier']
-      },
-      {
-        id: 'respond_quotation',
-        name: 'Respond to Quotation',
-        href: '/supplier/quotations/respond',
-        icon: getIcon('Send'),
-        description: 'Submit quotation response',
-        roles: ['supplier']
-      },
-      {
-        id: 'my_orders',
-        name: 'My Orders',
-        href: '/supplier/orders',
-        icon: getIcon('Package'),
-        description: 'View active orders',
-        roles: ['supplier']
-      },
-      {
-        id: 'submit_invoice',
-        name: 'Submit Invoice',
-        href: '/supplier/invoices/submit',
-        icon: getIcon('Receipt'),
-        description: 'Submit invoice for payment',
-        roles: ['supplier']
-      },
-      {
-        id: 'payment_history',
-        name: 'Payment History',
-        href: '/supplier/payments',
-        icon: getIcon('Wallet'),
-        description: 'View payment history',
+        id: 'supplier_dashboard',
+        name: 'Supplier Dashboard',
+        href: '/supplier',
+        icon: getIcon('LayoutDashboard'),
+        description: 'Quotations, orders, invoices, and payments',
         roles: ['supplier']
       }
     ]

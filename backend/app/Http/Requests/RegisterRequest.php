@@ -28,7 +28,6 @@ class RegisterRequest extends FormRequest
             'phone' => 'required|string|max:20',
             'id_number' => 'nullable|string|max:50',
             'date_of_birth' => 'nullable|date',
-            // ADDED 'ADMIN' to the allowed roles
             'role' => ['required', 'string', Rule::in(['ADMIN', 'STAFF', 'HOD', 'ACCOUNTANT', 'PRINCIPAL', 'FINAL_APPROVER', 'PROCUREMENT', 'SUPPLIER', 'AUDITOR'])],
             'department' => 'nullable|string|max:255',
             'timezone' => 'nullable|string|timezone',
@@ -37,15 +36,8 @@ class RegisterRequest extends FormRequest
             'password' => 'required|string|min:8|confirmed',
             'password_confirmation' => 'required|string|min:8',
 
-            // Supplier specific fields
-            'company_name' => 'required_if:role,SUPPLIER|string|max:255',
-            'company_email' => 'required_if:role,SUPPLIER|email|max:255|unique:suppliers,company_email',
-            'company_phone' => 'nullable|string|max:20',
-            'company_registration' => 'required_if:role,SUPPLIER|string|max:255|unique:suppliers,company_registration',
-            'company_address' => 'required_if:role,SUPPLIER|string|max:500',
-            'company_website' => 'nullable|url|max:255',
-            'tax_id' => 'nullable|string|max:50',
-            'supplier_category' => 'required_if:role,SUPPLIER|string|in:goods,services,both',
+            // ⚠️ REMOVED supplier field requirements - they will be handled separately
+            // Supplier profile will be completed after registration/approval
 
             // Terms
             'agree_terms' => 'accepted',
@@ -74,18 +66,6 @@ class RegisterRequest extends FormRequest
             'password.confirmed' => 'Password confirmation does not match',
             'password_confirmation.required' => 'Please confirm your password',
             'password_confirmation.min' => 'Password confirmation must be at least 8 characters',
-
-            // Supplier specific
-            'company_name.required_if' => 'Company name is required for suppliers',
-            'company_email.required_if' => 'Company email is required for suppliers',
-            'company_email.email' => 'Please enter a valid company email',
-            'company_email.unique' => 'This company email is already registered',
-            'company_registration.required_if' => 'Company registration number is required for suppliers',
-            'company_registration.unique' => 'This registration number is already used',
-            'company_address.required_if' => 'Company address is required for suppliers',
-            'company_website.url' => 'Please enter a valid website URL',
-            'supplier_category.required_if' => 'Supplier category is required',
-            'supplier_category.in' => 'Invalid supplier category',
 
             // Terms
             'agree_terms.accepted' => 'You must agree to the terms and conditions',

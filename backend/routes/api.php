@@ -1,11 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AuditLogController;
+use App\Http\Controllers\Api\Admin\BackupController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SupplierController;
-use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\Admin\RoleController;
+use App\Http\Controllers\Api\Admin\SystemStatusController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -103,17 +106,19 @@ Route::prefix('v1')->group(function () {
     // DEPARTMENT ROUTES
     // ============================================
     Route::prefix('departments')->group(function () {
+      // Public (authenticated) routes
       Route::get('/', [DepartmentController::class, 'index']);
       Route::get('/stats', [DepartmentController::class, 'stats']);
       Route::get('/{id}', [DepartmentController::class, 'show']);
       Route::get('/{id}/users', [DepartmentController::class, 'users']);
 
-      // Admin only routes
+      // Admin only routes - FIXED: Added deactivate route
       Route::middleware(['role:ADMIN'])->group(function () {
         Route::post('/', [DepartmentController::class, 'store']);
         Route::put('/{id}', [DepartmentController::class, 'update']);
         Route::delete('/{id}', [DepartmentController::class, 'destroy']);
         Route::post('/{id}/activate', [DepartmentController::class, 'activate']);
+        Route::post('/{id}/deactivate', [DepartmentController::class, 'deactivate']); // ADDED THIS
         Route::post('/{id}/assign-hod', [DepartmentController::class, 'assignHOD']);
         Route::post('/{id}/remove-hod', [DepartmentController::class, 'removeHOD']);
       });
@@ -144,24 +149,24 @@ Route::prefix('v1')->group(function () {
     // ============================================
     Route::prefix('admin')->middleware(['role:ADMIN'])->group(function () {
 
-      // User Management
+      // User Management - Using UserManagementController
       Route::prefix('users')->group(function () {
-        Route::get('/', [UserController::class, 'index']);
-        Route::post('/', [UserController::class, 'store']);
-        Route::get('/pending', [UserController::class, 'pending']);
-        Route::get('/recent', [UserController::class, 'recent']);
-        Route::get('/stats', [UserController::class, 'stats']);
-        Route::post('/bulk', [UserController::class, 'bulkAction']);
-        Route::get('/{id}', [UserController::class, 'show']);
-        Route::put('/{id}', [UserController::class, 'update']);
-        Route::delete('/{id}', [UserController::class, 'destroy']);
+        Route::get('/', [UserManagementController::class, 'index']);
+        Route::post('/', [UserManagementController::class, 'store']);
+        Route::get('/pending', [UserManagementController::class, 'pending']);
+        Route::get('/recent', [UserManagementController::class, 'recent']);
+        Route::get('/stats', [UserManagementController::class, 'stats']);
+        Route::post('/bulk', [UserManagementController::class, 'bulkAction']);
+        Route::get('/{id}', [UserManagementController::class, 'show']);
+        Route::put('/{id}', [UserManagementController::class, 'update']);
+        Route::delete('/{id}', [UserManagementController::class, 'destroy']);
 
         // User Actions
-        Route::post('/{id}/approve', [UserController::class, 'approve']);
-        Route::post('/{id}/reject', [UserController::class, 'reject']);
-        Route::post('/{id}/activate', [UserController::class, 'activate']);
-        Route::post('/{id}/deactivate', [UserController::class, 'deactivate']);
-        Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']);
+        Route::post('/{id}/approve', [UserManagementController::class, 'approve']);
+        Route::post('/{id}/reject', [UserManagementController::class, 'reject']);
+        Route::post('/{id}/activate', [UserManagementController::class, 'activate']);
+        Route::post('/{id}/deactivate', [UserManagementController::class, 'deactivate']);
+        Route::post('/{id}/reset-password', [UserManagementController::class, 'resetPassword']);
       });
 
       // Role Management
@@ -178,10 +183,42 @@ Route::prefix('v1')->group(function () {
         Route::get('/{id}/users', [RoleController::class, 'roleUsers']);
       });
 
+      // Audit Log Routes
+      Route::prefix('audit-logs')->group(function () {
+        Route::get('/', [AuditLogController::class, 'index']);
+        Route::get('/stats', [AuditLogController::class, 'stats']);
+        Route::get('/modules', [AuditLogController::class, 'modules']);
+        Route::get('/actions', [AuditLogController::class, 'actions']);
+        Route::get('/export', [AuditLogController::class, 'export']);
+        Route::get('/{id}', [AuditLogController::class, 'show']);
+      });
+
       // User Role Assignment
       Route::prefix('assignments')->group(function () {
         Route::post('/assign-role', [RoleController::class, 'assignRoleToUser']);
         Route::post('/user-roles', [RoleController::class, 'userRoles']);
+      });
+
+      // System Status Routes
+      Route::prefix('system-status')->group(function () {
+        Route::get('/current', [SystemStatusController::class, 'current']);
+        Route::get('/history', [SystemStatusController::class, 'history']);
+        Route::get('/summary', [SystemStatusController::class, 'summary']);
+        Route::get('/component/{component}', [SystemStatusController::class, 'component']);
+        Route::post('/refresh', [SystemStatusController::class, 'refresh']);
+      });
+
+
+      // Backup Routes
+      Route::prefix('backups')->group(function () {
+        Route::get('/', [BackupController::class, 'index']);
+        Route::post('/', [BackupController::class, 'store']);
+        Route::get('/stats', [BackupController::class, 'stats']);
+        Route::get('/{id}', [BackupController::class, 'show']);
+        Route::delete('/{id}', [BackupController::class, 'destroy']);
+        Route::get('/{id}/download', [BackupController::class, 'download']);
+        Route::post('/{id}/restore', [BackupController::class, 'restore']);
+        Route::post('/clean', [BackupController::class, 'clean']);
       });
     });
 

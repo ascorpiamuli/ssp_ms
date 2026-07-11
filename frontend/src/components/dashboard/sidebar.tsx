@@ -205,7 +205,6 @@ function NavSection({
 }
 
 export function DashboardSidebar() {
-  const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
@@ -221,12 +220,8 @@ export function DashboardSidebar() {
   const initialLoadDone = useRef(false)
   const previousPathname = useRef(pathname)
 
-  // Load saved state from localStorage on initial mount
+  // Initialize on mount
   useEffect(() => {
-    const savedCollapsed = localStorage.getItem('sidebarCollapsed')
-    if (savedCollapsed !== null) {
-      setCollapsed(savedCollapsed === 'true')
-    }
     setIsInitialized(true)
   }, [])
 
@@ -236,13 +231,6 @@ export function DashboardSidebar() {
       localStorage.setItem('lastVisitedPath', pathname)
     }
   }, [pathname, isInitialized, userRole])
-
-  // Save collapsed state to localStorage
-  useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('sidebarCollapsed', String(collapsed))
-    }
-  }, [collapsed, isInitialized])
 
   // Save open sections to localStorage
   useEffect(() => {
@@ -371,27 +359,20 @@ export function DashboardSidebar() {
 
   const sidebarContent = (
     <>
-      <div className="sticky top-0 z-10 flex-shrink-0 flex h-16 items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <Logo collapsed={collapsed && !isMobile} />
-        <button
-          onClick={() => {
-            if (isMobile) {
-              setMobileOpen(false)
-            } else {
-              setCollapsed(!collapsed)
-            }
-          }}
-          className="rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-          aria-label={isMobile ? "Close menu" : (collapsed ? "Expand sidebar" : "Collapse sidebar")}
-        >
-          {isMobile ? (
-            <X className="h-4 w-4" />
-          ) : collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </button>
+      <div className="sticky top-0 z-10 flex-shrink-0 flex h-20 items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="flex items-center justify-center flex-1">
+          <Logo collapsed={false} showText={false} />
+        </div>
+        {/* Only show close button on mobile */}
+        {isMobile && (
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            aria-label="Close menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-3">
@@ -400,7 +381,7 @@ export function DashboardSidebar() {
             <NavSection
               key={section.id}
               section={section}
-              collapsed={collapsed && !isMobile}
+              collapsed={false}
               isMobile={isMobile}
               userRole={userRole}
               openSections={openSections}
@@ -434,7 +415,8 @@ export function DashboardSidebar() {
       <div
         className={cn(
           "flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out relative overflow-hidden",
-          !isMobile && cn("fixed md:relative h-screen", collapsed ? "w-20" : "w-80"),
+          // Always expanded on desktop, slide in/out on mobile
+          !isMobile && "w-80",
           isMobile && cn(
             "fixed top-0 left-0 h-screen w-80 shadow-xl z-[200] transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full"

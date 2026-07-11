@@ -6,22 +6,41 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
   public function run(): void
   {
-    // Reset cached roles and permissions
-    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+    // ============================================
+    // CLEAR EXISTING DATA
+    // ============================================
+
+    $this->command->info('🧹 Clearing existing roles and permissions...');
+
+    // Disable foreign key checks
+    DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+    // Truncate tables in correct order
+    DB::table('role_has_permissions')->truncate();
+    DB::table('model_has_roles')->truncate();
+    DB::table('model_has_permissions')->truncate();
+    DB::table('roles')->truncate();
+    DB::table('permissions')->truncate();
+
+    // Re-enable foreign key checks
+    DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+    $this->command->info('✅ All existing roles and permissions cleared.');
 
     // ============================================
-    // CREATE PERMISSIONS
+    // CREATE PERMISSIONS WITH WEB GUARD
     // ============================================
+
+    $this->command->info('📝 Creating permissions with web guard...');
 
     $permissions = [
-      // ============================================
       // REQUISITION PERMISSIONS
-      // ============================================
       'create_requisitions',
       'view_own_requisitions',
       'view_department_requisitions',
@@ -38,9 +57,7 @@ class RolesAndPermissionsSeeder extends Seeder
       'return_requisitions',
       'fast_track_emergency',
 
-      // ============================================
       // SUPPLIER PERMISSIONS
-      // ============================================
       'view_suppliers',
       'create_suppliers',
       'edit_suppliers',
@@ -48,9 +65,7 @@ class RolesAndPermissionsSeeder extends Seeder
       'manage_suppliers',
       'blacklist_suppliers',
 
-      // ============================================
       // QUOTATION PERMISSIONS
-      // ============================================
       'view_quotations',
       'create_quotations',
       'edit_quotations',
@@ -60,50 +75,38 @@ class RolesAndPermissionsSeeder extends Seeder
       'respond_quotations',
       'select_supplier',
 
-      // ============================================
       // LPO/LSO PERMISSIONS
-      // ============================================
       'view_purchase_orders',
       'create_lpo',
       'create_lso',
       'approve_lpo',
       'approve_lso',
 
-      // ============================================
       // GRN/SAN PERMISSIONS
-      // ============================================
       'view_grn_san',
       'create_grn',
       'create_san',
       'approve_grn',
       'approve_san',
 
-      // ============================================
       // INVOICE PERMISSIONS
-      // ============================================
       'view_invoices',
       'create_invoices',
       'verify_invoices',
       'send_back_invoices',
 
-      // ============================================
       // PAYMENT VOUCHER PERMISSIONS
-      // ============================================
       'view_payment_vouchers',
       'create_payment_vouchers',
       'endorse_payment_vouchers',
       'approve_payment_vouchers',
 
-      // ============================================
       // CHEQUE PERMISSIONS
-      // ============================================
       'view_cheques',
       'record_cheques',
       'update_cheque_status',
 
-      // ============================================
       // USER & DEPARTMENT PERMISSIONS
-      // ============================================
       'view_users',
       'create_users',
       'edit_users',
@@ -115,9 +118,7 @@ class RolesAndPermissionsSeeder extends Seeder
       'edit_departments',
       'delete_departments',
 
-      // ============================================
       // SYSTEM PERMISSIONS
-      // ============================================
       'view_reports',
       'export_reports',
       'view_audit_logs',
@@ -126,19 +127,24 @@ class RolesAndPermissionsSeeder extends Seeder
     ];
 
     foreach ($permissions as $permission) {
-      Permission::create(['name' => $permission, 'guard_name' => 'api']);
+      Permission::create(['name' => $permission, 'guard_name' => 'web']);
     }
+
+    $this->command->info('✅ ' . count($permissions) . ' permissions created with web guard.');
 
     // ============================================
     // CREATE ROLES AND ASSIGN PERMISSIONS
     // ============================================
 
-    // 1. ADMIN - Full system access
-    $adminRole = Role::create(['name' => 'ADMIN', 'guard_name' => 'api']);
-    $adminRole->givePermissionTo(Permission::all());
+    $this->command->info('👤 Creating roles with web guard...');
 
-    // 2. STAFF - Can create and view own requisitions
-    $staffRole = Role::create(['name' => 'STAFF', 'guard_name' => 'api']);
+    // 1. ADMIN
+    $adminRole = Role::create(['name' => 'ADMIN', 'guard_name' => 'web']);
+    $adminRole->givePermissionTo(Permission::all());
+    $this->command->info('✅ ADMIN role created.');
+
+    // 2. STAFF
+    $staffRole = Role::create(['name' => 'STAFF', 'guard_name' => 'web']);
     $staffRole->givePermissionTo([
       'create_requisitions',
       'view_own_requisitions',
@@ -149,9 +155,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'create_grn',
       'view_grn_san',
     ]);
+    $this->command->info('✅ STAFF role created.');
 
-    // 3. HOD - Department head with approval powers
-    $hodRole = Role::create(['name' => 'HOD', 'guard_name' => 'api']);
+    // 3. HOD - IMPORTANT: This is the role we need!
+    $hodRole = Role::create(['name' => 'HOD', 'guard_name' => 'web']);
     $hodRole->givePermissionTo([
       'create_requisitions',
       'view_own_requisitions',
@@ -168,9 +175,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'approve_san',
       'view_departments',
     ]);
+    $this->command->info('✅ HOD role created.');
 
-    // 4. ACCOUNTANT - Budget authority
-    $accountantRole = Role::create(['name' => 'ACCOUNTANT', 'guard_name' => 'api']);
+    // 4. ACCOUNTANT
+    $accountantRole = Role::create(['name' => 'ACCOUNTANT', 'guard_name' => 'web']);
     $accountantRole->givePermissionTo([
       'view_own_requisitions',
       'view_department_requisitions',
@@ -197,9 +205,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'view_reports',
       'export_reports',
     ]);
+    $this->command->info('✅ ACCOUNTANT role created.');
 
-    // 5. PRINCIPAL - Level 3 approval
-    $principalRole = Role::create(['name' => 'PRINCIPAL', 'guard_name' => 'api']);
+    // 5. PRINCIPAL
+    $principalRole = Role::create(['name' => 'PRINCIPAL', 'guard_name' => 'web']);
     $principalRole->givePermissionTo([
       'view_own_requisitions',
       'view_department_requisitions',
@@ -226,9 +235,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'view_reports',
       'export_reports',
     ]);
+    $this->command->info('✅ PRINCIPAL role created.');
 
-    // 6. FINAL_APPROVER - Level 4 approval
-    $finalApproverRole = Role::create(['name' => 'FINAL_APPROVER', 'guard_name' => 'api']);
+    // 6. FINAL_APPROVER
+    $finalApproverRole = Role::create(['name' => 'FINAL_APPROVER', 'guard_name' => 'web']);
     $finalApproverRole->givePermissionTo([
       'view_department_requisitions',
       'view_all_requisitions',
@@ -252,9 +262,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'view_reports',
       'export_reports',
     ]);
+    $this->command->info('✅ FINAL_APPROVER role created.');
 
-    // 7. PROCUREMENT - Supplier and quotation management
-    $procurementRole = Role::create(['name' => 'PROCUREMENT', 'guard_name' => 'api']);
+    // 7. PROCUREMENT
+    $procurementRole = Role::create(['name' => 'PROCUREMENT', 'guard_name' => 'web']);
     $procurementRole->givePermissionTo([
       'view_own_requisitions',
       'view_department_requisitions',
@@ -282,9 +293,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'view_reports',
       'export_reports',
     ]);
+    $this->command->info('✅ PROCUREMENT role created.');
 
-    // 8. SUPPLIER - External vendor
-    $supplierRole = Role::create(['name' => 'SUPPLIER', 'guard_name' => 'api']);
+    // 8. SUPPLIER
+    $supplierRole = Role::create(['name' => 'SUPPLIER', 'guard_name' => 'web']);
     $supplierRole->givePermissionTo([
       'view_quotations',
       'respond_quotations',
@@ -293,9 +305,10 @@ class RolesAndPermissionsSeeder extends Seeder
       'view_purchase_orders',
       'view_grn_san',
     ]);
+    $this->command->info('✅ SUPPLIER role created.');
 
-    // 9. AUDITOR - Read-only access
-    $auditorRole = Role::create(['name' => 'AUDITOR', 'guard_name' => 'api']);
+    // 9. AUDITOR
+    $auditorRole = Role::create(['name' => 'AUDITOR', 'guard_name' => 'web']);
     $auditorRole->givePermissionTo([
       'view_all_requisitions',
       'view_suppliers',
@@ -309,23 +322,58 @@ class RolesAndPermissionsSeeder extends Seeder
       'export_reports',
       'view_audit_logs',
     ]);
+    $this->command->info('✅ AUDITOR role created.');
+
+    $this->command->info('✅ All 9 roles created with web guard.');
 
     // ============================================
     // CREATE SUPER ADMIN USER
     // ============================================
 
-    $adminUser = User::create([
-      'first_name' => 'System',
-      'last_name' => 'Administrator',
-      'email' => 'admin@sspms.com',
-      'password' => bcrypt('Admin@2024'),
-      'phone' => '+254700000000',
-      'is_active' => true,
-      'is_approved' => true,
-      'approved_at' => now(),
-      'timezone' => 'Africa/Nairobi',
-    ]);
+    $this->command->info('👤 Creating Super Admin user...');
+
+    // Check if admin exists
+    $adminUser = User::where('email', 'admin@sspms.com')->first();
+
+    if ($adminUser) {
+      $adminUser->update([
+        'first_name' => 'System',
+        'last_name' => 'Administrator',
+        'phone' => '+254700000000',
+        'is_active' => true,
+        'is_approved' => true,
+        'approved_at' => now(),
+        'timezone' => 'Africa/Nairobi',
+      ]);
+      $this->command->info('✅ Existing admin user updated.');
+    } else {
+      $adminUser = User::create([
+        'first_name' => 'System',
+        'last_name' => 'Administrator',
+        'email' => 'admin@sspms.com',
+        'password' => bcrypt('Admin@2024'),
+        'phone' => '+254700000000',
+        'is_active' => true,
+        'is_approved' => true,
+        'approved_at' => now(),
+        'timezone' => 'Africa/Nairobi',
+      ]);
+      $this->command->info('✅ New admin user created.');
+    }
 
     $adminUser->assignRole('ADMIN');
+    $this->command->info('✅ ADMIN role assigned to admin user.');
+
+    // ============================================
+    // SUMMARY
+    // ============================================
+
+    $this->command->info('============================================');
+    $this->command->info('✅ Seeding completed successfully!');
+    $this->command->info('📊 Summary:');
+    $this->command->info('   - ' . count($permissions) . ' permissions created (web guard)');
+    $this->command->info('   - 9 roles created (web guard)');
+    $this->command->info('   - HOD role exists in web guard');
+    $this->command->info('============================================');
   }
 }

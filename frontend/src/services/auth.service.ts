@@ -368,4 +368,5 @@ export class AuthService {
   }
 }
 
+// Add default export at the bottom
 export default AuthService;

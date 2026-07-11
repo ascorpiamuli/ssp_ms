@@ -1,227 +1,417 @@
+// app/under-development/page.tsx
+
 'use client'
 
-import { motion } from 'framer-motion';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react'
 import {
-  Home,
+  Construction,
+  Wrench,
+  Clock,
+  AlertCircle,
   ArrowLeft,
-  Search,
-  Building2,
-  ShoppingBag,
-  FileText,
-  Users,
-  Calendar,
-  Package,
+  Home,
   Mail,
-  MapPin,
-  ArrowRight,
-  Shield
-} from 'lucide-react';
+  MessageCircle,
+  Twitter,
+  Github,
+  Linkedin,
+  Loader2,
+  CheckCircle2,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
-export default function NotFound() {
-  const router = useRouter();
+// ============================================
+// TYPES
+// ============================================
 
-  // Animation variants
-  const fadeInUp = {
-    initial: { opacity: 0, y: 30 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6, ease: "easeOut" }
-  };
+interface Feature {
+  id: string
+  name: string
+  description: string
+  status: 'planned' | 'in-progress' | 'completed'
+  priority: 'high' | 'medium' | 'low'
+  estimated_completion?: string
+}
 
-  const staggerContainer = {
-    animate: {
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
+interface Milestone {
+  id: string
+  title: string
+  description: string
+  date: string
+  status: 'completed' | 'in-progress' | 'pending'
+}
 
-  const floatAnimation = {
-    animate: {
-      y: [0, -15, 0],
-      transition: {
-        duration: 3,
-        repeat: Infinity,
-        ease: "easeInOut" as const
-      }
-    }
-  };
+// ============================================
+// MOCK DATA
+// ============================================
 
-  const rotateAnimation = {
-    animate: {
-      rotate: [0, 5, -5, 0],
-      transition: {
-        duration: 4,
-        repeat: Infinity,
-        ease: "easeInOut" as const
-      }
-    }
-  };
+const features: Feature[] = [
+  {
+    id: '1',
+    name: 'Advanced Analytics Dashboard',
+    description: 'Real-time analytics with interactive charts and reports',
+    status: 'in-progress',
+    priority: 'high',
+    estimated_completion: '2026-08-15',
+  },
+  {
+    id: '2',
+    name: 'Mobile App Integration',
+    description: 'Native mobile app for iOS and Android with push notifications',
+    status: 'planned',
+    priority: 'high',
+    estimated_completion: '2026-09-01',
+  },
+  {
+    id: '3',
+    name: 'AI-Powered Insights',
+    description: 'Machine learning algorithms for predictive analytics and recommendations',
+    status: 'planned',
+    priority: 'medium',
+    estimated_completion: '2026-10-01',
+  },
+  {
+    id: '4',
+    name: 'Multi-language Support',
+    description: 'Support for multiple languages including Swahili, French, and Arabic',
+    status: 'in-progress',
+    priority: 'medium',
+    estimated_completion: '2026-08-30',
+  },
+  {
+    id: '5',
+    name: 'API Documentation',
+    description: 'Comprehensive API documentation with interactive examples',
+    status: 'completed',
+    priority: 'low',
+    estimated_completion: '2026-07-01',
+  },
+]
 
-  const quickLinks = [
-    { href: '/', label: 'Dashboard', icon: Home, color: 'from-blue-500 to-cyan-500' },
-    { href: '/requisitions', label: 'Requisitions', icon: FileText, color: 'from-purple-500 to-pink-500' },
-    { href: '/suppliers', label: 'Suppliers', icon: Package, color: 'from-green-500 to-emerald-500' },
-    { href: '/departments', label: 'Departments', icon: Building2, color: 'from-red-500 to-rose-500' },
-    { href: '/reports', label: 'Reports', icon: ShoppingBag, color: 'from-amber-500 to-orange-500' },
-    { href: '/admin/users', label: 'Users', icon: Users, color: 'from-indigo-500 to-purple-500' },
-  ];
+const milestones: Milestone[] = [
+  {
+    id: '1',
+    title: 'Beta Release',
+    description: 'Initial beta release to select users',
+    date: '2026-07-15',
+    status: 'completed',
+  },
+  {
+    id: '2',
+    title: 'Performance Optimization',
+    description: 'Optimize application performance and response times',
+    date: '2026-08-01',
+    status: 'in-progress',
+  },
+  {
+    id: '3',
+    title: 'Security Audit',
+    description: 'Comprehensive security audit and penetration testing',
+    date: '2026-08-15',
+    status: 'pending',
+  },
+  {
+    id: '4',
+    title: 'Public Launch',
+    description: 'Full public launch with all features',
+    date: '2026-09-01',
+    status: 'pending',
+  },
+]
 
-  const popularPages = [
-    { href: '/requisitions', label: 'My Requisitions' },
-    { href: '/suppliers', label: 'Supplier List' },
-    { href: '/departments', label: 'Department Management' },
-    { href: '/reports', label: 'Reports & Analytics' },
-    { href: '/admin/users', label: 'User Management' },
-    { href: '/settings', label: 'System Settings' },
-  ];
+// ============================================
+// COMPONENTS
+// ============================================
+
+const StatusBadge = ({ status }: { status: Feature['status'] }) => {
+  const variants = {
+    'planned': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    'in-progress': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+    'completed': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  }
+
+  const labels = {
+    'planned': 'Planned',
+    'in-progress': 'In Progress',
+    'completed': 'Completed',
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-900 dark:via-blue-950/30 dark:to-indigo-950/40">
-      {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 dark:bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 dark:bg-indigo-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-100/10 dark:bg-blue-400/5 rounded-full blur-3xl"></div>
-      </div>
+    <Badge className={cn("font-medium border", variants[status])}>
+      {labels[status]}
+    </Badge>
+  )
+}
 
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-16">
-        <motion.div
-          variants={staggerContainer}
-          initial="initial"
-          animate="animate"
-          className="max-w-4xl w-full text-center"
-        >
-          {/* Logo and 404 Section */}
-          <motion.div variants={fadeInUp} className="mb-8">
-            <div className="flex justify-center mb-6">
-              <motion.div
-                variants={floatAnimation}
-                animate="animate"
-                className="relative"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full blur-2xl opacity-50"></div>
-                <div className="relative w-28 h-28 rounded-2xl overflow-hidden shadow-2xl ring-4 ring-blue-500/30 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center">
-                  <Building2 className="h-14 w-14 text-white" />
+const PriorityBadge = ({ priority }: { priority: Feature['priority'] }) => {
+  const variants = {
+    'high': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+    'medium': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+    'low': 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-400 border-gray-200 dark:border-gray-700',
+  }
+
+  const labels = {
+    'high': 'High Priority',
+    'medium': 'Medium Priority',
+    'low': 'Low Priority',
+  }
+
+  return (
+    <Badge variant="outline" className={cn("font-medium border", variants[priority])}>
+      {labels[priority]}
+    </Badge>
+  )
+}
+
+const MilestoneStatusIcon = ({ status }: { status: Milestone['status'] }) => {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+    case 'in-progress':
+      return <Loader2 className="h-5 w-5 text-yellow-500 animate-spin" />
+    default:
+      return <Clock className="h-5 w-5 text-gray-400" />
+  }
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
+export default function UnderDevelopmentPage() {
+  const router = useRouter()
+  const [isVisible, setIsVisible] = useState(false)
+
+  // Animation on mount
+  useEffect(() => {
+    setIsVisible(true)
+  }, [])
+
+  // Calculate overall progress
+  const completedFeatures = features.filter(f => f.status === 'completed').length
+  const totalFeatures = features.length
+  const progressPercentage = totalFeatures > 0 ? Math.round((completedFeatures / totalFeatures) * 100) : 0
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <div className={cn(
+          "text-center mb-12 transition-all duration-700 transform",
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+        )}>
+          <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+            <Construction className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+              Under Development
+            </span>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+            We're Building Something
+            <br />
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Amazing
+            </span>
+          </h1>
+
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            This page is currently under development. We're working hard to bring you new features
+            and improvements. Check back soon!
+          </p>
+        </div>
+
+        {/* Progress Section */}
+        <div className={cn(
+          "mb-12 transition-all duration-700 delay-200 transform",
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+        )}>
+          <Card className="border-2 border-dashed border-blue-200 dark:border-blue-800/50">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Development Progress
+                  </h3>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {progressPercentage}%
+                  </p>
                 </div>
-              </motion.div>
-            </div>
-
-            <motion.h1
-              variants={rotateAnimation}
-              animate="animate"
-              className="text-8xl md:text-9xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 bg-clip-text text-transparent mb-4"
-            >
-              404
-            </motion.h1>
-
-            <motion.h2
-              variants={fadeInUp}
-              className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-4"
-            >
-              Page Not Found
-            </motion.h2>
-
-            <motion.p
-              variants={fadeInUp}
-              className="text-slate-600 dark:text-slate-400 text-base md:text-lg max-w-md mx-auto"
-            >
-              Oops! The page you're looking for doesn't exist or has been moved.
-              Let's get you back to managing school supplies & procurement.
-            </motion.p>
-          </motion.div>
-
-          {/* Search Bar */}
-          <motion.div variants={fadeInUp} className="max-w-md mx-auto mb-8">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search the system..."
-                className="w-full pl-12 pr-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const searchTerm = (e.target as HTMLInputElement).value;
-                    if (searchTerm.trim()) {
-                      window.location.href = `/search?q=${encodeURIComponent(searchTerm)}`;
-                    }
-                  }
-                }}
-              />
-            </div>
-          </motion.div>
-
-          {/* Quick Links Grid */}
-          <motion.div
-            variants={fadeInUp}
-            className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8"
-          >
-            {quickLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="group flex flex-col items-center gap-2 p-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-all hover:-translate-y-1"
-              >
-                <div className={`p-2 rounded-lg bg-gradient-to-r ${link.color}`}>
-                  <link.icon className="h-4 w-4 text-white" />
+                <div className="text-right">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {completedFeatures} of {totalFeatures} features completed
+                  </p>
                 </div>
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  {link.label}
-                </span>
-              </Link>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Features Grid */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+              Upcoming Features
+            </h2>
+            <Badge variant="outline" className="text-sm">
+              {totalFeatures} features
+            </Badge>
+          </div>
+
+          <div className={cn(
+            "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-all duration-700 delay-300 transform",
+            isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+          )}>
+            {features.map((feature) => (
+              <Card key={feature.id} className="hover:shadow-lg transition-shadow">
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      {feature.name}
+                    </h3>
+                    <StatusBadge status={feature.status} />
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    {feature.description}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <PriorityBadge priority={feature.priority} />
+                    {feature.estimated_completion && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Est. {new Date(feature.estimated_completion).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
-          </motion.div>
+          </div>
+        </div>
 
-          {/* Popular Pages */}
-          <motion.div variants={fadeInUp} className="mb-8">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-              Popular Pages
-            </h3>
-            <div className="flex flex-wrap justify-center gap-2">
-              {popularPages.map((page) => (
-                <Link
-                  key={page.href}
-                  href={page.href}
-                  className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors px-3 py-1 bg-white/50 dark:bg-slate-800/50 rounded-full border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700"
-                >
-                  {page.label}
-                </Link>
-              ))}
-            </div>
-          </motion.div>
+        {/* Milestones */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+              Development Milestones
+            </h2>
+          </div>
 
-          {/* Action Buttons */}
-          <motion.div
-            variants={fadeInUp}
-            className="flex flex-col sm:flex-row gap-4 justify-center"
+          <div className={cn(
+            "space-y-4 transition-all duration-700 delay-500 transform",
+            isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+          )}>
+            {milestones.map((milestone) => (
+              <Card key={milestone.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <MilestoneStatusIcon status={milestone.status} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {milestone.title}
+                        </h3>
+                        <Badge variant="outline" className="text-xs">
+                          {milestone.status === 'completed' ? '✅ Completed' :
+                            milestone.status === 'in-progress' ? '🔄 In Progress' :
+                              '⏳ Pending'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {milestone.description}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(milestone.date).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Notify Section */}
+        <div className={cn(
+          "text-center py-8 border-t border-gray-200 dark:border-gray-700 transition-all duration-700 delay-700 transform",
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+        )}>
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Want to be notified when we launch?
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button variant="outline" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Subscribe to Updates
+            </Button>
+            <Button variant="outline" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Join Waitlist
+            </Button>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+            className="gap-2"
           >
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all group"
-            >
-              <Home className="h-4 w-4 group-hover:scale-110 transition-transform" />
-              Back to Dashboard
-            </Link>
-            <button
-              onClick={() => router.back()}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-              Go Back
-            </button>
-          </motion.div>
+            <ArrowLeft className="h-4 w-4" />
+            Go Back
+          </Button>
+          <Link href="/dashboard">
+            <Button variant="outline" className="gap-2">
+              <Home className="h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/">
+            <Button className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Construction className="h-4 w-4" />
+              Back to Home
+            </Button>
+          </Link>
+        </div>
 
-          {/* System Info */}
-          <motion.div
-            variants={fadeInUp}
-            className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400"
-          >
-            <Shield className="h-3 w-3" />
-            <span>SSPMS v1.0.0 • Secure • Encrypted</span>
-          </motion.div>
-        </motion.div>
+        {/* Footer */}
+        <div className="mt-12 text-center">
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+              <Twitter className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+              <Github className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+              <Linkedin className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            © {new Date().getFullYear()} SSPMS. All rights reserved.
+          </p>
+        </div>
       </div>
     </div>
-  );
+  )
 }

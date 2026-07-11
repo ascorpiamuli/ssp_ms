@@ -3,119 +3,296 @@
 namespace App\Services\Admin;
 
 use App\Services\BaseService;
-use App\Models\User;
-use App\Models\UserActivityLog;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RoleService extends BaseService
 {
-  /**
-   * Get all roles.
-   */
-  public function getAllRoles(array $filters = [])
-  {
-    $query = Role::with('permissions');
+  protected $auditLogService;
 
-    if (isset($filters['search'])) {
-      $query->where('name', 'LIKE', "%{$filters['search']}%");
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
+  /**
+   * Get all roles with their permissions.
+   */
+  public function getAllRoles()
+  {
+    Log::info('🔍 RoleService::getAllRoles - Fetching all roles');
+
+    try {
+      $roles = Role::with('permissions')->get();
+
+      Log::info('✅ RoleService::getAllRoles - Roles fetched successfully', [
+        'count' => $roles->count()
+      ]);
+
+      return $roles;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getAllRoles - Error fetching roles', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      throw $e;
     }
-
-    return $query->orderBy('name')->get();
   }
 
   /**
-   * Get role by ID.
+   * Get a single role with its permissions.
    */
-  public function getRoleById(int $id): ?Role
+  public function getRoleById(int $id)
   {
-    return Role::with('permissions')->find($id);
+    Log::info('🔍 RoleService::getRoleById - Fetching role', ['role_id' => $id]);
+
+    try {
+      $role = Role::with('permissions')->findOrFail($id);
+
+      Log::info('✅ RoleService::getRoleById - Role fetched successfully', [
+        'role_id' => $id,
+        'role_name' => $role->name
+      ]);
+
+      return $role;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getRoleById - Error fetching role', [
+        'role_id' => $id,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
-   * Get role by name.
+   * Get role statistics.
    */
-  public function getRoleByName(string $name): ?Role
+  public function getRoleStats()
   {
-    return Role::where('name', $name)->first();
+    Log::info('🔍 RoleService::getRoleStats - Fetching role statistics');
+
+    try {
+      $stats = [
+        'total_roles' => Role::count(),
+        'total_permissions' => Permission::count(),
+        'roles_with_users' => 0,
+        'roles_without_users' => 0,
+        'permissions_per_role' => [],
+      ];
+
+      $roles = Role::withCount('permissions')->get();
+      $roleIds = $roles->pluck('id')->toArray();
+
+      if (!empty($roleIds)) {
+        $userCounts = DB::table('model_has_roles')
+          ->whereIn('role_id', $roleIds)
+          ->where('model_type', 'App\\Models\\User')
+          ->select('role_id', DB::raw('count(*) as user_count'))
+          ->groupBy('role_id')
+          ->get()
+          ->pluck('user_count', 'role_id')
+          ->toArray();
+
+        $rolesWithUsers = count($userCounts);
+        $rolesWithoutUsers = $roles->count() - $rolesWithUsers;
+
+        $stats['roles_with_users'] = $rolesWithUsers;
+        $stats['roles_without_users'] = $rolesWithoutUsers;
+
+        foreach ($roles as $role) {
+          $stats['permissions_per_role'][$role->name] = [
+            'permission_count' => $role->permissions_count,
+            'user_count' => $userCounts[$role->id] ?? 0,
+          ];
+        }
+      } else {
+        $stats['roles_without_users'] = $roles->count();
+      }
+
+      Log::info('✅ RoleService::getRoleStats - Statistics fetched successfully', $stats);
+
+      return $stats;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getRoleStats - Error fetching statistics', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      throw $e;
+    }
   }
 
   /**
    * Create a new role.
    */
-  public function createRole(array $data): Role
+  public function createRole(array $data)
   {
-    return DB::transaction(function () use ($data) {
+    Log::info('🔍 RoleService::createRole - Creating new role', ['data' => $data]);
+
+    try {
+      DB::beginTransaction();
+
       $role = Role::create([
         'name' => $data['name'],
-        'guard_name' => 'api',
+        'guard_name' => $data['guard_name'] ?? 'api',
       ]);
 
-      // Assign permissions if provided
-      if (isset($data['permissions'])) {
+      if (isset($data['permissions']) && !empty($data['permissions'])) {
         $role->syncPermissions($data['permissions']);
+
+        // Log permission assignments
+        $this->auditLogService->log([
+          'action' => 'role_created_with_permissions',
+          'module' => 'roles',
+          'description' => 'Role "' . $role->name . '" created with ' . count($data['permissions']) . ' permissions',
+          'entity_type' => get_class($role),
+          'entity_id' => $role->id,
+          'new_values' => [
+            'name' => $role->name,
+            'permissions' => $data['permissions']
+          ],
+          'metadata' => [
+            'permission_count' => count($data['permissions'])
+          ]
+        ]);
+      } else {
+        $this->auditLogService->log([
+          'action' => 'role_created',
+          'module' => 'roles',
+          'description' => 'Role "' . $role->name . '" created',
+          'entity_type' => get_class($role),
+          'entity_id' => $role->id,
+          'new_values' => ['name' => $role->name],
+        ]);
       }
 
-      // Log activity
-      $this->logActivity($role, 'CREATED', 'Role created');
+      DB::commit();
 
-      return $role;
-    });
+      Log::info('✅ RoleService::createRole - Role created successfully', [
+        'role_id' => $role->id,
+        'role_name' => $role->name
+      ]);
+
+      return $role->load('permissions');
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::createRole - Error creating role', [
+        'error' => $e->getMessage(),
+        'data' => $data
+      ]);
+      throw $e;
+    }
   }
 
   /**
    * Update a role.
    */
-  public function updateRole(int $id, array $data): Role
+  public function updateRole(int $id, array $data)
   {
-    $role = Role::findOrFail($id);
-
-    $role->update([
-      'name' => $data['name'] ?? $role->name,
+    Log::info('🔍 RoleService::updateRole - Updating role', [
+      'role_id' => $id,
+      'data' => $data
     ]);
 
-    // Sync permissions
-    if (isset($data['permissions'])) {
-      $role->syncPermissions($data['permissions']);
+    try {
+      DB::beginTransaction();
+
+      $role = Role::findOrFail($id);
+      $oldName = $role->name;
+      $oldPermissions = $role->permissions->pluck('name')->toArray();
+
+      $role->update([
+        'name' => $data['name'] ?? $role->name,
+        'guard_name' => $data['guard_name'] ?? $role->guard_name,
+      ]);
+
+      // Log role name change
+      if ($oldName !== $role->name) {
+        $this->auditLogService->log([
+          'action' => 'role_renamed',
+          'module' => 'roles',
+          'description' => 'Role renamed from "' . $oldName . '" to "' . $role->name . '"',
+          'entity_type' => get_class($role),
+          'entity_id' => $role->id,
+          'old_values' => ['name' => $oldName],
+          'new_values' => ['name' => $role->name],
+        ]);
+      }
+
+      if (isset($data['permissions'])) {
+        $role->syncPermissions($data['permissions']);
+        $newPermissions = $role->permissions->pluck('name')->toArray();
+        $this->logPermissionChanges($role, $oldPermissions, $newPermissions);
+      }
+
+      DB::commit();
+
+      Log::info('✅ RoleService::updateRole - Role updated successfully', [
+        'role_id' => $id,
+        'role_name' => $role->name
+      ]);
+
+      return $role->load('permissions');
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::updateRole - Error updating role', [
+        'role_id' => $id,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
     }
-
-    // Log activity
-    $this->logActivity($role, 'UPDATED', 'Role updated');
-
-    return $role->fresh();
   }
 
   /**
    * Delete a role.
    */
-  public function deleteRole(int $id): void
+  public function deleteRole(int $id)
   {
-    $role = Role::findOrFail($id);
+    Log::info('🔍 RoleService::deleteRole - Deleting role', ['role_id' => $id]);
 
-    // Check if role has users
-    $usersCount = User::role($role->name)->count();
-    if ($usersCount > 0) {
-      throw new \Exception("Cannot delete role '{$role->name}' because it has {$usersCount} users assigned.");
+    try {
+      DB::beginTransaction();
+
+      $role = Role::findOrFail($id);
+
+      // Log before deletion
+      $this->auditLogService->log([
+        'action' => 'role_deleted',
+        'module' => 'roles',
+        'description' => 'Role "' . $role->name . '" deleted',
+        'entity_type' => get_class($role),
+        'entity_id' => $role->id,
+        'old_values' => [
+          'name' => $role->name,
+          'permissions' => $role->permissions->pluck('name')->toArray()
+        ],
+        'metadata' => [
+          'permission_count' => $role->permissions->count()
+        ]
+      ]);
+
+      $role->permissions()->detach();
+      $role->users()->detach();
+
+      $role->delete();
+
+      DB::commit();
+
+      Log::info('✅ RoleService::deleteRole - Role deleted successfully', [
+        'role_id' => $id,
+        'role_name' => $role->name
+      ]);
+
+      return true;
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::deleteRole - Error deleting role', [
+        'role_id' => $id,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
     }
-
-    // Log activity
-    $this->logActivity($role, 'DELETED', 'Role deleted');
-
-    $role->delete();
-  }
-
-  /**
-   * Assign permissions to role.
-   */
-  public function assignPermissions(int $roleId, array $permissions): Role
-  {
-    $role = Role::findOrFail($roleId);
-    $role->syncPermissions($permissions);
-
-    $this->logActivity($role, 'PERMISSIONS_ASSIGNED', 'Permissions assigned to role');
-
-    return $role->fresh();
   }
 
   /**
@@ -123,7 +300,22 @@ class RoleService extends BaseService
    */
   public function getAllPermissions()
   {
-    return Permission::orderBy('name')->get();
+    Log::info('🔍 RoleService::getAllPermissions - Fetching all permissions');
+
+    try {
+      $permissions = Permission::all();
+
+      Log::info('✅ RoleService::getAllPermissions - Permissions fetched successfully', [
+        'count' => $permissions->count()
+      ]);
+
+      return $permissions;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getAllPermissions - Error fetching permissions', [
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
@@ -131,33 +323,262 @@ class RoleService extends BaseService
    */
   public function getPermissionsGrouped()
   {
-    $permissions = Permission::orderBy('name')->get();
+    Log::info('🔍 RoleService::getPermissionsGrouped - Fetching grouped permissions');
 
-    $grouped = [];
-    foreach ($permissions as $permission) {
-      $module = explode('_', $permission->name)[0] ?? 'general';
-      if (!isset($grouped[$module])) {
-        $grouped[$module] = [];
+    try {
+      $permissions = Permission::all();
+      $grouped = [];
+
+      $moduleGroups = [
+        'requisition' => 'requisitions',
+        'approv' => 'approvals',
+        'supplier' => 'suppliers',
+        'quotation' => 'quotations',
+        'tender' => 'procurement',
+        'contract' => 'procurement',
+        'purchase_order' => 'orders',
+        'purchase_orders' => 'orders',
+        'lpo' => 'orders',
+        'lso' => 'orders',
+        'grn' => 'orders',
+        'san' => 'orders',
+        'invoice' => 'invoices',
+        'payment_voucher' => 'invoices',
+        'cheque' => 'invoices',
+        'budget' => 'budget',
+        'expenditure' => 'budget',
+        'report' => 'reports',
+        'user' => 'users',
+        'department' => 'departments',
+        'audit' => 'audit',
+        'setting' => 'settings',
+        'backup' => 'backup',
+        'profile' => 'profile',
+        'support' => 'support',
+        'hr' => 'hr',
+        'asset' => 'assets',
+        'facility' => 'facilities',
+      ];
+
+      foreach ($permissions as $permission) {
+        $foundGroup = 'other';
+        $nameLower = strtolower($permission->name);
+
+        foreach ($moduleGroups as $key => $groupName) {
+          if (strpos($nameLower, $key) !== false) {
+            $foundGroup = $groupName;
+            break;
+          }
+        }
+
+        if (!isset($grouped[$foundGroup])) {
+          $grouped[$foundGroup] = [];
+        }
+        $grouped[$foundGroup][] = $permission;
       }
-      $grouped[$module][] = $permission;
-    }
 
-    return $grouped;
+      Log::info('✅ RoleService::getPermissionsGrouped - Grouped permissions fetched successfully', [
+        'group_count' => count($grouped)
+      ]);
+
+      return $grouped;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getPermissionsGrouped - Error fetching grouped permissions', [
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
-   * Create a permission.
+   * Assign permissions to a role.
+   * THIS IS THE METHOD THE CONTROLLER CALLS
    */
-  public function createPermission(string $name): Permission
+  public function assignPermissions(int $roleId, array $permissions)
   {
-    $permission = Permission::create([
-      'name' => $name,
-      'guard_name' => 'api',
+    Log::info('🔍 RoleService::assignPermissions - Assigning permissions to role', [
+      'role_id' => $roleId,
+      'permissions' => $permissions
     ]);
 
-    $this->logActivity($permission, 'PERMISSION_CREATED', 'Permission created: ' . $name);
+    try {
+      DB::beginTransaction();
 
-    return $permission;
+      $role = Role::findOrFail($roleId);
+
+      // Get current permissions before update
+      $oldPermissions = $role->permissions->pluck('name')->toArray();
+
+      // Sync permissions
+      $role->syncPermissions($permissions);
+
+      // Get new permissions after update
+      $newPermissions = $role->permissions->pluck('name')->toArray();
+
+      // Log the permission changes
+      $this->logPermissionChanges($role, $oldPermissions, $newPermissions);
+
+      DB::commit();
+
+      Log::info('✅ RoleService::assignPermissions - Permissions assigned successfully', [
+        'role_id' => $roleId,
+        'role_name' => $role->name,
+        'permission_count' => count($permissions)
+      ]);
+
+      return $role->load('permissions');
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::assignPermissions - Error assigning permissions', [
+        'role_id' => $roleId,
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
+   * Log permission changes for a role.
+   */
+  protected function logPermissionChanges(Role $role, array $oldPermissions, array $newPermissions): void
+  {
+    try {
+      $added = array_diff($newPermissions, $oldPermissions);
+      $removed = array_diff($oldPermissions, $newPermissions);
+
+      if (empty($added) && empty($removed)) {
+        return; // No changes to log
+      }
+
+      $description = [];
+      if (!empty($added)) {
+        $description[] = 'Added permissions: ' . implode(', ', $added);
+      }
+      if (!empty($removed)) {
+        $description[] = 'Removed permissions: ' . implode(', ', $removed);
+      }
+
+      $this->auditLogService->log([
+        'action' => 'permissions_updated',
+        'module' => 'roles',
+        'description' => 'Permissions updated for role "' . $role->name . '": ' . implode('; ', $description),
+        'entity_type' => get_class($role),
+        'entity_id' => $role->id,
+        'old_values' => ['permissions' => $oldPermissions],
+        'new_values' => ['permissions' => $newPermissions],
+        'metadata' => [
+          'role_name' => $role->name,
+          'added' => $added,
+          'removed' => $removed,
+          'total_added' => count($added),
+          'total_removed' => count($removed),
+        ]
+      ]);
+    } catch (\Exception $e) {
+      // Don't let audit logging break the main operation
+      Log::error('Failed to log permission changes: ' . $e->getMessage());
+    }
+  }
+
+  /**
+   * Grant a single permission to a role.
+   */
+  public function grantPermission(int $roleId, string $permissionName): Role
+  {
+    Log::info('🔍 RoleService::grantPermission - Granting permission to role', [
+      'role_id' => $roleId,
+      'permission' => $permissionName
+    ]);
+
+    try {
+      DB::beginTransaction();
+
+      $role = Role::findOrFail($roleId);
+      $oldPermissions = $role->permissions->pluck('name')->toArray();
+
+      $role->givePermissionTo($permissionName);
+
+      $newPermissions = $role->permissions->pluck('name')->toArray();
+
+      $this->auditLogService->log([
+        'action' => 'permission_granted',
+        'module' => 'roles',
+        'description' => 'Permission "' . $permissionName . '" granted to role "' . $role->name . '"',
+        'entity_type' => get_class($role),
+        'entity_id' => $role->id,
+        'old_values' => ['permissions' => $oldPermissions],
+        'new_values' => ['permissions' => $newPermissions],
+        'metadata' => [
+          'role_name' => $role->name,
+          'permission' => $permissionName,
+          'action' => 'granted'
+        ]
+      ]);
+
+      DB::commit();
+      Log::info('✅ RoleService::grantPermission - Permission granted successfully');
+
+      return $role->load('permissions');
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::grantPermission - Error granting permission', [
+        'role_id' => $roleId,
+        'permission' => $permissionName,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
+   * Revoke a single permission from a role.
+   */
+  public function revokePermission(int $roleId, string $permissionName): Role
+  {
+    Log::info('🔍 RoleService::revokePermission - Revoking permission from role', [
+      'role_id' => $roleId,
+      'permission' => $permissionName
+    ]);
+
+    try {
+      DB::beginTransaction();
+
+      $role = Role::findOrFail($roleId);
+      $oldPermissions = $role->permissions->pluck('name')->toArray();
+
+      $role->revokePermissionTo($permissionName);
+
+      $newPermissions = $role->permissions->pluck('name')->toArray();
+
+      $this->auditLogService->log([
+        'action' => 'permission_revoked',
+        'module' => 'roles',
+        'description' => 'Permission "' . $permissionName . '" revoked from role "' . $role->name . '"',
+        'entity_type' => get_class($role),
+        'entity_id' => $role->id,
+        'old_values' => ['permissions' => $oldPermissions],
+        'new_values' => ['permissions' => $newPermissions],
+        'metadata' => [
+          'role_name' => $role->name,
+          'permission' => $permissionName,
+          'action' => 'revoked'
+        ]
+      ]);
+
+      DB::commit();
+      Log::info('✅ RoleService::revokePermission - Permission revoked successfully');
+
+      return $role->load('permissions');
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::revokePermission - Error revoking permission', [
+        'role_id' => $roleId,
+        'permission' => $permissionName,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
@@ -165,135 +586,116 @@ class RoleService extends BaseService
    */
   public function getRoleUsers(int $roleId)
   {
-    $role = Role::findOrFail($roleId);
-    return User::role($role->name)->with(['department', 'profile'])->get();
+    Log::info('🔍 RoleService::getRoleUsers - Fetching users for role', ['role_id' => $roleId]);
+
+    try {
+      $userIds = DB::table('model_has_roles')
+        ->where('role_id', $roleId)
+        ->where('model_type', 'App\\Models\\User')
+        ->pluck('model_id')
+        ->toArray();
+
+      Log::info('✅ RoleService::getRoleUsers - Users fetched successfully', [
+        'role_id' => $roleId,
+        'user_count' => count($userIds)
+      ]);
+
+      return $userIds;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getRoleUsers - Error fetching users for role', [
+        'role_id' => $roleId,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
-   * Get role statistics.
+   * Assign role to a user.
    */
-  public function getRoleStats(): array
+  public function assignRoleToUser(int $userId, string $roleName)
   {
-    $roles = Role::withCount('users')->get();
+    Log::info('🔍 RoleService::assignRoleToUser - Assigning role to user', [
+      'user_id' => $userId,
+      'role' => $roleName
+    ]);
 
-    return [
-      'total' => Role::count(),
-      'roles' => $roles->map(function ($role) {
-        return [
-          'name' => $role->name,
-          'users_count' => $role->users_count,
-          'permissions_count' => $role->permissions->count(),
-        ];
-      }),
-      'total_permissions' => Permission::count(),
-    ];
+    try {
+      DB::beginTransaction();
+
+      $user = \App\Models\User::findOrFail($userId);
+      $oldRoles = $user->getRoleNames()->toArray();
+
+      $user->assignRole($roleName);
+
+      $newRoles = $user->getRoleNames()->toArray();
+
+      // Log role assignment
+      $this->auditLogService->log([
+        'action' => 'role_assigned_to_user',
+        'module' => 'users',
+        'description' => 'Role "' . $roleName . '" assigned to user "' . $user->full_name . '" (' . $user->email . ')',
+        'entity_type' => get_class($user),
+        'entity_id' => $user->id,
+        'old_values' => ['roles' => $oldRoles],
+        'new_values' => ['roles' => $newRoles],
+        'metadata' => [
+          'user_name' => $user->full_name,
+          'user_email' => $user->email,
+          'role' => $roleName,
+          'action' => 'assigned'
+        ]
+      ]);
+
+      DB::commit();
+
+      Log::info('✅ RoleService::assignRoleToUser - Role assigned to user successfully', [
+        'user_id' => $userId,
+        'role' => $roleName
+      ]);
+
+      return true;
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::assignRoleToUser - Error assigning role to user', [
+        'user_id' => $userId,
+        'role' => $roleName,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
   }
 
   /**
    * Get user's roles and permissions.
    */
-  public function getUserRolesAndPermissions(int $userId): array
+  public function getUserRolesAndPermissions(int $userId)
   {
-    $user = User::with('roles.permissions')->findOrFail($userId);
-
-    return [
-      'user' => $user,
-      'roles' => $user->getRoleNames(),
-      'permissions' => $user->getAllPermissions()->pluck('name'),
-      'direct_permissions' => $user->getDirectPermissions()->pluck('name'),
-    ];
-  }
-
-  /**
-   * Assign role to user.
-   */
-  public function assignRoleToUser(int $userId, string $roleName): void
-  {
-    $user = User::findOrFail($userId);
-    $role = Role::where('name', $roleName)->firstOrFail();
-
-    // Remove all existing roles and assign only this one
-    $user->syncRoles([$role]);
-
-    // Update user's role field
-    $user->update(['role' => $roleName]);
-
-    // Log activity
-    UserActivityLog::create([
-      'user_id' => auth()->id(),
-      'action' => 'ROLE_ASSIGNED',
-      'module' => 'ROLE',
-      'description' => "Role '{$roleName}' assigned to user {$user->email}",
-      'data' => ['user_id' => $userId, 'role' => $roleName],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
+    Log::info('🔍 RoleService::getUserRolesAndPermissions - Fetching user roles', [
+      'user_id' => $userId
     ]);
-  }
 
-  /**
-   * Assign multiple roles to user.
-   */
-  public function assignRolesToUser(int $userId, array $roleNames): void
-  {
-    $user = User::findOrFail($userId);
-    $roles = Role::whereIn('name', $roleNames)->get();
+    try {
+      $user = \App\Models\User::findOrFail($userId);
 
-    $user->syncRoles($roles);
+      $data = [
+        'roles' => $user->getRoleNames(),
+        'permissions' => $user->getAllPermissions()->pluck('name'),
+      ];
 
-    // Update user's role field (use first role as primary)
-    if (!empty($roleNames)) {
-      $user->update(['role' => $roleNames[0]]);
+      Log::info('✅ RoleService::getUserRolesAndPermissions - User roles fetched successfully', [
+        'user_id' => $userId,
+        'roles_count' => count($data['roles']),
+        'permissions_count' => count($data['permissions'])
+      ]);
+
+      return $data;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getUserRolesAndPermissions - Error fetching user roles', [
+        'user_id' => $userId,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
     }
-
-    UserActivityLog::create([
-      'user_id' => auth()->id(),
-      'action' => 'ROLES_ASSIGNED',
-      'module' => 'ROLE',
-      'description' => "Roles assigned to user {$user->email}: " . implode(', ', $roleNames),
-      'data' => ['user_id' => $userId, 'roles' => $roleNames],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
-  }
-
-  /**
-   * Remove role from user.
-   */
-  public function removeRoleFromUser(int $userId, string $roleName): void
-  {
-    $user = User::findOrFail($userId);
-    $user->removeRole($roleName);
-
-    // Update user's role field if it matches
-    if ($user->role === $roleName) {
-      $newRole = $user->roles->first();
-      $user->update(['role' => $newRole->name ?? 'STAFF']);
-    }
-
-    UserActivityLog::create([
-      'user_id' => auth()->id(),
-      'action' => 'ROLE_REMOVED',
-      'module' => 'ROLE',
-      'description' => "Role '{$roleName}' removed from user {$user->email}",
-      'data' => ['user_id' => $userId, 'role' => $roleName],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
-  }
-
-  /**
-   * Log activity.
-   */
-  protected function logActivity($model, string $action, string $description): void
-  {
-    UserActivityLog::create([
-      'user_id' => auth()->id(),
-      'action' => $action,
-      'module' => 'ROLE',
-      'description' => $description . ' - ' . ($model->name ?? $model->id),
-      'data' => ['model' => get_class($model), 'id' => $model->id],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
   }
 }

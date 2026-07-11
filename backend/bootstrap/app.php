@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use App\Services\Admin\AuditLogService;
 
 return Application::configure(basePath: dirname(__DIR__))
   ->withRouting(
@@ -16,14 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
     health: '/up',
   )
   ->withMiddleware(function (Middleware $middleware) {
-    // Middleware Aliases - UNCOMMENT THIS LINE
+    // Middleware Aliases
     $middleware->alias([
-      'auth' => \App\Http\Middleware\Authenticate::class,  // <-- UNCOMMENT THIS
+      'auth' => \App\Http\Middleware\Authenticate::class,
       'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
       'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
       'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
       'can' => \Illuminate\Auth\Middleware\Authorize::class,
-      'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,  // <-- UNCOMMENT THIS TOO
+      'audit' => \App\Http\Middleware\AuditMiddleware::class,
+      'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
       'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
       'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
       'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
@@ -44,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
     // API Middleware Group - Prepend ForceJsonResponse
     $middleware->api(prepend: [
       \App\Http\Middleware\ForceJsonResponse::class,
+      \App\Http\Middleware\AuditMiddleware::class,
     ]);
 
     // API Middleware Group - Append

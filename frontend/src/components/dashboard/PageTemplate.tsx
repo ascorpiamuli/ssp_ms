@@ -46,12 +46,12 @@ export function PageTemplate({
           ? "bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm"
           : "bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800"
       )}>
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {/* Icon */}
               {icon && (
-                <div className="hidden sm:flex p-2 rounded-lg bg-brand-blue/10">
+                <div className="hidden sm:flex p-2 rounded-lg bg-brand-blue/10 flex-shrink-0">
                   {icon}
                 </div>
               )}
@@ -60,10 +60,10 @@ export function PageTemplate({
               <div className="min-w-0 flex-1">
                 {/* Breadcrumbs */}
                 {breadcrumbs && breadcrumbs.length > 0 && (
-                  <div className="flex items-center gap-1.5 mb-1 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-1.5 mb-1 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto">
                     {breadcrumbs.map((crumb, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5">
-                        {idx > 0 && <ChevronRight className="h-3 w-3 text-gray-400" />}
+                      <div key={idx} className="flex items-center gap-1.5 whitespace-nowrap">
+                        {idx > 0 && <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />}
                         {crumb.href ? (
                           <a href={crumb.href} className="hover:text-brand-blue transition-colors">
                             {crumb.label}
@@ -79,13 +79,13 @@ export function PageTemplate({
                 )}
 
                 {/* Title */}
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white truncate">
                   {title}
                 </h1>
 
                 {/* Description */}
                 {description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                     {description}
                   </p>
                 )}
@@ -94,7 +94,7 @@ export function PageTemplate({
 
             {/* Actions */}
             {actions && (
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {actions}
               </div>
             )}
@@ -102,10 +102,10 @@ export function PageTemplate({
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-6">
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-          <div className="p-6">
+      {/* Main Content - FULL WIDTH */}
+      <div className="px-4 sm:px-6 lg:px-8 py-6">
+        <div className="w-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+          <div className="p-4 sm:p-6">
             {children}
           </div>
         </div>
