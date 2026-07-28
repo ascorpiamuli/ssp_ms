@@ -7,13 +7,12 @@ import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle, Building2, CheckCircle2 } 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthContext } from '@/contexts/AuthContext'
-import { useToast } from '@/components/ui/toast-context'
+import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, isLoading: authLoading, isAuthenticated } = useAuthContext()
-  const { success, error } = useToast()
 
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -27,6 +26,7 @@ export default function LoginPage() {
     password: ''
   })
   const [serverError, setServerError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Prevent duplicate submissions
   const isSubmitting = useRef(false)
@@ -38,12 +38,12 @@ export default function LoginPage() {
   useEffect(() => {
     // Show success messages from query params
     if (registered === 'true') {
-      success('Registration successful! Please login to continue.', 5000)
+      setSuccessMessage('Registration successful! Please login to continue.')
     }
     if (reset === 'true') {
-      success('Password reset successfully! Please login with your new password.', 5000)
+      setSuccessMessage('Password reset successfully! Please login with your new password.')
     }
-  }, [registered, reset, success])
+  }, [registered, reset])
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -78,11 +78,11 @@ export default function LoginPage() {
 
     // Prevent duplicate submissions
     if (isSubmitting.current || isLoadingState) {
-      console.log('Login already in progress, skipping duplicate submission')
       return
     }
 
     setServerError(null)
+    setSuccessMessage(null)
 
     if (!validateForm()) return
 
@@ -113,8 +113,6 @@ export default function LoginPage() {
       } else {
         setServerError(errorMessage)
       }
-
-      error(errorMessage, 5000)
     } finally {
       setIsLoading(false)
       // Reset submission flag after a short delay to prevent race conditions
@@ -128,12 +126,14 @@ export default function LoginPage() {
     setFormData({ ...formData, email: e.target.value })
     if (errors.email) setErrors({ ...errors, email: '' })
     if (serverError) setServerError(null)
+    if (successMessage) setSuccessMessage(null)
   }
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, password: e.target.value })
     if (errors.password) setErrors({ ...errors, password: '' })
     if (serverError) setServerError(null)
+    if (successMessage) setSuccessMessage(null)
   }
 
   const isLoadingState = isLoading || authLoading
@@ -157,6 +157,16 @@ export default function LoginPage() {
       {/* Form */}
       <div className="max-w-sm mx-auto">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Success Message Display */}
+          {successMessage && (
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 animate-fade-in">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">{successMessage}</p>
+              </div>
+            </div>
+          )}
+
           {/* Server Error Display */}
           {serverError && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 animate-fade-in">
@@ -304,9 +314,6 @@ export default function LoginPage() {
           type="button"
           variant="outline"
           className="w-full relative flex items-center justify-center gap-3 py-5 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all group"
-          onClick={() => {
-            error('Google SSO coming soon!', 3000)
-          }}
           disabled={isLoadingState}
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -380,8 +387,4 @@ export default function LoginPage() {
       `}</style>
     </div>
   )
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ')
 }

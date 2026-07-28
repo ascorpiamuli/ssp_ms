@@ -231,13 +231,50 @@ export class AuthService {
     }
   }
 
+  /**
+   * Upload avatar - FIXED: Using the correct endpoint from your routes
+   * The route is POST /profile/photo in your API
+   */
   static async uploadAvatar(file: File): Promise<AvatarResponse> {
     try {
-      const result = await privateApi.upload<AvatarData>('/auth/profile/avatar', file, 'avatar');
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      // Use the correct endpoint from your routes: /profile/photo
+      const result = await privateApi.post<AvatarData>('/profile/photo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
       return {
         success: true,
-        message: 'Avatar uploaded',
+        message: 'Avatar uploaded successfully',
         data: result,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Delete avatar - FIXED: Using the correct endpoint from your routes
+   * The route is DELETE /profile/photo in your API
+   */
+  static async deleteAvatar(): Promise<SimpleResponse> {
+    try {
+      const result = await privateApi.delete<SimpleResponse>('/profile/photo');
+
+      if (result && typeof result === 'object') {
+        return {
+          success: result.success === true,
+          message: result.message || 'Avatar deleted successfully',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Invalid response from server',
       };
     } catch (error) {
       throw error;
@@ -270,7 +307,7 @@ export class AuthService {
 
   static async enableTwoFactor(data: TwoFactorEnableRequest): Promise<TwoFactorResponse> {
     try {
-      const result = await privateApi.post<TwoFactorData>('/auth/2fa/enable', data);
+      const result = await privateApi.post<TwoFactorData>('/2fa/enable', data);
       return {
         success: true,
         message: '2FA enabled',
@@ -283,7 +320,7 @@ export class AuthService {
 
   static async disableTwoFactor(): Promise<SimpleResponse> {
     try {
-      const result = await privateApi.post<SimpleResponse>('/auth/2fa/disable');
+      const result = await privateApi.post<SimpleResponse>('/2fa/disable');
 
       if (result && typeof result === 'object') {
         return {
@@ -303,7 +340,7 @@ export class AuthService {
 
   static async verifyTwoFactor(data: TwoFactorVerifyRequest): Promise<SimpleResponse> {
     try {
-      const result = await privateApi.post<SimpleResponse>('/auth/2fa/verify', data);
+      const result = await privateApi.post<SimpleResponse>('/2fa/verify', data);
 
       if (result && typeof result === 'object') {
         return {
@@ -323,7 +360,7 @@ export class AuthService {
 
   static async generateRecoveryCodes(): Promise<RecoveryCodesResponse> {
     try {
-      const result = await privateApi.post<RecoveryCodesData>('/auth/2fa/recovery-codes');
+      const result = await privateApi.post<RecoveryCodesData>('/2fa/recovery-codes');
       return {
         success: true,
         message: 'Recovery codes generated',
@@ -336,7 +373,7 @@ export class AuthService {
 
   static async verifyRecoveryCode(data: TwoFactorRecoveryRequest): Promise<SimpleResponse> {
     try {
-      const result = await privateApi.post<SimpleResponse>('/auth/2fa/verify-recovery', data);
+      const result = await privateApi.post<SimpleResponse>('/2fa/verify-recovery', data);
 
       if (result && typeof result === 'object') {
         return {
@@ -356,7 +393,7 @@ export class AuthService {
 
   static async getTwoFactorStatus(): Promise<TwoFactorStatusResponse> {
     try {
-      const result = await privateApi.get<TwoFactorStatusData>('/auth/2fa/status');
+      const result = await privateApi.get<TwoFactorStatusData>('/2fa/status');
       return {
         success: true,
         message: '2FA status retrieved',
@@ -368,5 +405,4 @@ export class AuthService {
   }
 }
 
-// Add default export at the bottom
 export default AuthService;

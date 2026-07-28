@@ -9,6 +9,7 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
+    
     <AdminProvider>
       {children}
     </AdminProvider>

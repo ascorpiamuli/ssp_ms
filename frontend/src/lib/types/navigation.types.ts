@@ -14,7 +14,9 @@ export interface NavItem {
   badge?: string
   badgeColor?: string
   isDynamic?: boolean
+  badgeKey?: string  // ✅ Added: Key for dynamic badge updates
   children?: NavItem[]
+  [key: string]: any  // Allow additional properties
 }
 
 export interface NavigationSection {
@@ -24,4 +26,5 @@ export interface NavigationSection {
   defaultOpen?: boolean
   department?: string
   items: NavItem[]
+  [key: string]: any  // Allow additional properties
 }

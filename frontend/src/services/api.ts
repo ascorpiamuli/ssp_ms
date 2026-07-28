@@ -33,7 +33,7 @@ const setToken = (token: string, rememberMe: boolean = false): void => {
     localStorage.setItem('token', token);
     sessionStorage.setItem('token', token);
   } catch (error) {
-    console.error('❌ Failed to save token:', error);
+    console.error('Failed to save token:', error);
   }
 };
 
@@ -124,20 +124,15 @@ publicApiClient.interceptors.response.use(
   async (error) => Promise.reject(error)
 );
 
-// services/api.ts - Fix extractData
-
+// ─── Extract Data Helper ───
 function extractData<T>(response: any): T {
-  console.log('🔍 extractData input:', response);
-
   // If response has data property, unwrap it
   if (response && typeof response === 'object' && 'data' in response) {
     const data = response.data;
     // If the data also has data property (nested), unwrap again
     if (data && typeof data === 'object' && 'data' in data) {
-      console.log('🔍 extractData: Double nested, returning inner data');
       return data.data as T;
     }
-    console.log('🔍 extractData: Single nested, returning data');
     return data as T;
   }
 

@@ -19,8 +19,8 @@ import {
   Users,
   Check,
   Loader2,
-  FileText,
-  ArrowLeft
+  ArrowLeft,
+  Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/hooks/useAuth'
-import { useToast } from '@/components/ui/toast-context'
+import { cn } from '@/lib/utils'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -44,17 +44,6 @@ export default function RegisterPage() {
     isLoadingDepartments,
     isLoadingRoles,
   } = useAuth()
-
-
-  useEffect(() => {
-    console.log('🔍 ===== REGISTER PAGE DEBUG =====')
-    console.log('📦 Departments:', departments)
-    console.log('📦 Departments length:', departments?.length)
-    console.log('👤 Available Roles:', availableRoles)
-    console.log('👤 Available Roles length:', availableRoles?.length)
-    console.log('🔄 Loading states:', { isLoadingDepartments, isLoadingRoles })
-    console.log('🔍 ===== END DEBUG =====')
-  }, [departments, availableRoles, isLoadingDepartments, isLoadingRoles])
 
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -70,8 +59,6 @@ export default function RegisterPage() {
     confirmPassword: '',
     agree_terms: false,
     department: '',
-    idNumber: '',
-    dateOfBirth: '',
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -152,8 +139,6 @@ export default function RegisterPage() {
         last_name: formData.lastName,
         email: formData.email,
         phone: formData.phone,
-        id_number: formData.idNumber || undefined,
-        date_of_birth: formData.dateOfBirth || undefined,
         role: formData.role,
         department: formData.department || undefined,
         password: formData.password,
@@ -161,7 +146,6 @@ export default function RegisterPage() {
         agree_terms: formData.agree_terms,
       }
 
-      console.log('📝 Submitting registration:', registrationData)
       await register(registrationData)
       setRegistrationComplete(true)
 
@@ -170,7 +154,7 @@ export default function RegisterPage() {
       }, 3000)
 
     } catch (err: any) {
-      console.error('❌ Registration error:', err)
+      console.error('Registration error:', err)
     } finally {
       setIsLoading(false)
     }
@@ -182,15 +166,11 @@ export default function RegisterPage() {
     const errorMessage = serverError?.[0] || clientError
     if (!errorMessage) return null
     return (
-      <p className="text-xs text-red-500 flex items-center mt-1 animate-shake">
-        <AlertCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+      <p className="text-xs text-red-500 flex items-center gap-1 mt-1 animate-shake">
+        <AlertCircle className="h-3 w-3 flex-shrink-0" />
         {errorMessage}
       </p>
     )
-  }
-
-  function cn(...classes: any[]) {
-    return classes.filter(Boolean).join(' ')
   }
 
   const isLoadingState = isLoading || authLoading
@@ -202,13 +182,13 @@ export default function RegisterPage() {
           <div className="relative inline-block">
             <div className="absolute inset-0 rounded-full animate-ping-slow bg-emerald-400/30 dark:bg-emerald-500/30" />
             <div className="absolute inset-0 rounded-full animate-ping-slower bg-emerald-400/20 dark:bg-emerald-500/20" />
-            <div className="relative w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-emerald-500 dark:from-emerald-500 dark:to-emerald-600 rounded-full flex items-center justify-center shadow-xl transform transition-all duration-300 hover:scale-110">
+            <div className="relative w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-emerald-500 rounded-full flex items-center justify-center shadow-xl">
               <Check className="h-12 w-12 text-white" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
+            <h2 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               Registration Submitted! 🎉
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -265,7 +245,7 @@ export default function RegisterPage() {
 
         <div className="space-y-3 pt-2">
           <Link href="/login">
-            <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300">
+            <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25">
               Return to Login
             </Button>
           </Link>
@@ -281,7 +261,7 @@ export default function RegisterPage() {
     return (
       <div className="space-y-8 animate-fade-in max-w-md mx-auto text-center">
         <div className="relative inline-block">
-          <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-full flex items-center justify-center shadow-xl">
+          <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-xl">
             <Loader2 className="h-10 w-10 text-white animate-spin" />
           </div>
         </div>
@@ -289,19 +269,17 @@ export default function RegisterPage() {
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Loading Registration Form</h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Please wait while we prepare your registration...</p>
         </div>
-        <div className="flex justify-center">
-          <div className="flex space-x-2">
-            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-          </div>
+        <div className="flex justify-center gap-2">
+          <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+          <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+          <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-md mx-auto px-4 sm:px-0">
+    <div className="space-y-8 animate-fade-in max-w-lg mx-auto px-4 sm:px-0">
       {/* Header */}
       <div className="text-center space-y-3">
         <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
@@ -311,7 +289,7 @@ export default function RegisterPage() {
 
         <div className="relative inline-block">
           <div className="absolute inset-0 rounded-full animate-ping-slow bg-blue-400/30 dark:bg-blue-500/30" />
-          <div className="relative w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-full flex items-center justify-center shadow-xl transform transition-all duration-300 hover:scale-110">
+          <div className="relative w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-xl">
             <UserPlus className="h-10 w-10 text-white" />
           </div>
         </div>
@@ -333,26 +311,26 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Form - Wider inputs */}
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Personal Information */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
             <User className="h-4 w-4" /> Personal Information
           </h3>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 First Name <span className="text-red-500">*</span>
               </label>
               <Input
                 placeholder="John"
                 className={cn(
-                  "transition-all duration-200",
+                  "w-full transition-all duration-200 h-11",
                   (errors.firstName || serverErrors.firstName)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.firstName}
                 onChange={(e) => {
@@ -365,17 +343,17 @@ export default function RegisterPage() {
               <FieldError field="firstName" />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Last Name <span className="text-red-500">*</span>
               </label>
               <Input
                 placeholder="Doe"
                 className={cn(
-                  "transition-all duration-200",
+                  "w-full transition-all duration-200 h-11",
                   (errors.lastName || serverErrors.lastName)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.lastName}
                 onChange={(e) => {
@@ -389,20 +367,20 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Email Address <span className="text-red-500">*</span>
             </label>
-            <div className="relative group">
-              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors duration-200" />
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 type="email"
                 placeholder="john.doe@school.com"
                 className={cn(
-                  "pl-10 transition-all duration-200",
+                  "w-full pl-10 transition-all duration-200 h-11",
                   (errors.email || serverErrors.email)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.email}
                 onChange={(e) => {
@@ -416,20 +394,20 @@ export default function RegisterPage() {
             <FieldError field="email" />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Phone Number <span className="text-red-500">*</span>
             </label>
-            <div className="relative group">
-              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors duration-200" />
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 type="tel"
                 placeholder="+254 712 345 678"
                 className={cn(
-                  "pl-10 transition-all duration-200",
+                  "w-full pl-10 transition-all duration-200 h-11",
                   (errors.phone || serverErrors.phone)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.phone}
                 onChange={(e) => {
@@ -443,7 +421,7 @@ export default function RegisterPage() {
             <FieldError field="phone" />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Role <span className="text-red-500">*</span>
             </label>
@@ -457,10 +435,10 @@ export default function RegisterPage() {
               disabled={isLoadingState}
             >
               <SelectTrigger className={cn(
-                "transition-all duration-200",
+                "w-full h-11 transition-all duration-200",
                 (errors.role || serverErrors.role)
-                  ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                  : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                  ? "border-red-500 focus:ring-red-500"
+                  : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               )}>
                 <SelectValue placeholder="Select your role" />
               </SelectTrigger>
@@ -485,7 +463,7 @@ export default function RegisterPage() {
           </div>
 
           {requiresDepartment && (
-            <div className="space-y-1 animate-fade-in">
+            <div className="space-y-1.5 animate-fade-in">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Department <span className="text-red-500">*</span>
               </label>
@@ -499,10 +477,10 @@ export default function RegisterPage() {
                 disabled={isLoadingState}
               >
                 <SelectTrigger className={cn(
-                  "transition-all duration-200",
+                  "w-full h-11 transition-all duration-200",
                   (errors.department || serverErrors.department)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
@@ -521,58 +499,27 @@ export default function RegisterPage() {
               <FieldError field="department" />
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                ID Number <span className="text-slate-400 text-xs">(Optional)</span>
-              </label>
-              <div className="relative group">
-                <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors duration-200" />
-                <Input
-                  placeholder="12345678"
-                  className="pl-10 transition-all duration-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
-                  value={formData.idNumber}
-                  onChange={(e) => setFormData({ ...formData, idNumber: e.target.value })}
-                  disabled={isLoadingState}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Date of Birth <span className="text-slate-400 text-xs">(Optional)</span>
-              </label>
-              <Input
-                type="date"
-                className="transition-all duration-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
-                value={formData.dateOfBirth}
-                onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                disabled={isLoadingState}
-              />
-            </div>
-          </div>
         </div>
 
         {/* Security Section */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
             <Lock className="h-4 w-4" /> Security
           </h3>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Password <span className="text-red-500">*</span>
             </label>
-            <div className="relative group">
+            <div className="relative">
               <Input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 className={cn(
-                  "pr-10 transition-all duration-200",
+                  "w-full pr-10 transition-all duration-200 h-11",
                   (errors.password || serverErrors.password)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.password}
                 onChange={(e) => {
@@ -596,8 +543,8 @@ export default function RegisterPage() {
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-xs text-slate-500">Strength:</span>
                   <span className={`text-xs font-medium ${passwordStrength.color === 'bg-red-500' ? 'text-red-500' :
-                      passwordStrength.color === 'bg-yellow-500' ? 'text-yellow-500' :
-                        passwordStrength.color === 'bg-blue-500' ? 'text-blue-500' : 'text-green-500'
+                    passwordStrength.color === 'bg-yellow-500' ? 'text-yellow-500' :
+                      passwordStrength.color === 'bg-blue-500' ? 'text-blue-500' : 'text-green-500'
                     }`}>
                     {passwordStrength.label}
                   </span>
@@ -613,19 +560,19 @@ export default function RegisterPage() {
             <FieldError field="password" />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Confirm Password <span className="text-red-500">*</span>
             </label>
-            <div className="relative group">
+            <div className="relative">
               <Input
                 type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 className={cn(
-                  "pr-10 transition-all duration-200",
+                  "w-full pr-10 transition-all duration-200 h-11",
                   (errors.confirmPassword || serverErrors.confirmPassword)
-                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-blue-300"
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 )}
                 value={formData.confirmPassword}
                 onChange={(e) => {
@@ -667,7 +614,7 @@ export default function RegisterPage() {
         </div>
 
         {/* Terms & Actions */}
-        <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+        <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
           <div className="flex items-start gap-2">
             <input
               id="terms"
@@ -692,7 +639,7 @@ export default function RegisterPage() {
 
           <Button
             type="submit"
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
+            className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 transition-all duration-300"
             disabled={isLoadingState}
           >
             {isLoadingState ? (

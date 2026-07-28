@@ -10,14 +10,37 @@ import {
   Moon,
   Settings,
   Sun,
-  User
+  User,
+  Search,
+  Building2,
+  Sparkles,
+  Mail,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Info,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthContext } from '@/contexts/AuthContext'
-import { useToast } from '@/components/ui/toast-context'
+import { useSuppliers } from '@/hooks/useSuppliers'
+import { Input } from '@/components/ui/input'
+import { Supplier } from '@/services/supplier.service'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+// Notification type
+interface Notification {
+  id: string
+  title: string
+  message: string
+  time: string
+  type: 'info' | 'success' | 'warning' | 'error'
+  read: boolean
+  icon?: React.ReactNode
+}
 
 export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const {
@@ -25,13 +48,74 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
     logout,
     profilePercentage,
   } = useAuthContext()
-  const { success, error: toastError } = useToast()
+  const { useSupplierProfileExists } = useSuppliers()
+  const { exists: supplierExists, supplier: supplierData } = useSupplierProfileExists()
+
   const [showProfile, setShowProfile] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const { theme, setTheme } = useTheme()
   const [isMobile, setIsMobile] = useState(false)
   const [isTablet, setIsTablet] = useState(false)
 
   const profileRef = useRef<HTMLDivElement>(null)
+  const notificationsRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  // Cast supplier data to Supplier type
+  const supplier = supplierData as unknown as Supplier | null
+
+  // Demo notifications
+  const [notifications, setNotifications] = useState<Notification[]>([
+    {
+      id: '1',
+      title: 'New Tender Opportunity',
+      message: 'A new tender opportunity matching your category has been posted.',
+      time: '2 minutes ago',
+      type: 'info',
+      read: false,
+      icon: <Sparkles className="h-4 w-4" />,
+    },
+    {
+      id: '2',
+      title: 'Bid Status Updated',
+      message: 'Your bid for "Office Supplies Procurement" has been shortlisted.',
+      time: '1 hour ago',
+      type: 'success',
+      read: false,
+      icon: <CheckCircle className="h-4 w-4" />,
+    },
+    {
+      id: '3',
+      title: 'Profile Verification',
+      message: 'Your supplier profile has been verified and is now active.',
+      time: '3 hours ago',
+      type: 'success',
+      read: true,
+      icon: <CheckCircle className="h-4 w-4" />,
+    },
+    {
+      id: '4',
+      title: 'Document Upload Reminder',
+      message: 'Please upload your latest tax compliance certificate.',
+      time: '1 day ago',
+      type: 'warning',
+      read: true,
+      icon: <AlertCircle className="h-4 w-4" />,
+    },
+    {
+      id: '5',
+      title: 'New Message',
+      message: 'You have received a new message from Procurement Department.',
+      time: '2 days ago',
+      type: 'info',
+      read: true,
+      icon: <Mail className="h-4 w-4" />,
+    },
+  ])
+
+  const unreadCount = notifications.filter(n => !n.read).length
 
   // Check screen size for responsive behavior
   useEffect(() => {
@@ -50,11 +134,31 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfile(false)
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearch(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Mark notification as read
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    )
+  }
+
+  // Mark all as read
+  const markAllAsRead = () => {
+    setNotifications(prev =>
+      prev.map(n => ({ ...n, read: true }))
+    )
+  }
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -86,7 +190,18 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
     return colors[index]
   }
 
-  // Get user role badge color - FIXED to handle roles array
+  // Get avatar URL
+  const getAvatarUrl = () => {
+    if ((user as any)?.avatar_url) {
+      return (user as any).avatar_url
+    }
+    if ((user as any)?.avatar) {
+      return (user as any).avatar
+    }
+    return null
+  }
+
+  // Get user role badge color
   const getRoleColor = () => {
     const roles = user?.roles || []
     const primaryRole = roles.length > 0 ? roles[0].toLowerCase() : ''
@@ -106,7 +221,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
     }
   }
 
-  // Get user role display name - FIXED to handle roles array
+  // Get user role display name
   const getRoleDisplayName = () => {
     const roles = user?.roles || []
     const primaryRole = roles.length > 0 ? roles[0].toLowerCase() : ''
@@ -150,22 +265,28 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const handleLogout = async () => {
     try {
       await logout()
-      success('Logged out successfully', 3000)
     } catch (error) {
       console.error('Logout failed:', error)
-      toastError('Failed to logout')
     }
+  }
+
+  // Handle notification click
+  const handleNotificationClick = (notification: Notification) => {
+    markAsRead(notification.id)
   }
 
   const avatarColors = getAvatarColors()
   const roles = user?.roles || []
-  const primaryRole = roles.length > 0 ? roles[0] : 'User'
   const allRoles = getAllRoles()
+  const avatarUrl = getAvatarUrl()
+
+  // Check if user is supplier
+  const isSupplier = roles.some(r => r.toLowerCase() === 'supplier')
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white/95 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95 px-4 shadow-sm">
       {/* Left section - Logo/Brand and Menu button */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-shrink-0">
         {onMenuClick && (isMobile || isTablet) && (
           <Button
             variant="ghost"
@@ -176,7 +297,6 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             <Menu className="h-5 w-5" />
           </Button>
         )}
-        {/* Brand name - visible on larger screens */}
         <div className="hidden sm:block">
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
             SSPMS
@@ -184,8 +304,40 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
         </div>
       </div>
 
+      {/* Search Bar - Centered */}
+      <div className="hidden md:flex flex-1 max-w-2xl mx-4" ref={searchRef}>
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search for tenders, suppliers, documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 h-9 rounded-lg border-gray-200 bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Right section - Actions */}
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        {/* Search button for mobile */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={() => setShowSearch(!showSearch)}
+        >
+          <Search className="h-5 w-5" />
+        </Button>
+
         {/* Theme Toggle */}
         <Button
           variant="ghost"
@@ -197,6 +349,112 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
 
+        {/* Notifications */}
+        <div className="relative" ref={notificationsRef}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative rounded-full"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </Button>
+
+          {showNotifications && (
+            <div className={cn(
+              "absolute mt-2 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800 z-50 max-h-[500px] overflow-y-auto",
+              isMobile
+                ? "fixed left-4 right-4 top-auto w-auto"
+                : "right-0 w-[380px]"
+            )}
+              style={isMobile ? { top: '4rem' } : {}}>
+              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No notifications</p>
+                  </div>
+                ) : (
+                  notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors",
+                        !notification.read && "bg-blue-50 dark:bg-blue-900/10"
+                      )}
+                      onClick={() => handleNotificationClick(notification)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "mt-0.5 p-1.5 rounded-full",
+                          notification.type === 'info' && 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+                          notification.type === 'success' && 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+                          notification.type === 'warning' && 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
+                          notification.type === 'error' && 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+                        )}>
+                          {notification.icon || (
+                            notification.type === 'info' && <Info className="h-3.5 w-3.5" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {notification.message}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-400">{notification.time}</span>
+                            {!notification.read && (
+                              <span className="ml-auto h-2 w-2 rounded-full bg-blue-500"></span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                <Link
+                  href="/notifications"
+                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  onClick={() => setShowNotifications(false)}
+                >
+                  View all notifications
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Profile */}
         <div className="relative" ref={profileRef}>
           <Button
@@ -204,12 +462,21 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             className="flex items-center gap-2 px-2 sm:px-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
             onClick={() => setShowProfile(!showProfile)}
           >
-            <div className={cn(
-              "h-8 w-8 rounded-full bg-gradient-to-r flex items-center justify-center text-white font-medium overflow-hidden ring-2 ring-white dark:ring-gray-700",
-              avatarColors
-            )}>
-              <span className="text-sm font-bold">{getUserInitials()}</span>
-            </div>
+            <Avatar className="h-8 w-8 ring-2 ring-white dark:ring-gray-700">
+              {avatarUrl ? (
+                <AvatarImage
+                  src={avatarUrl}
+                  alt={user?.full_name || 'User'}
+                  className="object-cover"
+                />
+              ) : null}
+              <AvatarFallback className={cn(
+                "bg-gradient-to-r text-white font-medium",
+                avatarColors
+              )}>
+                {getUserInitials()}
+              </AvatarFallback>
+            </Avatar>
             {!isMobile && (
               <>
                 <div className="hidden sm:block text-left">
@@ -227,20 +494,29 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {showProfile && (
             <div className={cn(
-              "absolute mt-2 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-700 z-50",
+              "absolute mt-2 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800 z-50",
               isMobile
                 ? "fixed left-4 right-4 top-auto w-auto"
                 : "right-0 w-80"
             )}
               style={isMobile ? { top: '4rem' } : {}}>
-              <div className="border-b border-gray-200 dark:border-gray-600 px-4 py-4">
+              <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-4">
                 <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "h-12 w-12 rounded-full bg-gradient-to-r flex items-center justify-center text-white font-medium overflow-hidden",
-                    avatarColors
-                  )}>
-                    <span className="text-base font-bold">{getUserInitials()}</span>
-                  </div>
+                  <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900/30">
+                    {avatarUrl ? (
+                      <AvatarImage
+                        src={avatarUrl}
+                        alt={user?.full_name || 'User'}
+                        className="object-cover"
+                      />
+                    ) : null}
+                    <AvatarFallback className={cn(
+                      "bg-gradient-to-r text-white font-medium text-base",
+                      avatarColors
+                    )}>
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                       {user?.full_name || 'User'}
@@ -261,6 +537,21 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </div>
                 </div>
 
+                {/* Supplier Company Info */}
+                {isSupplier && supplierExists && supplier && (
+                  <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-orange-500" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {supplier.company_name || 'Company Name'}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Category: {supplier.category || 'N/A'} • Status: {supplier.status || 'N/A'}
+                    </div>
+                  </div>
+                )}
+
                 {/* Profile completion */}
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs mb-1">
@@ -269,7 +560,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </div>
                   <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-brand-blue to-brand-purple rounded-full transition-all duration-300"
+                      className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300"
                       style={{ width: `${profilePercentage}%` }}
                     />
                   </div>
@@ -279,7 +570,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
               <div className="p-2">
                 <Link
                   href="/profile"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => setShowProfile(false)}
                 >
                   <User className="h-4 w-4" />
@@ -288,7 +579,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
                 <Link
                   href="/settings"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => setShowProfile(false)}
                 >
                   <Settings className="h-4 w-4" />
@@ -297,14 +588,14 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
                 <Link
                   href="/help"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => setShowProfile(false)}
                 >
                   <HelpCircle className="h-4 w-4" />
                   <span>Help & Support</span>
                 </Link>
 
-                <div className="border-t border-gray-200 dark:border-gray-600 my-2" />
+                <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
 
                 <button
                   onClick={handleLogout}
@@ -318,6 +609,29 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Mobile Search Overlay */}
+      {showSearch && isMobile && (
+        <div className="fixed inset-x-0 top-16 z-50 bg-white dark:bg-gray-800 p-4 shadow-lg border-b border-gray-200 dark:border-gray-700">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search for tenders, suppliers, documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 h-10 rounded-lg border-gray-200 bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600"
+              autoFocus
+            />
+            <button
+              onClick={() => setShowSearch(false)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

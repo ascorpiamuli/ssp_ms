@@ -5,16 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\UploadResource;
 use App\Services\User\ProfileService;
+use App\Services\UploadService;
+use App\Models\Upload;
 use Illuminate\Http\Request;
 
 class ProfileController extends Controller
 {
   protected ProfileService $profileService;
+  protected UploadService $uploadService;
 
-  public function __construct(ProfileService $profileService)
+  public function __construct(ProfileService $profileService, UploadService $uploadService)
   {
     $this->profileService = $profileService;
+    $this->uploadService = $uploadService;
   }
 
   /**
@@ -101,20 +106,40 @@ class ProfileController extends Controller
   public function uploadPhoto(Request $request)
   {
     $request->validate([
-      'avatar' => 'required|image|max:2048|mimes:jpeg,png,jpg,gif,svg',
+      'avatar' => 'required|image|max:5120|mimes:jpeg,png,jpg,gif,svg,webp',
     ]);
 
     try {
-      $path = $this->profileService->uploadPhoto(
-        $request->user()->id,
-        $request->file('avatar')
+      $user = $request->user();
+
+      // Upload the file using the upload service
+      $upload = $this->uploadService->upload(
+        $request->file('avatar'),
+        $user,
+        'avatar',
+        'Profile Avatar',
+        'User profile avatar uploaded on ' . now()->toDateTimeString()
       );
+
+      // Delete old avatar upload if exists
+      if ($user->avatar_upload_id) {
+        $oldUpload = Upload::find($user->avatar_upload_id);
+        if ($oldUpload) {
+          $this->uploadService->delete($oldUpload);
+        }
+      }
+
+      // Update user's avatar references
+      $user->avatar = $upload->file_url;
+      $user->avatar_upload_id = $upload->id;
+      $user->save();
 
       return response()->json([
         'success' => true,
         'message' => 'Profile photo uploaded successfully',
         'data' => [
-          'avatar' => asset('storage/' . $path),
+          'avatar' => $upload->file_url,
+          'upload' => new UploadResource($upload),
         ],
       ]);
     } catch (\Exception $e) {
@@ -131,7 +156,18 @@ class ProfileController extends Controller
   public function deletePhoto(Request $request)
   {
     try {
-      $this->profileService->deletePhoto($request->user()->id);
+      $user = $request->user();
+
+      if ($user->avatar_upload_id) {
+        $upload = Upload::find($user->avatar_upload_id);
+        if ($upload) {
+          $this->uploadService->delete($upload);
+        }
+      }
+
+      $user->avatar = null;
+      $user->avatar_upload_id = null;
+      $user->save();
 
       return response()->json([
         'success' => true,
@@ -175,5 +211,65 @@ class ProfileController extends Controller
         'last_page' => $profiles->lastPage(),
       ],
     ]);
+  }
+
+  /**
+   * Get user's avatar upload history.
+   */
+  public function avatarHistory(Request $request)
+  {
+    $user = $request->user();
+
+    $avatars = Upload::where('uploadable_type', get_class($user))
+      ->where('uploadable_id', $user->id)
+      ->where('collection', 'avatar')
+      ->orderBy('created_at', 'desc')
+      ->get();
+
+    return response()->json([
+      'success' => true,
+      'data' => UploadResource::collection($avatars),
+    ]);
+  }
+
+  /**
+   * Set a specific upload as the primary avatar.
+   */
+  public function setPrimaryAvatar(Request $request, $uploadId)
+  {
+    try {
+      $user = $request->user();
+      $upload = Upload::where('id', $uploadId)
+        ->where('uploadable_type', get_class($user))
+        ->where('uploadable_id', $user->id)
+        ->where('collection', 'avatar')
+        ->first();
+
+      if (!$upload) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Avatar not found',
+        ], 404);
+      }
+
+      // Update user's avatar
+      $user->avatar = $upload->file_url;
+      $user->avatar_upload_id = $upload->id;
+      $user->save();
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Primary avatar updated successfully',
+        'data' => [
+          'avatar' => $upload->file_url,
+          'upload' => new UploadResource($upload),
+        ],
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to set primary avatar: ' . $e->getMessage(),
+      ], 500);
+    }
   }
 }

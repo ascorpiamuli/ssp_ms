@@ -176,10 +176,6 @@ export function useAuth() {
   // MUTATIONS
   // ============================================
 
-// hooks/useAuth.ts - Fixed loginMutation
-
-  // hooks/useAuth.ts - Fixed loginMutation
-
   const loginMutation = useMutation({
     mutationFn: async (data: LoginRequest) => {
       await csrf.getCookie();
@@ -285,8 +281,14 @@ export function useAuth() {
         sessionStorage.removeItem('user');
       }
       queryClient.clear();
+
+      // Show toast first, then redirect after delay
       success(response?.message || 'Logged out successfully');
-      router.push('/login');
+
+      // Delay redirect to allow toast to be seen
+      setTimeout(() => {
+        router.push('/login');
+      }, 1500);
     },
     onError: () => {
       tokenManager.remove();
@@ -295,7 +297,13 @@ export function useAuth() {
         sessionStorage.removeItem('user');
       }
       queryClient.clear();
-      router.push('/login');
+
+      // Show error toast first, then redirect after delay
+      error('Failed to logout properly. Redirecting...');
+
+      setTimeout(() => {
+        router.push('/login');
+      }, 1500);
     },
   });
 
@@ -364,13 +372,27 @@ export function useAuth() {
   });
 
   /**
-   * Upload avatar mutation
+   * Upload avatar mutation - Updated to handle response from /profile/photo
    */
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => AuthService.uploadAvatar(file),
     onSuccess: (response) => {
       if (response?.success) {
-        success('Avatar uploaded successfully');
+        // Update user with new avatar
+        if (user && response.data?.avatar) {
+          const updatedUser = { ...user, avatar: response.data.avatar };
+          // Update local storage
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          sessionStorage.setItem('user', JSON.stringify(updatedUser));
+          // Update query cache
+          queryClient.setQueryData(['user'], {
+            data: {
+              user: updatedUser,
+              permissions: permissions,
+              roles: user?.roles || [],
+            }
+          });
+        }
         queryClient.invalidateQueries({ queryKey: ['user'] });
         queryClient.invalidateQueries({ queryKey: ['profile', 'completion'] });
       } else {
@@ -520,30 +542,34 @@ export function useAuth() {
     return rolesToCheck.some((role) => user.role === role || roles.includes(role));
   };
 
-  const isAdmin = (): boolean => user?.role === 'ADMIN';
-  const isSupplier = (): boolean => user?.role === 'SUPPLIER';
-  const isHOD = (): boolean => user?.role === 'HOD';
-  const isAccountant = (): boolean => user?.role === 'ACCOUNTANT';
-  const isPrincipal = (): boolean => user?.role === 'PRINCIPAL';
-  const isFinalApprover = (): boolean => user?.role === 'FINAL_APPROVER';
-  const isStaff = (): boolean => user?.role === 'STAFF';
-  const isAuditor = (): boolean => user?.role === 'AUDITOR';
-  const isProcurement = (): boolean => user?.role === 'PROCUREMENT';
+  // ============================================
+  // ROLE HELPERS
+  // ============================================
+
+  const isAdmin = (): boolean => user?.role === 'ADMIN' || user?.roles?.includes('ADMIN') || false;
+  const isSupplier = (): boolean => user?.roles?.includes('SUPPLIER') || false;
+  const isHOD = (): boolean => user?.role === 'HOD' || user?.roles?.includes('HOD') || false;
+  const isAccountant = (): boolean => user?.role === 'ACCOUNTANT' || user?.roles?.includes('ACCOUNTANT') || false;
+  const isPrincipal = (): boolean => user?.role === 'PRINCIPAL' || user?.roles?.includes('PRINCIPAL') || false;
+  const isFinalApprover = (): boolean => user?.role === 'FINAL_APPROVER' || user?.roles?.includes('FINAL_APPROVER') || false;
+  const isStaff = (): boolean => user?.role === 'STAFF' || user?.roles?.includes('STAFF') || false;
+  const isAuditor = (): boolean => user?.role === 'AUDITOR' || user?.roles?.includes('AUDITOR') || false;
+  const isProcurement = (): boolean => user?.role === 'PROCUREMENT' || user?.roles?.includes('PROCUREMENT') || false;
 
   // ============================================
   // PROFILE COMPLETION HELPERS
   // ============================================
 
   const getCompletionStatus = () => {
-    return completionStatus?.data || { percentage: 0, is_complete: false, missing_fields: [] };
+    return completionStatus || { percentage: 0, is_complete: false, missing_fields: [] };
   };
 
   const isProfileComplete = (): boolean => {
-    return completionStatus?.data?.is_complete || false;
+    return (completionStatus as { is_complete: boolean } | undefined)?.is_complete || false;
   };
 
   const getProfilePercentage = (): number => {
-    return completionStatus?.data?.percentage || 0;
+    return (completionStatus as { percentage: number } | undefined)?.percentage || 0;
   };
 
   // ============================================

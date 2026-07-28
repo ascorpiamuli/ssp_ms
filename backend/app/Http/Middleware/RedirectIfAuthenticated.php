@@ -1,5 +1,3 @@
-// app/Http/Middleware/RedirectIfAuthenticated.php
-
 <?php
 
 namespace App\Http\Middleware;

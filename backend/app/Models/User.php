@@ -7,13 +7,13 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-use App\Notifications\CustomResetPasswordNotification; // Add this
+use App\Notifications\CustomResetPasswordNotification;
 use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-  use HasApiTokens, HasFactory, Notifiable, HasRoles,SoftDeletes;
+  use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes;
 
   /**
    * The attributes that are mass assignable.
@@ -32,6 +32,11 @@ class User extends Authenticatable
     'rejection_reason',
     'last_login_at',
     'timezone',
+    'avatar', // Add this
+    'id_number', // Add this
+    'date_of_birth', // Add this
+    'profile_photo', // Add this
+    'avatar_upload_id', // Add this
   ];
 
   /**
@@ -70,6 +75,14 @@ class User extends Authenticatable
   public function getInitialsAttribute(): string
   {
     return strtoupper($this->first_name[0] . $this->last_name[0]);
+  }
+
+  /**
+   * Get the user's avatar URL.
+   */
+  public function getAvatarUrlAttribute(): ?string
+  {
+    return $this->avatar ?? null;
   }
 
   // ============================================
@@ -140,6 +153,14 @@ class User extends Authenticatable
     return $this->hasOne(TwoFactorAuthentication::class);
   }
 
+  /**
+   * Avatar upload relationship.
+   */
+  public function avatarUpload()
+  {
+    return $this->belongsTo(Upload::class, 'avatar_upload_id');
+  }
+
   // ============================================
   // SCOPES
   // ============================================
@@ -205,7 +226,7 @@ class User extends Authenticatable
   }
 
   // ============================================
-  // PASSWORD RESET NOTIFICATION - ADD THIS
+  // PASSWORD RESET NOTIFICATION
   // ============================================
 
   /**

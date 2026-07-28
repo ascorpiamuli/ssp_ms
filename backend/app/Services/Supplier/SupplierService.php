@@ -5,18 +5,29 @@ namespace App\Services\Supplier;
 use App\Services\BaseService;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Models\Upload;
 use App\Models\UserActivityLog;
+use App\Services\UploadService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 
 class SupplierService extends BaseService
 {
+  protected UploadService $uploadService;
+
+  public function __construct(UploadService $uploadService)
+  {
+    $this->uploadService = $uploadService;
+  }
+
   /**
    * Get all suppliers with filters.
    */
   public function getAll(array $filters = [])
   {
-    $query = Supplier::with(['user', 'creator', 'blacklistedBy']);
+    $query = Supplier::with(['user', 'creator', 'blacklistedBy', 'companyLogoUpload']);
 
     if (isset($filters['status'])) {
       $query->where('status', $filters['status']);
@@ -53,7 +64,7 @@ class SupplierService extends BaseService
    */
   public function getById(int $id): ?Supplier
   {
-    return Supplier::with(['user', 'creator', 'blacklistedBy'])->find($id);
+    return Supplier::with(['user', 'creator', 'blacklistedBy', 'companyLogoUpload'])->find($id);
   }
 
   /**
@@ -61,7 +72,9 @@ class SupplierService extends BaseService
    */
   public function getByUserId(int $userId): ?Supplier
   {
-    return Supplier::where('user_id', $userId)->first();
+    return Supplier::with(['user', 'creator', 'blacklistedBy', 'companyLogoUpload'])
+      ->where('user_id', $userId)
+      ->first();
   }
 
   /**
@@ -78,32 +91,115 @@ class SupplierService extends BaseService
   public function create(array $data): Supplier
   {
     return DB::transaction(function () use ($data) {
+      Log::info('[SupplierService] Creating supplier', [
+        'data' => $data,
+        'has_logo' => isset($data['company_logo']) && $data['company_logo'] instanceof UploadedFile,
+      ]);
+
       // Create user account if not exists
       $userId = $data['user_id'] ?? null;
 
       if (!$userId) {
-        $user = $this->createSupplierUser($data);
-        $userId = $user->id;
+        // Check if user already exists by email
+        $existingUser = User::where('email', $data['company_email'])->first();
+
+        if ($existingUser) {
+          $userId = $existingUser->id;
+          Log::info('[SupplierService] Using existing user', [
+            'user_id' => $userId,
+            'email' => $data['company_email'],
+          ]);
+        } else {
+          $user = $this->createSupplierUser($data);
+          $userId = $user->id;
+          Log::info('[SupplierService] Created new user', [
+            'user_id' => $userId,
+            'email' => $data['company_email'],
+          ]);
+        }
       }
 
-      $supplier = Supplier::create([
+      // Prepare supplier data with proper null handling
+      $supplierData = [
         'user_id' => $userId,
         'company_name' => $data['company_name'],
         'company_email' => $data['company_email'],
-        'company_phone' => $data['company_phone'] ?? null,
+        'company_phone' => $this->nullIfEmpty($data['company_phone'] ?? null),
         'company_registration' => $data['company_registration'],
         'company_address' => $data['company_address'],
-        'company_website' => $data['company_website'] ?? null,
-        'tax_id' => $data['tax_id'] ?? null,
+        'company_website' => $this->nullIfEmpty($data['company_website'] ?? null),
+        'tax_id' => $this->nullIfEmpty($data['tax_id'] ?? null),
         'category' => $data['category'],
         'status' => 'ACTIVE',
         'created_by' => auth()->id(),
+        'description' => $this->nullIfEmpty($data['description'] ?? null),
+        'established_year' => $this->nullIfEmpty($data['established_year'] ?? null),
+        'employee_count' => $this->nullIfEmpty($data['employee_count'] ?? null),
+        'annual_revenue' => $this->nullIfEmpty($data['annual_revenue'] ?? null),
+        'certifications' => $this->nullIfEmpty($data['certifications'] ?? null),
+        'registration_date' => $this->nullIfEmpty($data['registration_date'] ?? null),
+        'license_number' => $this->nullIfEmpty($data['license_number'] ?? null),
+        'bank_name' => $this->nullIfEmpty($data['bank_name'] ?? null),
+        'bank_account' => $this->nullIfEmpty($data['bank_account'] ?? null),
+        'bank_branch' => $this->nullIfEmpty($data['bank_branch'] ?? null),
+        'payment_terms' => $this->nullIfEmpty($data['payment_terms'] ?? null),
+        'preferred_currency' => $data['preferred_currency'] ?? 'KES',
+        'contact_person_name' => $this->nullIfEmpty($data['contact_person_name'] ?? null),
+        'contact_person_email' => $this->nullIfEmpty($data['contact_person_email'] ?? null),
+        'contact_person_phone' => $this->nullIfEmpty($data['contact_person_phone'] ?? null),
+      ];
+
+      // Handle company logo upload - similar to avatar upload
+      $upload = null;
+      if (isset($data['company_logo']) && $data['company_logo'] instanceof UploadedFile) {
+        Log::info('[SupplierService] Uploading company logo', [
+          'file_name' => $data['company_logo']->getClientOriginalName(),
+          'file_size' => $data['company_logo']->getSize(),
+        ]);
+
+        // Upload the logo using UploadService
+        $upload = $this->uploadService->upload(
+          $data['company_logo'],                              // File
+          null,                                               // Model (will be attached after creation)
+          'company_logo',                                     // Collection
+          $data['company_name'] . ' Logo',                   // Title
+          'Company logo for ' . $data['company_name'],       // Description
+          [                                                   // Metadata
+            'uploaded_from' => 'supplier_creation',
+            'company_id' => $data['company_name'],
+          ]
+        );
+
+        // Set the logo URL and upload ID
+        $supplierData['company_logo'] = $upload->file_url;
+        $supplierData['company_logo_upload_id'] = $upload->id;
+
+        Log::info('[SupplierService] Logo uploaded successfully', [
+          'upload_id' => $upload->id,
+          'file_url' => $upload->file_url,
+        ]);
+      }
+
+      Log::info('[SupplierService] Supplier data prepared', [
+        'supplier_data' => $supplierData,
       ]);
+
+      // Create the supplier
+      $supplier = Supplier::create($supplierData);
+
+      // Associate the upload with the supplier
+      if ($upload) {
+        $this->uploadService->attachToModel($upload, $supplier);
+        Log::info('[SupplierService] Logo attached to supplier', [
+          'supplier_id' => $supplier->id,
+          'upload_id' => $upload->id,
+        ]);
+      }
 
       // Log activity
       $this->logActivity($supplier, 'CREATED', 'Supplier created');
 
-      return $supplier;
+      return $supplier->fresh();
     });
   }
 
@@ -134,29 +230,132 @@ class SupplierService extends BaseService
 
   /**
    * Update a supplier.
+   * Now properly handles all fields including null values and company logo.
    */
   public function update(int $id, array $data): Supplier
   {
     $supplier = Supplier::findOrFail($id);
 
-    $supplier->update([
-      'company_name' => $data['company_name'] ?? $supplier->company_name,
-      'company_email' => $data['company_email'] ?? $supplier->company_email,
-      'company_phone' => $data['company_phone'] ?? $supplier->company_phone,
-      'company_address' => $data['company_address'] ?? $supplier->company_address,
-      'company_website' => $data['company_website'] ?? $supplier->company_website,
-      'tax_id' => $data['tax_id'] ?? $supplier->tax_id,
-      'category' => $data['category'] ?? $supplier->category,
+    Log::info('[SupplierService] Updating supplier', [
+      'supplier_id' => $id,
+      'data_received' => $data,
+      'has_logo' => isset($data['company_logo']) && $data['company_logo'] instanceof UploadedFile,
     ]);
 
-    // Update user if needed
-    if (isset($data['contact_person_first_name']) || isset($data['contact_person_last_name'])) {
+    // Build update array with proper null handling
+    $updateData = [];
+
+    // Use array_key_exists to properly handle null values
+    $fieldMapping = [
+      'company_name' => null,
+      'company_email' => null,
+      'company_phone' => null,
+      'company_registration' => null,
+      'company_address' => null,
+      'company_website' => null,
+      'tax_id' => null,
+      'category' => null,
+      'description' => null,
+      'established_year' => null,
+      'employee_count' => null,
+      'annual_revenue' => null,
+      'certifications' => null,
+      'registration_date' => null,
+      'license_number' => null,
+      'bank_name' => null,
+      'bank_account' => null,
+      'bank_branch' => null,
+      'payment_terms' => null,
+      'preferred_currency' => null,
+      'contact_person_name' => null,
+      'contact_person_email' => null,
+      'contact_person_phone' => null,
+    ];
+
+    foreach ($fieldMapping as $field => $default) {
+      if (array_key_exists($field, $data)) {
+        $value = $data[$field];
+        // Convert empty strings to null
+        $updateData[$field] = $this->nullIfEmpty($value);
+        Log::info("[SupplierService] Setting field: {$field} = " . ($updateData[$field] ?? 'null'));
+      }
+    }
+
+    Log::info('[SupplierService] Update data prepared', [
+      'supplier_id' => $id,
+      'update_data' => $updateData,
+    ]);
+
+    // Handle company logo upload - similar to avatar upload
+    if (isset($data['company_logo']) && $data['company_logo'] instanceof UploadedFile) {
+      Log::info('[SupplierService] Updating company logo', [
+        'supplier_id' => $id,
+        'file_name' => $data['company_logo']->getClientOriginalName(),
+        'file_size' => $data['company_logo']->getSize(),
+      ]);
+
+      // Delete old logo if exists
+      if ($supplier->company_logo_upload_id) {
+        $oldUpload = Upload::find($supplier->company_logo_upload_id);
+        if ($oldUpload) {
+          $this->uploadService->delete($oldUpload);
+          Log::info('[SupplierService] Deleted old logo', [
+            'upload_id' => $oldUpload->id,
+            'file_url' => $oldUpload->file_url,
+          ]);
+        }
+      }
+
+      // Upload the new logo
+      $upload = $this->uploadService->upload(
+        $data['company_logo'],                                      // File
+        $supplier,                                                 // Model (attach directly)
+        'company_logo',                                            // Collection
+        ($data['company_name'] ?? $supplier->company_name) . ' Logo', // Title
+        'Company logo for ' . ($data['company_name'] ?? $supplier->company_name), // Description
+        [                                                          // Metadata
+          'uploaded_from' => 'supplier_update',
+          'company_id' => $supplier->id,
+          'previous_logo_upload_id' => $supplier->company_logo_upload_id,
+        ]
+      );
+
+      // Set the new logo data
+      $updateData['company_logo'] = $upload->file_url;
+      $updateData['company_logo_upload_id'] = $upload->id;
+
+      Log::info('[SupplierService] New logo uploaded successfully', [
+        'upload_id' => $upload->id,
+        'file_url' => $upload->file_url,
+      ]);
+    }
+
+    // Perform the update
+    $supplier->update($updateData);
+
+    Log::info('[SupplierService] Supplier updated successfully', [
+      'supplier_id' => $supplier->id,
+      'updated_fields' => array_keys($updateData),
+    ]);
+
+    // Update user if needed (for contact person)
+    if (array_key_exists('contact_person_first_name', $data) || array_key_exists('contact_person_last_name', $data)) {
       $user = User::find($supplier->user_id);
       if ($user) {
-        $user->update([
-          'first_name' => $data['contact_person_first_name'] ?? $user->first_name,
-          'last_name' => $data['contact_person_last_name'] ?? $user->last_name,
-        ]);
+        $userUpdateData = [];
+        if (array_key_exists('contact_person_first_name', $data)) {
+          $userUpdateData['first_name'] = $data['contact_person_first_name'];
+        }
+        if (array_key_exists('contact_person_last_name', $data)) {
+          $userUpdateData['last_name'] = $data['contact_person_last_name'];
+        }
+        if (!empty($userUpdateData)) {
+          $user->update($userUpdateData);
+          Log::info('[SupplierService] User updated', [
+            'user_id' => $user->id,
+            'update_data' => $userUpdateData,
+          ]);
+        }
       }
     }
 
@@ -164,6 +363,17 @@ class SupplierService extends BaseService
     $this->logActivity($supplier, 'UPDATED', 'Supplier updated');
 
     return $supplier->fresh();
+  }
+
+  /**
+   * Helper function to convert empty strings to null.
+   */
+  protected function nullIfEmpty($value)
+  {
+    if ($value === '' || $value === 'null') {
+      return null;
+    }
+    return $value;
   }
 
   /**

@@ -59,10 +59,19 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 # ============================================
 RUN echo "upload_max_filesize = 20M" > /usr/local/etc/php/conf.d/99-uploads.ini \
   && echo "post_max_size = 20M" >> /usr/local/etc/php/conf.d/99-uploads.ini \
-  && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/99-uploads.ini \
   && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/99-uploads.ini \
   && echo "max_input_time = 300" >> /usr/local/etc/php/conf.d/99-uploads.ini \
   && echo "max_file_uploads = 20" >> /usr/local/etc/php/conf.d/99-uploads.ini
+
+# ============================================
+# ADDITIONAL DEBUGGING CONFIGURATION
+# ============================================
+RUN echo "display_errors = On" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "display_startup_errors = On" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "error_reporting = E_ALL" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "log_errors = On" >> /usr/local/etc/php/conf.d/99-uploads.ini \
+  && echo "error_log = /var/log/php_errors.log" >> /usr/local/etc/php/conf.d/99-uploads.ini
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -79,8 +88,11 @@ RUN if [ -f .env.production ]; then cp .env.production .env; fi
 RUN chown -R www-data:www-data /var/www/html/storage \
   && chown -R www-data:www-data /var/www/html/bootstrap/cache
 
+# Create log directory and file
+RUN mkdir -p /var/log && touch /var/log/php_errors.log && chmod 666 /var/log/php_errors.log
+
 # Display PHP info for debugging (optional - remove in production)
-RUN php -i | grep -E "upload_max_filesize|post_max_size|memory_limit" || true
+RUN php -i | grep -E "upload_max_filesize|post_max_size|memory_limit|display_errors" || true
 
 EXPOSE 9000
 

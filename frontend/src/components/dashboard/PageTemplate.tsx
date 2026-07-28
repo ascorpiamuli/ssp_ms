@@ -34,24 +34,21 @@ export function PageTemplate({
   }, [])
 
   return (
-    <div className={cn(
-      "min-h-screen bg-gray-50 dark:bg-gray-950",
-      className
-    )}>
+    <div>
 
       {/* Sticky Header */}
       <div className={cn(
         "sticky top-0 z-20 transition-all duration-300",
         isScrolled
-          ? "bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm"
-          : "bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800"
+          ? "bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-200/80 dark:border-gray-800/80 shadow-lg shadow-gray-200/20 dark:shadow-gray-950/20"
+          : "bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border-b border-gray-200/50 dark:border-gray-800/50"
       )}>
         <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {/* Icon */}
               {icon && (
-                <div className="hidden sm:flex p-2 rounded-lg bg-brand-blue/10 flex-shrink-0">
+                <div className="hidden sm:flex p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 flex-shrink-0 ring-1 ring-blue-500/10 dark:ring-blue-400/10">
                   {icon}
                 </div>
               )}
@@ -65,11 +62,11 @@ export function PageTemplate({
                       <div key={idx} className="flex items-center gap-1.5 whitespace-nowrap">
                         {idx > 0 && <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />}
                         {crumb.href ? (
-                          <a href={crumb.href} className="hover:text-brand-blue transition-colors">
+                          <a href={crumb.href} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                             {crumb.label}
                           </a>
                         ) : (
-                          <span className={idx === breadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300" : ""}>
+                          <span className={idx === breadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300 font-medium" : ""}>
                             {crumb.label}
                           </span>
                         )}
@@ -79,7 +76,7 @@ export function PageTemplate({
                 )}
 
                 {/* Title */}
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white truncate">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {title}
                 </h1>
 
@@ -102,19 +99,10 @@ export function PageTemplate({
         </div>
       </div>
 
-      {/* Main Content - FULL WIDTH */}
+      {/* Main Content - FULL WIDTH, NO RESTRICTIONS */}
       <div className="px-4 sm:px-6 lg:px-8 py-6">
-        <div className="w-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-          <div className="p-4 sm:p-6">
-            {children}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            TUM CATHOLIC COMMUNITY — Treasury Management System
-          </p>
+        <div className="w-full">
+          {children}
         </div>
       </div>
 

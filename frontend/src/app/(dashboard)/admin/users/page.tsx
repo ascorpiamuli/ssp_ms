@@ -5,9 +5,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Users,
   Search,
-  Plus,
   MoreVertical,
-  Edit,
   Trash2,
   UserCheck,
   UserX,
@@ -16,18 +14,14 @@ import {
   Clock,
   AlertCircle,
   Eye,
-  UserPlus,
   RefreshCw,
   Building2,
   FilterX,
-  Save,
-  Pencil,
   AlertTriangle,
   Mail,
   Phone,
   Shield,
   Calendar,
-  Key,
   User,
   UserCheck2,
   Activity,
@@ -82,7 +76,6 @@ import {
 import {
   Card,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -93,7 +86,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
 
@@ -175,7 +167,7 @@ const getRoleDisplayName = (role: string) => {
     'SUPER_ADMIN': 'Super Admin',
     'HOD': 'Head of Department',
     'ACCOUNTANT': 'Accountant',
-    'PRINCIPAL': 'Principal',
+    'HEAD OF INSTITUTION': 'Head of Institution',
     'FINAL_APPROVER': 'Final Approver',
     'PROCUREMENT': 'Procurement Officer',
     'SUPPLIER': 'Supplier',
@@ -191,7 +183,7 @@ const getRoleColor = (role: string) => {
     'SUPER_ADMIN': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
     'HOD': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
     'ACCOUNTANT': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
-    'PRINCIPAL': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+    'HEAD OF INSTITUTION': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
     'FINAL_APPROVER': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
     'PROCUREMENT': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
     'SUPPLIER': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
@@ -238,7 +230,7 @@ const formatTimeAgo = (date: string | null) => {
 }
 
 // ============================================
-// View User Modal (No actions)
+// View User Modal
 // ============================================
 
 const ViewUserModal = ({
@@ -256,18 +248,18 @@ const ViewUserModal = ({
   const isAdmin = user.roles?.includes('ADMIN') || user.roles?.includes('SUPER_ADMIN')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-5xl w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-start">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">User Details</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">User Details</h2>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               <XCircle className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl mb-6">
             <Avatar className="h-16 w-16 ring-4 ring-white dark:ring-gray-700">
               <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xl font-medium">
@@ -401,7 +393,7 @@ const ViewUserModal = ({
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <div className="mt-1 rounded-full bg-blue-100 dark:bg-blue-900/30 p-1.5">
-                    <UserPlus className="h-3 w-3 text-blue-600" />
+                    <User className="h-3 w-3 text-blue-600" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Account Created</p>
@@ -436,7 +428,7 @@ const ViewUserModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
@@ -761,496 +753,492 @@ export default function AdminUsersPage() {
       description="Manage users, roles, and permissions across the system"
       icon={<Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
     >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {stats?.total || 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active</p>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {stats?.active || 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+                  <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-yellow-500">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Approval</p>
+                  <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                    {stats?.pending || 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-purple-500">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Departments</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {departments?.length || 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats?.total || 0}
-                </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Search users by name, email, or phone..."
+                    value={filters.search}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
+                    className="pl-9"
+                  />
+                </div>
               </div>
-              <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
+              <Select
+                value={filters.role}
+                onValueChange={(value) => setFilters({ ...filters, role: value, page: 1 })}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  {availableRoles?.map((role: any) => (
+                    <SelectItem key={role.name} value={role.name}>
+                      {getRoleDisplayName(role.name)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.status}
+                onValueChange={(value: any) => setFilters({ ...filters, status: value, page: 1 })}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.department}
+                onValueChange={(value) => setFilters({ ...filters, department: value, page: 1 })}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments?.map((dept: any) => (
+                    <SelectItem key={dept.id} value={dept.id.toString()}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilters({
+                    search: '',
+                    role: 'all',
+                    status: 'all',
+                    department: 'all',
+                    sort_by: 'created_at',
+                    sort_order: 'desc',
+                    per_page: 10,
+                    page: 1
+                  })
+                }}
+                className="gap-2"
+              >
+                <FilterX className="h-4 w-4" />
+                Clear
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => refetchUsers()}
+                className="gap-2"
+                disabled={isLoading}
+              >
+                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                Refresh
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active</p>
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {stats?.active || 0}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-                <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-yellow-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Approval</p>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {stats?.pending || 0}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Departments</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {departments?.length || 0}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Search users by name, email, or phone..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <Select
-              value={filters.role}
-              onValueChange={(value) => setFilters({ ...filters, role: value, page: 1 })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {availableRoles?.map((role: any) => (
-                  <SelectItem key={role.name} value={role.name}>
-                    {getRoleDisplayName(role.name)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.status}
-              onValueChange={(value: any) => setFilters({ ...filters, status: value, page: 1 })}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.department}
-              onValueChange={(value) => setFilters({ ...filters, department: value, page: 1 })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {departments?.map((dept: any) => (
-                  <SelectItem key={dept.id} value={dept.id.toString()}>
-                    {dept.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFilters({
-                  search: '',
-                  role: 'all',
-                  status: 'all',
-                  department: 'all',
-                  sort_by: 'created_at',
-                  sort_order: 'desc',
-                  per_page: 10,
-                  page: 1
-                })
-              }}
-              className="gap-2"
-            >
-              <FilterX className="h-4 w-4" />
-              Clear
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => refetchUsers()}
-              className="gap-2"
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Users Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                  <TableHead className="w-[40px]">
-                    <Checkbox
-                      checked={selectedUsers.length === users.length && users.length > 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedUsers(users.map((u: any) => u.id))
-                        } else {
-                          setSelectedUsers([])
-                        }
-                      }}
-                    />
-                  </TableHead>
-                  <TableHead className="min-w-[220px]">User</TableHead>
-                  <TableHead className="min-w-[130px]">Role</TableHead>
-                  <TableHead className="min-w-[130px]">Department</TableHead>
-                  <TableHead className="min-w-[110px]">Status</TableHead>
-                  <TableHead className="min-w-[150px]">Last Login</TableHead>
-                  <TableHead className="min-w-[200px]">Permissions</TableHead>
-                  <TableHead className="text-right min-w-[130px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                        <span className="text-sm text-gray-500">Loading users...</span>
-                      </div>
-                    </TableCell>
+        {/* Users Table */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                    <TableHead className="w-[40px]">
+                      <Checkbox
+                        checked={selectedUsers.length === users.length && users.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedUsers(users.map((u: any) => u.id))
+                          } else {
+                            setSelectedUsers([])
+                          }
+                        }}
+                      />
+                    </TableHead>
+                    <TableHead className="min-w-[220px]">User</TableHead>
+                    <TableHead className="min-w-[130px]">Role</TableHead>
+                    <TableHead className="min-w-[130px]">Department</TableHead>
+                    <TableHead className="min-w-[110px]">Status</TableHead>
+                    <TableHead className="min-w-[150px]">Last Login</TableHead>
+                    <TableHead className="min-w-[200px]">Permissions</TableHead>
+                    <TableHead className="text-right min-w-[130px]">Actions</TableHead>
                   </TableRow>
-                ) : users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <Users className="h-12 w-12 text-gray-300 dark:text-gray-600" />
-                        <p className="text-sm font-medium text-gray-500">No users found</p>
-                        <p className="text-xs text-gray-400">Try adjusting your filters</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  users.map((user: User) => {
-                    const primaryRole = user.role_details?.[0]?.name || 'STAFF'
-                    const displayPermissions = user.permissions?.slice(0, 4) || []
-                    const hasMorePermissions = (user.permissions?.length || 0) > 4
-                    const isAdmin = user.roles?.includes('ADMIN') || user.roles?.includes('SUPER_ADMIN')
-                    const isTargetCurrentUser = user.id === currentUser?.id
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                          <span className="text-sm text-gray-500">Loading users...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <Users className="h-12 w-12 text-gray-300 dark:text-gray-600" />
+                          <p className="text-sm font-medium text-gray-500">No users found</p>
+                          <p className="text-xs text-gray-400">Try adjusting your filters</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    users.map((user: User) => {
+                      const primaryRole = user.role_details?.[0]?.name || 'STAFF'
+                      const displayPermissions = user.permissions?.slice(0, 4) || []
+                      const hasMorePermissions = (user.permissions?.length || 0) > 4
+                      const isAdmin = user.roles?.includes('ADMIN') || user.roles?.includes('SUPER_ADMIN')
+                      const isTargetCurrentUser = user.id === currentUser?.id
 
-                    return (
-                      <TableRow key={user.id} className={cn(
-                        "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-                        isTargetCurrentUser && "bg-blue-50/50 dark:bg-blue-900/10"
-                      )}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedUsers.includes(user.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedUsers([...selectedUsers, user.id])
-                              } else {
-                                setSelectedUsers(selectedUsers.filter(id => id !== user.id))
-                              }
-                            }}
-                            disabled={isAdmin}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-gray-700">
-                              <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-medium">
-                                {user.first_name?.[0]}{user.last_name?.[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                  {user.full_name}
-                                </p>
-                                {isAdmin && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Crown className="h-3.5 w-3.5 text-yellow-500" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>Administrator</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                )}
-                                {isTargetCurrentUser && (
-                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                    You
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                  {user.email}
-                                </p>
+                      return (
+                        <TableRow key={user.id} className={cn(
+                          "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
+                          isTargetCurrentUser && "bg-blue-50/50 dark:bg-blue-900/10"
+                        )}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedUsers.includes(user.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedUsers([...selectedUsers, user.id])
+                                } else {
+                                  setSelectedUsers(selectedUsers.filter(id => id !== user.id))
+                                }
+                              }}
+                              disabled={isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-gray-700">
+                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-medium">
+                                  {user.first_name?.[0]}{user.last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                    {user.full_name}
+                                  </p>
+                                  {isAdmin && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Crown className="h-3.5 w-3.5 text-yellow-500" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>Administrator</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {isTargetCurrentUser && (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                      You
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                    {user.email}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={cn("font-medium border", getRoleColor(primaryRole))}>
-                            {getRoleDisplayName(primaryRole)}
-                          </Badge>
-                          {user.roles && user.roles.length > 1 && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="text-xs ml-1">
-                                    +{user.roles.length - 1}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Additional roles: {user.roles.slice(1).join(', ')}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {user.department?.name || '—'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <Badge className={cn("font-medium border text-xs", getStatusColor(user.is_active ? 'active' : 'inactive'))}>
-                              {user.is_active ? 'Active' : 'Inactive'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn("font-medium border", getRoleColor(primaryRole))}>
+                              {getRoleDisplayName(primaryRole)}
                             </Badge>
-                            {!user.is_approved && (
-                              <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-600 dark:text-yellow-400">
-                                Pending
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                              {formatTimeAgo(user.last_login_at)}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              {user.last_login_at ? formatDate(user.last_login_at) : 'Never'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-1">
-                            {displayPermissions.map((permission: string) => (
-                              <Badge key={permission} variant="secondary" className="text-xs whitespace-nowrap">
-                                {permission}
-                              </Badge>
-                            ))}
-                            {hasMorePermissions && (
-                              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                +{user.permissions.length - 4} more
-                              </Badge>
-                            )}
-                            {user.permissions?.length === 0 && (
-                              <span className="text-xs text-gray-400">No permissions</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            {/* View - Always visible */}
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    onClick={() => {
-                                      setSelectedUser(user)
-                                      setShowViewDialog(true)
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View Details</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-
-                            {/* Actions Dropdown - Only for non-admin users */}
-                            {!isAdmin && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  {canApproveUsers && !user.is_approved && (
-                                    <>
-                                      <DropdownMenuItem onClick={() => handleToggleApproval(user.id, 'approve')}>
-                                        <UserCheck2 className="h-4 w-4 mr-2 text-emerald-600" />
-                                        Approve User
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleToggleApproval(user.id, 'reject')}>
-                                        <UserX className="h-4 w-4 mr-2 text-red-600" />
-                                        Reject User
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                    </>
-                                  )}
-                                  <DropdownMenuItem onClick={() => {
-                                    if (user.is_active) {
-                                      handleToggleStatus(user.id, 'deactivate')
-                                    } else {
-                                      handleToggleStatus(user.id, 'activate')
-                                    }
-                                  }}>
-                                    {user.is_active ? (
-                                      <>
-                                        <UserX className="h-4 w-4 mr-2 text-red-600" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <UserCheck className="h-4 w-4 mr-2 text-emerald-600" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  {canDeleteUsers && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          setSelectedUser(user)
-                                          setShowDeleteDialog(true)
-                                        }}
-                                        className="text-red-600"
-                                      >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete User
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-
-                            {/* Admin users get a disabled dropdown */}
-                            {isAdmin && (
+                            {user.roles && user.roles.length > 1 && (
                               <TooltipProvider>
                                 <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 cursor-not-allowed" disabled>
-                                      <MoreVertical className="h-4 w-4 text-gray-400" />
-                                    </Button>
+                                  <TooltipTrigger>
+                                    <Badge variant="outline" className="text-xs ml-1">
+                                      +{user.roles.length - 1}
+                                    </Badge>
                                   </TooltipTrigger>
-                                  <TooltipContent>Admin users cannot be modified</TooltipContent>
+                                  <TooltipContent>
+                                    <p>Additional roles: {user.roles.slice(1).join(', ')}</p>
+                                  </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {user.department?.name || '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge className={cn("font-medium border text-xs", getStatusColor(user.is_active ? 'active' : 'inactive'))}>
+                                {user.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                              {!user.is_approved && (
+                                <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-600 dark:text-yellow-400">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                {formatTimeAgo(user.last_login_at)}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {user.last_login_at ? formatDate(user.last_login_at) : 'Never'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {displayPermissions.map((permission: string) => (
+                                <Badge key={permission} variant="secondary" className="text-xs whitespace-nowrap">
+                                  {permission}
+                                </Badge>
+                              ))}
+                              {hasMorePermissions && (
+                                <Badge variant="outline" className="text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+                                  +{user.permissions.length - 4} more
+                                </Badge>
+                              )}
+                              {user.permissions?.length === 0 && (
+                                <span className="text-xs text-gray-400">No permissions</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                      onClick={() => {
+                                        setSelectedUser(user)
+                                        setShowViewDialog(true)
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4 text-gray-500" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View Details</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              {!isAdmin && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {canApproveUsers && !user.is_approved && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleToggleApproval(user.id, 'approve')}>
+                                          <UserCheck2 className="h-4 w-4 mr-2 text-emerald-600" />
+                                          Approve User
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleToggleApproval(user.id, 'reject')}>
+                                          <UserX className="h-4 w-4 mr-2 text-red-600" />
+                                          Reject User
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    <DropdownMenuItem onClick={() => {
+                                      if (user.is_active) {
+                                        handleToggleStatus(user.id, 'deactivate')
+                                      } else {
+                                        handleToggleStatus(user.id, 'activate')
+                                      }
+                                    }}>
+                                      {user.is_active ? (
+                                        <>
+                                          <UserX className="h-4 w-4 mr-2 text-red-600" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <UserCheck className="h-4 w-4 mr-2 text-emerald-600" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    {canDeleteUsers && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            setSelectedUser(user)
+                                            setShowDeleteDialog(true)
+                                          }}
+                                          className="text-red-600"
+                                        >
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete User
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+
+                              {isAdmin && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 cursor-not-allowed" disabled>
+                                        <MoreVertical className="h-4 w-4 text-gray-400" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Admin users cannot be modified</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+          <div className="flex items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+            <div className="text-sm text-gray-500">
+              Showing <span className="font-medium text-gray-700 dark:text-gray-300">{users.length}</span> of{' '}
+              <span className="font-medium text-gray-700 dark:text-gray-300">{usersTotal}</span> users
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={filters.per_page.toString()}
+                onValueChange={(value) => setFilters({ ...filters, per_page: parseInt(value), page: 1 })}
+              >
+                <SelectTrigger className="w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setFilters({ ...filters, page: Math.max(1, filters.page - 1) })}
+                      className={filters.page === 1 ? 'pointer-events-none opacity-50' : ''}
+                    />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationLink isActive>{filters.page}</PaginationLink>
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
+                      className={users.length < filters.per_page ? 'pointer-events-none opacity-50' : ''}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           </div>
-        </CardContent>
-        <CardFooter className="flex items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700">
-          <div className="text-sm text-gray-500">
-            Showing <span className="font-medium text-gray-700 dark:text-gray-300">{users.length}</span> of{' '}
-            <span className="font-medium text-gray-700 dark:text-gray-300">{usersTotal}</span> users
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={filters.per_page.toString()}
-              onValueChange={(value) => setFilters({ ...filters, per_page: parseInt(value), page: 1 })}
-            >
-              <SelectTrigger className="w-[80px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectContent>
-            </Select>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setFilters({ ...filters, page: Math.max(1, filters.page - 1) })}
-                    className={filters.page === 1 ? 'pointer-events-none opacity-50' : ''}
-                  />
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink isActive>{filters.page}</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
-                    className={users.length < filters.per_page ? 'pointer-events-none opacity-50' : ''}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        </CardFooter>
-      </Card>
+        </Card>
+      </div>
 
       {/* ============================================
           MODALS
           ============================================ */}
-
-
-
 
       <ViewUserModal
         isOpen={showViewDialog}
@@ -1340,8 +1328,6 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-
 
       {/* Bulk Action Modal */}
       <Dialog open={showBulkActionDialog} onOpenChange={setShowBulkActionDialog}>

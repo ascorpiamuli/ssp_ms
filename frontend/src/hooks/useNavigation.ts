@@ -6,25 +6,40 @@ import { useAuth } from '@/contexts/AuthContext'
 import { navigationSections } from '@/lib/navigation/sections'
 import { NavItem, NavigationSection } from '@/lib/types/navigation.types'
 
+const ACTIVE_TAB_STORAGE_KEY = 'sspms_active_tab'
+const OPEN_SECTIONS_STORAGE_KEY = 'sspms_open_sections'
+
 export function useNavigation() {
   const { user, isAuthenticated, roles } = useAuth()
   const pathname = usePathname()
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set())
 
-  console.log('[useNavigation] Hook called', {
-    isAuthenticated,
-    userId: user?.id,
-    userEmail: user?.email,
-    userRoleField: user?.role,
-    userRolesArray: roles,
-    pathname,
-    rolesCount: roles?.length || 0
-  })
+  // Initialize open sections from localStorage - FIXED: explicit Set<string> return type
+  const getInitialOpenSections = useCallback((): Set<string> => {
+    if (typeof window === 'undefined') return new Set<string>()
+
+    try {
+      const stored = localStorage.getItem(OPEN_SECTIONS_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        // Ensure we're returning a Set<string>
+        if (Array.isArray(parsed)) {
+          return new Set<string>(parsed.filter((item): item is string => typeof item === 'string'))
+        }
+      }
+    } catch (error) {
+      // Silent fail
+    }
+    return new Set<string>()
+  }, [])
+
+  const [openSections, setOpenSections] = useState<Set<string>>(getInitialOpenSections)
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  // ✅ Add state for dynamic badge values
+  const [dynamicBadges, setDynamicBadges] = useState<Record<string, string>>({})
 
   // Get user's role names from backend - ONLY ROLES, no permissions
   const userRoles = useMemo(() => {
     if (!user) {
-      console.log('[useNavigation] No user, returning empty roles')
       return []
     }
 
@@ -59,7 +74,6 @@ export function useNavigation() {
       roleNames.push('guest')
     }
 
-    console.log('[useNavigation] Final user roles:', roleNames)
     return roleNames
   }, [user, roles])
 
@@ -71,74 +85,71 @@ export function useNavigation() {
     if (userRoles.includes('admin') || userRoles.includes('super_admin')) return true
 
     // Check if user has any of the required roles
-    const hasRole = roleNames.some(role =>
+    return roleNames.some(role =>
       userRoles.includes(role.toLowerCase())
     )
-
-    console.log('[hasAnyRole]', {
-      requiredRoles: roleNames,
-      userRoles,
-      hasRole
-    })
-
-    return hasRole
   }, [userRoles])
 
   // Check if an item is accessible - ONLY BASED ON ROLES
   const isItemAccessible = useCallback((item: NavItem): boolean => {
-    console.log(`[useNavigation] Checking item accessibility: ${item.name}`, {
-      roles: item.roles,
-      userRoles,
-      isAuthenticated
-    })
-
     // If no roles specified, accessible to all authenticated users
     if (!item.roles || item.roles.length === 0) {
       return isAuthenticated
     }
 
     // Check roles (OR logic) - user must have at least one of the required roles
-    const hasRole = hasAnyRole(item.roles)
+    return hasAnyRole(item.roles)
+  }, [isAuthenticated, hasAnyRole])
 
-    if (!hasRole) {
-      console.log(`[useNavigation] Item ${item.name} - Role check failed. Required:`, item.roles, 'User has:', userRoles)
-      return false
+  // Find the active tab based on current path
+  const findActiveTab = useCallback((navigationItems: NavigationSection[]): string | null => {
+    for (const section of navigationItems) {
+      for (const item of section.items) {
+        // Check if current path matches this item
+        if (item.href === pathname) {
+          return item.id
+        }
+        // Check if current path starts with item href (for nested routes)
+        if (item.href !== '/' && pathname.startsWith(item.href)) {
+          return item.id
+        }
+        // Check children
+        if (item.children) {
+          for (const child of item.children) {
+            if (child.href === pathname || (child.href !== '/' && pathname.startsWith(child.href))) {
+              return child.id
+            }
+            // Check grandchildren
+            if (child.children) {
+              for (const grandChild of child.children) {
+                if (grandChild.href === pathname || (grandChild.href !== '/' && pathname.startsWith(grandChild.href))) {
+                  return grandChild.id
+                }
+              }
+            }
+          }
+        }
+      }
     }
-
-    console.log(`[useNavigation] Item ${item.name} - ACCESSIBLE (role check passed)`)
-    return true
-  }, [isAuthenticated, hasAnyRole, userRoles])
+    return null
+  }, [pathname])
 
   // Build filtered navigation
   const navigation = useMemo(() => {
-    console.log('[useNavigation] Building filtered navigation', {
-      isAuthenticated,
-      hasUser: !!user,
-      userRoles,
-      sectionsCount: navigationSections.length
-    })
-
     if (!isAuthenticated || !user) {
-      console.log('[useNavigation] Not authenticated or no user, returning empty navigation')
       return []
     }
 
     const filtered: NavigationSection[] = []
 
     for (const section of navigationSections) {
-      console.log(`[useNavigation] Processing section: ${section.id} - ${section.title}`)
-
       // Filter items in this section based on roles
       const filteredItems = section.items.filter(item => {
-        const accessible = isItemAccessible(item)
-        return accessible
+        return isItemAccessible(item)
       })
-
-      console.log(`[useNavigation] Section ${section.id} - Filtered items: ${filteredItems.length}/${section.items.length}`)
 
       // If no items in this section, skip the section
       if (filteredItems.length === 0) {
-        console.log(`[useNavigation] Section ${section.id} - Skipping (no items)`)
         continue
       }
 
@@ -148,36 +159,114 @@ export function useNavigation() {
       })
     }
 
-    console.log('[useNavigation] Final navigation sections:', filtered.map(s => ({
-      id: s.id,
-      title: s.title,
-      itemsCount: s.items.length
-    })))
-
     return filtered
-  }, [isAuthenticated, user, isItemAccessible, userRoles])
+  }, [isAuthenticated, user, isItemAccessible])
+
+  // Save active tab to localStorage
+  const saveActiveTab = useCallback((tabId: string | null) => {
+    if (typeof window === 'undefined') return
+
+    try {
+      if (tabId) {
+        localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tabId)
+      } else {
+        localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY)
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  }, [])
+
+  // Save open sections to localStorage
+  const saveOpenSections = useCallback((sections: Set<string>) => {
+    if (typeof window === 'undefined') return
+
+    try {
+      localStorage.setItem(OPEN_SECTIONS_STORAGE_KEY, JSON.stringify(Array.from(sections)))
+    } catch (error) {
+      // Silent fail
+    }
+  }, [])
+
+  // ✅ Update dynamic badge value
+  const updateBadge = useCallback((badgeKey: string, value: string) => {
+    setDynamicBadges(prev => ({
+      ...prev,
+      [badgeKey]: value
+    }))
+  }, [])
+
+  // ✅ Get badge value for an item
+  const getBadgeValue = useCallback((item: NavItem): string => {
+    // If item is dynamic, check the dynamicBadges state
+    if (item.isDynamic && item.badgeKey) {
+      return dynamicBadges[item.badgeKey] || item.badge || '0'
+    }
+    // Otherwise return the static badge
+    return item.badge || ''
+  }, [dynamicBadges])
+
+  // Update active tab when path changes
+  useEffect(() => {
+    if (navigation.length === 0) {
+      return
+    }
+
+    const activeTab = findActiveTab(navigation)
+
+    if (activeTab) {
+      setActiveTabId(activeTab)
+      saveActiveTab(activeTab)
+    } else {
+      // Check if we have a stored active tab that might still be valid
+      const storedTab = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_TAB_STORAGE_KEY) : null
+
+      // Only use stored tab if it exists in the current navigation
+      if (storedTab) {
+        const exists = navigation.some(section =>
+          section.items.some(item => {
+            if (item.id === storedTab) return true
+            if (item.children) {
+              return item.children.some(child => {
+                if (child.id === storedTab) return true
+                if (child.children) {
+                  return child.children.some(gc => gc.id === storedTab)
+                }
+                return false
+              })
+            }
+            return false
+          })
+        )
+        if (exists) {
+          setActiveTabId(storedTab)
+        } else {
+          setActiveTabId(null)
+          saveActiveTab(null)
+        }
+      } else {
+        setActiveTabId(null)
+      }
+    }
+  }, [pathname, navigation, findActiveTab, saveActiveTab])
 
   // Auto-open section based on current path
   useEffect(() => {
     if (navigation.length === 0) {
-      console.log('[useNavigation] No navigation items, skipping auto-open')
       return
     }
 
-    console.log('[useNavigation] Auto-opening section for path:', pathname)
     let foundSection: string | null = null
 
     for (const section of navigation) {
       for (const item of section.items) {
         // Check if current path matches this item
         if (item.href === pathname) {
-          console.log(`[useNavigation] Found exact match in section ${section.id}:`, item.name)
           foundSection = section.id
           break
         }
         // Check if current path starts with item href (for nested routes)
         if (item.href !== '/' && pathname.startsWith(item.href)) {
-          console.log(`[useNavigation] Found prefix match in section ${section.id}:`, item.name)
           foundSection = section.id
           break
         }
@@ -185,9 +274,17 @@ export function useNavigation() {
         if (item.children) {
           for (const child of item.children) {
             if (child.href === pathname || (child.href !== '/' && pathname.startsWith(child.href))) {
-              console.log(`[useNavigation] Found child match in section ${section.id}:`, child.name)
               foundSection = section.id
               break
+            }
+            // Check grandchildren
+            if (child.children) {
+              for (const grandChild of child.children) {
+                if (grandChild.href === pathname || (grandChild.href !== '/' && pathname.startsWith(grandChild.href))) {
+                  foundSection = section.id
+                  break
+                }
+              }
             }
           }
         }
@@ -197,19 +294,17 @@ export function useNavigation() {
     }
 
     if (foundSection) {
-      console.log('[useNavigation] Opening section:', foundSection)
       setOpenSections(prev => {
         const newSet = new Set(prev)
         newSet.add(foundSection)
+        // Save to localStorage
+        saveOpenSections(newSet)
         return newSet
       })
-    } else {
-      console.log('[useNavigation] No matching section found for path:', pathname)
     }
-  }, [pathname, navigation])
+  }, [pathname, navigation, saveOpenSections])
 
   const toggleSection = useCallback((sectionId: string) => {
-    console.log('[useNavigation] toggleSection called:', sectionId)
     setOpenSections(prev => {
       const newSet = new Set(prev)
       if (newSet.has(sectionId)) {
@@ -217,9 +312,11 @@ export function useNavigation() {
       } else {
         newSet.add(sectionId)
       }
+      // Save to localStorage
+      saveOpenSections(newSet)
       return newSet
     })
-  }, [])
+  }, [saveOpenSections])
 
   const isSectionOpen = useCallback((sectionId: string, defaultOpen?: boolean) => {
     if (openSections.has(sectionId)) return true
@@ -228,7 +325,39 @@ export function useNavigation() {
 
   // Get primary role
   const primaryRole = userRoles.length > 0 ? userRoles[0] : 'guest'
-  console.log('[useNavigation] Primary role determined:', primaryRole, 'from roles:', userRoles)
+
+  // Check if a tab is active
+  const isTabActive = useCallback((tabId: string): boolean => {
+    return activeTabId === tabId
+  }, [activeTabId])
+
+  // Get the active tab object
+  const getActiveTab = useCallback((): NavItem | null => {
+    if (!activeTabId) return null
+
+    for (const section of navigation) {
+      for (const item of section.items) {
+        if (item.id === activeTabId) {
+          return item
+        }
+        if (item.children) {
+          for (const child of item.children) {
+            if (child.id === activeTabId) {
+              return child
+            }
+            if (child.children) {
+              for (const grandChild of child.children) {
+                if (grandChild.id === activeTabId) {
+                  return grandChild
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return null
+  }, [navigation, activeTabId])
 
   return {
     navigation,
@@ -237,6 +366,17 @@ export function useNavigation() {
     openSections,
     toggleSection,
     isSectionOpen,
-    hasAnyRole
+    hasAnyRole,
+    activeTabId,
+    isTabActive,
+    getActiveTab,
+    setActiveTab: (tabId: string) => {
+      setActiveTabId(tabId)
+      saveActiveTab(tabId)
+    },
+    // ✅ New methods for dynamic badges
+    updateBadge,
+    getBadgeValue,
+    dynamicBadges,
   }
 }
