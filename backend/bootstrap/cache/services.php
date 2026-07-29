@@ -36,8 +36,10 @@
     32 => 'Spatie\\Csp\\CspServiceProvider',
     33 => 'Spatie\\Permission\\PermissionServiceProvider',
     34 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
-    35 => 'App\\Providers\\RateLimiterServiceProvider',
-    36 => 'App\\Providers\\AppServiceProvider',
+    35 => 'App\\Providers\\AppServiceProvider',
+    36 => 'App\\Providers\\ProcurementServiceProvider',
+    37 => 'App\\Providers\\RateLimiterServiceProvider',
+    38 => 'App\\Providers\\ProcurementServiceProvider',
   ),
   'eager' => 
   array (
@@ -61,8 +63,10 @@
     17 => 'Spatie\\Csp\\CspServiceProvider',
     18 => 'Spatie\\Permission\\PermissionServiceProvider',
     19 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
-    20 => 'App\\Providers\\RateLimiterServiceProvider',
-    21 => 'App\\Providers\\AppServiceProvider',
+    20 => 'App\\Providers\\AppServiceProvider',
+    21 => 'App\\Providers\\ProcurementServiceProvider',
+    22 => 'App\\Providers\\RateLimiterServiceProvider',
+    23 => 'App\\Providers\\ProcurementServiceProvider',
   ),
   'deferred' => 
   array (

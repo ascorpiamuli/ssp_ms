@@ -1,6 +1,8 @@
 <?php
 
 return [
-  App\Providers\RateLimiterServiceProvider::class,
   App\Providers\AppServiceProvider::class,
+  App\Providers\ProcurementServiceProvider::class,
+  App\Providers\RateLimiterServiceProvider::class,
+  App\Providers\ProcurementServiceProvider::class,
 ];

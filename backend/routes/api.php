@@ -25,6 +25,20 @@ use App\Http\Controllers\Api\RequisitionRevisionController;
 use App\Http\Controllers\Api\RequisitionNotificationController;
 use App\Http\Controllers\Api\RequisitionReportController;
 
+// ============================================
+// PROCUREMENT CONTROLLERS
+// ============================================
+use App\Http\Controllers\Api\QuotationController;
+use App\Http\Controllers\Api\SupplierQuotationController;
+use App\Http\Controllers\Api\PurchaseOrderController;
+use App\Http\Controllers\Api\GoodsReceivedController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\TenderController;
+use App\Http\Controllers\Api\ProcurementController;
+use App\Http\Controllers\Api\ProcurementApprovalController;
+
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -121,6 +135,51 @@ Route::prefix('v1')->group(function () {
   });
 
   // ============================================
+  // PUBLIC PROCUREMENT DROPDOWN ROUTES
+  // ============================================
+  Route::get('/quotation-statuses', function () {
+    return response()->json([
+      'success' => true,
+      'data' => [
+        ['value' => 'draft', 'label' => 'Draft'],
+        ['value' => 'sent', 'label' => 'Sent'],
+        ['value' => 'responded', 'label' => 'Responded'],
+        ['value' => 'evaluating', 'label' => 'Evaluating'],
+        ['value' => 'closed', 'label' => 'Closed'],
+        ['value' => 'cancelled', 'label' => 'Cancelled'],
+        ['value' => 'expired', 'label' => 'Expired'],
+      ],
+    ]);
+  });
+
+  Route::get('/purchase-order-statuses', function () {
+    return response()->json([
+      'success' => true,
+      'data' => [
+        ['value' => 'draft', 'label' => 'Draft'],
+        ['value' => 'issued', 'label' => 'Issued'],
+        ['value' => 'sent', 'label' => 'Sent to Supplier'],
+        ['value' => 'acknowledged', 'label' => 'Acknowledged'],
+        ['value' => 'delivered', 'label' => 'Delivered'],
+        ['value' => 'partial', 'label' => 'Partially Delivered'],
+        ['value' => 'completed', 'label' => 'Completed'],
+        ['value' => 'cancelled', 'label' => 'Cancelled'],
+        ['value' => 'closed', 'label' => 'Closed'],
+      ],
+    ]);
+  });
+
+  Route::get('/purchase-order-types', function () {
+    return response()->json([
+      'success' => true,
+      'data' => [
+        ['value' => 'lpo', 'label' => 'LPO (Goods)'],
+        ['value' => 'lso', 'label' => 'LSO (Services)'],
+      ],
+    ]);
+  });
+
+  // ============================================
   // AUTHENTICATION ROUTES (Public)
   // ============================================
   Route::prefix('auth')->group(function () {
@@ -198,9 +257,11 @@ Route::prefix('v1')->group(function () {
       });
     });
 
+    // ============================================
+    // REQUISITION ROUTES
+    // ============================================
     Route::prefix('requisitions')->group(function () {
       Route::post('/', [RequisitionController::class, 'store']);
-      // All authenticated users can view requisitions
       Route::get('/', [RequisitionController::class, 'index']);
       Route::get('/stats', [RequisitionController::class, 'stats']);
       Route::get('/my', [RequisitionController::class, 'userRequisitions']);
@@ -208,28 +269,13 @@ Route::prefix('v1')->group(function () {
       Route::get('/pending', [RequisitionController::class, 'pendingApprovals']);
       Route::get('/{id}', [RequisitionController::class, 'show']);
       Route::get('/reference/{referenceNumber}', [RequisitionController::class, 'showByReference']);
-
-      // Create requisition (authenticated users)
-
-
-      // Update requisition (only draft/returned/revised)
       Route::put('/{id}', [RequisitionController::class, 'update']);
-
-      // Submit requisition for approval
       Route::post('/{id}/submit', [RequisitionController::class, 'submit']);
-
-      // Return requisition for revision
       Route::post('/{id}/return', [RequisitionController::class, 'return']);
-
-      // Cancel requisition
       Route::post('/{id}/cancel', [RequisitionController::class, 'cancel']);
-
-      // Delete requisition (only draft)
       Route::delete('/{id}', [RequisitionController::class, 'destroy']);
 
-      // --------------------------------------------
-      // REQUISITION ITEMS ROUTES
-      // --------------------------------------------
+      // Requisition Items
       Route::prefix('{requisitionId}/items')->group(function () {
         Route::get('/', [RequisitionItemController::class, 'index']);
         Route::get('/stats', [RequisitionItemController::class, 'stats']);
@@ -242,9 +288,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/quality', [RequisitionItemController::class, 'updateQualityStatus']);
       });
 
-      // --------------------------------------------
-      // REQUISITION ATTACHMENT ROUTES
-      // --------------------------------------------
+      // Requisition Attachments
       Route::prefix('{requisitionId}/attachments')->group(function () {
         Route::get('/', [RequisitionAttachmentController::class, 'index']);
         Route::post('/', [RequisitionAttachmentController::class, 'store']);
@@ -254,17 +298,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/{id}/download', [RequisitionAttachmentController::class, 'download']);
       });
 
-      // --------------------------------------------
-      // REQUISITION HISTORY ROUTES
-      // --------------------------------------------
+      // Requisition History
       Route::prefix('{requisitionId}/history')->group(function () {
         Route::get('/', [RequisitionHistoryController::class, 'index']);
         Route::get('/{id}', [RequisitionHistoryController::class, 'show']);
       });
 
-      // --------------------------------------------
-      // REQUISITION BUDGET ROUTES
-      // --------------------------------------------
+      // Requisition Budgets
       Route::prefix('{requisitionId}/budgets')->group(function () {
         Route::get('/', [RequisitionBudgetController::class, 'index']);
         Route::post('/', [RequisitionBudgetController::class, 'store']);
@@ -275,9 +315,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/reject', [RequisitionBudgetController::class, 'reject']);
       });
 
-      // --------------------------------------------
-      // REQUISITION REVISION ROUTES
-      // --------------------------------------------
+      // Requisition Revisions
       Route::prefix('{requisitionId}/revisions')->group(function () {
         Route::get('/', [RequisitionRevisionController::class, 'index']);
         Route::post('/', [RequisitionRevisionController::class, 'store']);
@@ -288,19 +326,15 @@ Route::prefix('v1')->group(function () {
       });
     });
 
-    // --------------------------------------------
+    // ============================================
     // APPROVAL ROUTES
-    // --------------------------------------------
+    // ============================================
     Route::prefix('approvals')->group(function () {
+      Route::get('/pending', [ApprovalController::class, 'pending']);
+      Route::get('/stats', [ApprovalController::class, 'stats']);
+      Route::get('/role', [ApprovalController::class, 'byRole']);
+      Route::get('/delegated', [ApprovalController::class, 'delegated']);
 
-      // Get pending approvals for current user
-      Route::get('/pending', [ApprovalController::class, 'pending'])->middleware(['auth:sanctum']);
-      Route::get('/stats', [ApprovalController::class, 'stats'])->middleware(['auth:sanctum']);
-      Route::get('/role', [ApprovalController::class, 'byRole'])->middleware(['auth:sanctum']);
-      Route::get('/delegated', [ApprovalController::class, 'delegated'])->middleware(['auth:sanctum']);
-
-
-      // Approval workflows
       Route::prefix('workflows')->group(function () {
         Route::get('/', [ApprovalWorkflowController::class, 'index']);
         Route::post('/', [ApprovalWorkflowController::class, 'store'])->middleware(['role:ADMIN']);
@@ -311,19 +345,17 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/clone', [ApprovalWorkflowController::class, 'clone'])->middleware(['role:ADMIN']);
       });
 
-      // Process approvals for a requisition
       Route::prefix('requisitions/{requisitionId}')->group(function () {
         Route::get('/', [ApprovalController::class, 'index']);
         Route::post('/{level}/process', [ApprovalController::class, 'process']);
       });
 
-      // Delegate approval
       Route::post('/{approvalId}/delegate', [ApprovalController::class, 'delegate']);
     });
 
-    // --------------------------------------------
+    // ============================================
     // REQUISITION NOTIFICATION ROUTES
-    // --------------------------------------------
+    // ============================================
     Route::prefix('notifications')->group(function () {
       Route::get('/', [RequisitionNotificationController::class, 'index']);
       Route::get('/unread-count', [RequisitionNotificationController::class, 'unreadCount']);
@@ -335,9 +367,9 @@ Route::prefix('v1')->group(function () {
       Route::delete('/{id}', [RequisitionNotificationController::class, 'destroy']);
     });
 
-    // --------------------------------------------
+    // ============================================
     // REQUISITION REPORT ROUTES
-    // --------------------------------------------
+    // ============================================
     Route::prefix('reports')->group(function () {
       Route::get('/dashboard', [RequisitionReportController::class, 'dashboard']);
       Route::get('/summary', [RequisitionReportController::class, 'summary']);
@@ -347,21 +379,218 @@ Route::prefix('v1')->group(function () {
       Route::get('/export', [RequisitionReportController::class, 'export']);
     });
 
-    // --------------------------------------------
+    // ============================================
     // BUDGET ROUTES (Global)
-    // --------------------------------------------
+    // ============================================
     Route::prefix('budgets')->group(function () {
       Route::get('/stats', [RequisitionBudgetController::class, 'stats']);
       Route::get('/fiscal-years', [RequisitionBudgetController::class, 'fiscalYears']);
     });
 
-    // --------------------------------------------
+    // ============================================
     // HISTORY ROUTES (Global)
-    // --------------------------------------------
+    // ============================================
     Route::prefix('history')->group(function () {
       Route::get('/actions/{action}', [RequisitionHistoryController::class, 'byAction']);
       Route::get('/stats', [RequisitionHistoryController::class, 'stats']);
       Route::get('/recent/{userId}', [RequisitionHistoryController::class, 'recent']);
+    });
+
+    // ============================================
+    // PROCUREMENT MODULE ROUTES
+    // ============================================
+
+    // --------------------------------------------
+    // QUOTATION ROUTES
+    // --------------------------------------------
+    Route::prefix('quotations')->group(function () {
+      Route::get('/', [QuotationController::class, 'index']);
+      Route::post('/', [QuotationController::class, 'store']);
+      Route::get('/stats', [QuotationController::class, 'statistics']);
+      Route::get('/{id}', [QuotationController::class, 'show']);
+      Route::put('/{id}', [QuotationController::class, 'update']);
+      Route::post('/{id}/send', [QuotationController::class, 'send']);
+      Route::post('/{id}/close', [QuotationController::class, 'close']);
+      Route::post('/{id}/cancel', [QuotationController::class, 'cancel']);
+      Route::post('/{id}/reminder', [QuotationController::class, 'sendReminder']);
+      Route::get('/{id}/statistics', [QuotationController::class, 'statistics']);
+      Route::post('/select-supplier', [QuotationController::class, 'selectSupplier']);
+    });
+
+    // --------------------------------------------
+    // SUPPLIER QUOTATION ROUTES
+    // --------------------------------------------
+    Route::prefix('supplier-quotations')->group(function () {
+      Route::get('/', [SupplierQuotationController::class, 'index']);
+      Route::post('/', [SupplierQuotationController::class, 'store']);
+      Route::get('/lowest/{qtnId}', [SupplierQuotationController::class, 'lowest']);
+      Route::get('/{id}', [SupplierQuotationController::class, 'show']);
+      Route::post('/{id}/verify', [SupplierQuotationController::class, 'verify']);
+      Route::post('/{id}/evaluate', [SupplierQuotationController::class, 'evaluate']);
+    });
+
+    // --------------------------------------------
+    // PURCHASE ORDER ROUTES
+    // --------------------------------------------
+    Route::prefix('purchase-orders')->group(function () {
+      Route::get('/', [PurchaseOrderController::class, 'index']);
+      Route::post('/', [PurchaseOrderController::class, 'store']);
+      Route::get('/overdue', [PurchaseOrderController::class, 'overdue']);
+      Route::get('/{id}', [PurchaseOrderController::class, 'show']);
+      Route::get('/{id}/summary', [PurchaseOrderController::class, 'summary']);
+      Route::get('/{id}/delivery-progress', [PurchaseOrderController::class, 'deliveryProgress']);
+      Route::get('/{id}/pdf', [PurchaseOrderController::class, 'pdf']);
+      Route::post('/{id}/approve', [PurchaseOrderController::class, 'approve']);
+      Route::post('/{id}/issue', [PurchaseOrderController::class, 'issue']);
+      Route::post('/{id}/send', [PurchaseOrderController::class, 'sendToSupplier']);
+      Route::post('/{id}/acknowledge', [PurchaseOrderController::class, 'acknowledge']);
+      Route::post('/{id}/deliver', [PurchaseOrderController::class, 'markDelivered']);
+      Route::post('/{id}/complete', [PurchaseOrderController::class, 'complete']);
+      Route::post('/{id}/cancel', [PurchaseOrderController::class, 'cancel']);
+    });
+
+    // --------------------------------------------
+    // GOODS RECEIVED ROUTES
+    // --------------------------------------------
+    Route::prefix('goods-received')->group(function () {
+      Route::get('/', [GoodsReceivedController::class, 'index']);
+      Route::post('/', [GoodsReceivedController::class, 'store']);
+      Route::get('/{id}', [GoodsReceivedController::class, 'show']);
+      Route::get('/{id}/summary', [GoodsReceivedController::class, 'summary']);
+      Route::get('/{id}/pdf', [GoodsReceivedController::class, 'pdf']);
+      Route::post('/{id}/submit', [GoodsReceivedController::class, 'submit']);
+      Route::post('/{id}/approve', [GoodsReceivedController::class, 'approve']);
+      Route::post('/{id}/reject', [GoodsReceivedController::class, 'reject']);
+      Route::post('/{id}/inspect', [GoodsReceivedController::class, 'inspect']);
+    });
+
+    // --------------------------------------------
+    // SERVICE ACKNOWLEDGMENT ROUTES
+    // --------------------------------------------
+    Route::prefix('service-acknowledgments')->group(function () {
+      Route::get('/', [GoodsReceivedController::class, 'index']);
+      Route::post('/', [GoodsReceivedController::class, 'store']);
+      Route::get('/{id}', [GoodsReceivedController::class, 'show']);
+      Route::get('/{id}/summary', [GoodsReceivedController::class, 'sanSummary']);
+      Route::get('/{id}/pdf', [GoodsReceivedController::class, 'pdfSan']);
+      Route::post('/{id}/submit', [GoodsReceivedController::class, 'submitSan']);
+      Route::post('/{id}/approve', [GoodsReceivedController::class, 'approveSan']);
+      Route::post('/{id}/reject', [GoodsReceivedController::class, 'rejectSan']);
+      Route::post('/{id}/rate', [GoodsReceivedController::class, 'rateService']);
+    });
+
+    // --------------------------------------------
+    // INVOICE ROUTES
+    // --------------------------------------------
+    Route::prefix('invoices')->group(function () {
+      Route::get('/', [InvoiceController::class, 'index']);
+      Route::post('/', [InvoiceController::class, 'store']);
+      Route::get('/overdue', [InvoiceController::class, 'overdue']);
+      Route::get('/{id}', [InvoiceController::class, 'show']);
+      Route::get('/{id}/summary', [InvoiceController::class, 'summary']);
+      Route::get('/{id}/matching-status', [InvoiceController::class, 'matchingStatus']);
+      Route::get('/{id}/pdf', [InvoiceController::class, 'pdf']);
+      Route::post('/{id}/match', [InvoiceController::class, 'match']);
+      Route::post('/{id}/verify', [InvoiceController::class, 'verify']);
+      Route::post('/{id}/approve', [InvoiceController::class, 'approve']);
+      Route::post('/{id}/pay', [InvoiceController::class, 'markPaid']);
+      Route::post('/{id}/dispute', [InvoiceController::class, 'dispute']);
+      Route::post('/{id}/cancel', [InvoiceController::class, 'cancel']);
+      Route::post('/{id}/send-back', [InvoiceController::class, 'sendBack']);
+    });
+
+    // --------------------------------------------
+    // PAYMENT ROUTES
+    // --------------------------------------------
+    Route::prefix('payments')->group(function () {
+      // Payment Vouchers
+      Route::get('/vouchers', [PaymentController::class, 'index']);
+      Route::post('/vouchers', [PaymentController::class, 'store']);
+      Route::get('/vouchers/{id}', [PaymentController::class, 'show']);
+      Route::get('/vouchers/{id}/summary', [PaymentController::class, 'summary']);
+      Route::get('/vouchers/{id}/pdf', [PaymentController::class, 'pdf']);
+      Route::post('/vouchers/{id}/endorse', [PaymentController::class, 'endorse']);
+      Route::post('/vouchers/{id}/approve', [PaymentController::class, 'approve']);
+      Route::post('/vouchers/{id}/pay', [PaymentController::class, 'markPaid']);
+      Route::post('/vouchers/{id}/cancel', [PaymentController::class, 'cancel']);
+
+      // Cheques
+      Route::post('/cheques', [PaymentController::class, 'recordCheque']);
+      Route::get('/cheques/{id}', [PaymentController::class, 'chequeShow']);
+      Route::get('/cheques/{id}/pdf', [PaymentController::class, 'chequePdf']);
+      Route::post('/cheques/{id}/cash', [PaymentController::class, 'chequeCashed']);
+      Route::post('/cheques/{id}/cancel', [PaymentController::class, 'chequeCancelled']);
+      Route::post('/cheques/{id}/stop', [PaymentController::class, 'chequeStopped']);
+    });
+
+    // --------------------------------------------
+    // CONTRACT ROUTES
+    // --------------------------------------------
+    Route::prefix('contracts')->group(function () {
+      Route::get('/', [ContractController::class, 'index']);
+      Route::post('/', [ContractController::class, 'store']);
+      Route::get('/expiring', [ContractController::class, 'expiring']);
+      Route::get('/renewable', [ContractController::class, 'renewable']);
+      Route::get('/{id}', [ContractController::class, 'show']);
+      Route::get('/{id}/summary', [ContractController::class, 'summary']);
+      Route::get('/{id}/pdf', [ContractController::class, 'pdf']);
+      Route::post('/{id}/approve', [ContractController::class, 'approve']);
+      Route::post('/{id}/activate', [ContractController::class, 'activate']);
+      Route::post('/{id}/complete', [ContractController::class, 'complete']);
+      Route::post('/{id}/terminate', [ContractController::class, 'terminate']);
+      Route::post('/{id}/suspend', [ContractController::class, 'suspend']);
+      Route::post('/{id}/renew', [ContractController::class, 'renew']);
+    });
+
+    // --------------------------------------------
+    // TENDER ROUTES
+    // --------------------------------------------
+    Route::prefix('tenders')->group(function () {
+      Route::get('/', [TenderController::class, 'index']);
+      Route::post('/', [TenderController::class, 'store']);
+      Route::get('/{id}', [TenderController::class, 'show']);
+      Route::get('/{id}/statistics', [TenderController::class, 'statistics']);
+      Route::get('/{id}/bidders', [TenderController::class, 'bidders']);
+      Route::get('/{id}/pdf', [TenderController::class, 'pdf']);
+      Route::post('/{id}/publish', [TenderController::class, 'publish']);
+      Route::post('/{id}/bidder', [TenderController::class, 'addBidder']);
+      Route::delete('/{id}/bidder/{supplierId}', [TenderController::class, 'removeBidder']);
+      Route::post('/{id}/evaluate', [TenderController::class, 'startEvaluation']);
+      Route::post('/{id}/award', [TenderController::class, 'award']);
+      Route::post('/{id}/cancel', [TenderController::class, 'cancel']);
+    });
+
+    // --------------------------------------------
+    // PROCUREMENT WORKFLOW ROUTES
+    // --------------------------------------------
+    Route::prefix('procurement')->group(function () {
+      Route::post('/start', [ProcurementController::class, 'start']);
+      Route::post('/complete', [ProcurementController::class, 'complete']);
+      Route::post('/cancel', [ProcurementController::class, 'cancel']);
+      Route::get('/status/{requisitionId}', [ProcurementController::class, 'status']);
+      Route::get('/summary/{requisitionId}', [ProcurementController::class, 'summary']);
+      Route::get('/timeline/{requisitionId}', [ProcurementController::class, 'timeline']);
+      Route::get('/metrics/{requisitionId}', [ProcurementController::class, 'metrics']);
+      Route::get('/steps/{requisitionId}', [ProcurementController::class, 'steps']);
+    });
+
+    // --------------------------------------------
+    // PROCUREMENT APPROVAL ROUTES
+    // --------------------------------------------
+    Route::prefix('procurement-approvals')->group(function () {
+      Route::get('/', [ProcurementApprovalController::class, 'index']);
+      Route::post('/', [ProcurementApprovalController::class, 'store']);
+      Route::get('/statistics', [ProcurementApprovalController::class, 'statistics']);
+      Route::get('/entity', [ProcurementApprovalController::class, 'entity']);
+      Route::get('/timeline', [ProcurementApprovalController::class, 'timeline']);
+      Route::get('/is-approved', [ProcurementApprovalController::class, 'isApproved']);
+      Route::get('/current-level', [ProcurementApprovalController::class, 'currentLevel']);
+      Route::get('/{id}', [ProcurementApprovalController::class, 'show']);
+      Route::post('/{id}/approve', [ProcurementApprovalController::class, 'approve']);
+      Route::post('/{id}/decline', [ProcurementApprovalController::class, 'decline']);
+      Route::post('/{id}/return', [ProcurementApprovalController::class, 'return']);
+      Route::post('/{id}/delegate', [ProcurementApprovalController::class, 'delegate']);
+      Route::post('/{id}/reassign', [ProcurementApprovalController::class, 'reassign']);
     });
 
     // ============================================
