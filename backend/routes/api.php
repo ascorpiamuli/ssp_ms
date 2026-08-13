@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\RequisitionAttachmentController;
 use App\Http\Controllers\Api\RequisitionHistoryController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\ApprovalWorkflowController;
+use App\Http\Controllers\Api\CompanyProfileController;
 use App\Http\Controllers\Api\RequisitionBudgetController;
 use App\Http\Controllers\Api\RequisitionRevisionController;
 use App\Http\Controllers\Api\RequisitionNotificationController;
@@ -38,7 +39,8 @@ use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\TenderController;
 use App\Http\Controllers\Api\ProcurementController;
 use App\Http\Controllers\Api\ProcurementApprovalController;
-
+use App\Http\Controllers\Api\RequestForQuotationController;
+use App\Http\Controllers\Api\SignatureController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,6 +74,7 @@ Route::prefix('v1')->group(function () {
 
   Route::get('/departments/active', [DepartmentController::class, 'active']);
   Route::get('/roles/available', [RoleController::class, 'index']);
+  Route::get('/signatures/token/{token}', [SignatureController::class, 'verifyByToken']);
 
   Route::get('/supplier-categories', function () {
     return response()->json([
@@ -237,13 +240,14 @@ Route::prefix('v1')->group(function () {
       });
     });
 
+
     // ============================================
     // SUPPLIER ROUTES
     // ============================================
     Route::prefix('suppliers')->group(function () {
       Route::get('/me', [SupplierController::class, 'me']);
 
-      Route::middleware(['role:ADMIN,PROCUREMENT,HOD,ACCOUNTANT,PRINCIPAL,FINAL APPROVER,HEAD OF INSTITUTION'])->group(function () {
+      Route::middleware(['role:ADMIN,PROCUREMENT,HOD,ACCOUNTANT,PRINCIPAL,FINAL APPROVER,HEAD OF INSTITUTION,SUPPLIER'])->group(function () {
         Route::get('/', [SupplierController::class, 'index']);
         Route::get('/active', [SupplierController::class, 'active']);
         Route::get('/stats', [SupplierController::class, 'stats']);
@@ -404,17 +408,27 @@ Route::prefix('v1')->group(function () {
     // QUOTATION ROUTES
     // --------------------------------------------
     Route::prefix('quotations')->group(function () {
-      Route::get('/', [QuotationController::class, 'index']);
-      Route::post('/', [QuotationController::class, 'store']);
-      Route::get('/stats', [QuotationController::class, 'statistics']);
-      Route::get('/{id}', [QuotationController::class, 'show']);
-      Route::put('/{id}', [QuotationController::class, 'update']);
-      Route::post('/{id}/send', [QuotationController::class, 'send']);
-      Route::post('/{id}/close', [QuotationController::class, 'close']);
-      Route::post('/{id}/cancel', [QuotationController::class, 'cancel']);
-      Route::post('/{id}/reminder', [QuotationController::class, 'sendReminder']);
-      Route::get('/{id}/statistics', [QuotationController::class, 'statistics']);
-      Route::post('/select-supplier', [QuotationController::class, 'selectSupplier']);
+      // CRUD Operations
+      Route::get('/', [RequestForQuotationController::class, 'index']);
+      Route::post('/', [RequestForQuotationController::class, 'store']);
+      Route::get('/{id}', [RequestForQuotationController::class, 'show']);
+      Route::put('/{id}', [RequestForQuotationController::class, 'update']);
+
+      // Statistics
+      Route::get('/stats', [RequestForQuotationController::class, 'statistics']);
+      Route::get('/{id}/statistics', [RequestForQuotationController::class, 'statistics']);
+
+      // Actions
+      Route::post('/{id}/send', [RequestForQuotationController::class, 'send']);
+      Route::post('/{id}/close', [RequestForQuotationController::class, 'close']);
+      Route::post('/{id}/cancel', [RequestForQuotationController::class, 'cancel']);
+      Route::post('/{id}/reminder', [RequestForQuotationController::class, 'sendReminder']);
+      Route::post('/select-supplier', [RequestForQuotationController::class, 'selectSupplier']);
+
+      // PDF Routes
+      Route::get('/{id}/download-pdf', [RequestForQuotationController::class, 'downloadPDF']);      // Download as attachment
+      Route::get('/{id}/preview-pdf', [RequestForQuotationController::class, 'previewPDF']);        // Preview inline
+      Route::get('/{id}/base64-pdf', [RequestForQuotationController::class, 'getBase64PDF']);       // Base64 for emails
     });
 
     // --------------------------------------------
@@ -448,6 +462,31 @@ Route::prefix('v1')->group(function () {
       Route::post('/{id}/complete', [PurchaseOrderController::class, 'complete']);
       Route::post('/{id}/cancel', [PurchaseOrderController::class, 'cancel']);
     });
+
+    Route::prefix('company')->middleware(['auth:sanctum'])->group(function () {
+      // GET: Fetch the company profile (returns existing or default)
+      Route::get('/profile', [CompanyProfileController::class, 'index']);
+
+      // POST: Create or update the company profile
+      // - If no profile exists, it creates one
+      // - If a profile exists, it updates it
+      Route::post('/profile', [CompanyProfileController::class, 'save']);
+
+      // DELETE: Remove the company logo
+      Route::delete('/profile/logo', [CompanyProfileController::class, 'deleteLogo']);
+
+      // Add these new routes
+      Route::get('/completion', [CompanyProfileController::class, 'getCompletionStatus']);
+      Route::get('/settings', [CompanyProfileController::class, 'getSettings']);
+      Route::put('/settings', [CompanyProfileController::class, 'updateSettings']);
+      Route::get('/branding', [CompanyProfileController::class, 'getBranding']);
+      Route::put('/branding', [CompanyProfileController::class, 'updateBranding']);
+      Route::get('/social-links', [CompanyProfileController::class, 'getSocialLinks']);
+      Route::put('/social-links', [CompanyProfileController::class, 'updateSocialLinks']);
+      Route::post('/upload-logo', [CompanyProfileController::class, 'uploadLogo']);
+      Route::get('/exists', [CompanyProfileController::class, 'exists']);
+    });
+
 
     // --------------------------------------------
     // GOODS RECEIVED ROUTES
@@ -572,6 +611,35 @@ Route::prefix('v1')->group(function () {
       Route::get('/timeline/{requisitionId}', [ProcurementController::class, 'timeline']);
       Route::get('/metrics/{requisitionId}', [ProcurementController::class, 'metrics']);
       Route::get('/steps/{requisitionId}', [ProcurementController::class, 'steps']);
+      Route::get('/ready-requisitions', [ProcurementController::class, 'readyRequisitions']);
+      Route::get('/requisitions-with-qtns', [ProcurementController::class, 'requisitionsWithQtns']);
+      Route::get('/in-progress', [ProcurementController::class, 'inProgress']);
+      Route::get('statistics', [ProcurementController::class, 'statistics']);
+    });
+
+    // Signature Routes
+    Route::prefix('signatures')->group(function () {
+      // Public/User routes
+      Route::post('upload', [SignatureController::class, 'upload']);
+      Route::get('status', [SignatureController::class, 'status']);
+      Route::get('my-signature', [SignatureController::class, 'mySignature']);
+      Route::get('qr/{specimenId}', [SignatureController::class, 'getQR']);
+      Route::post('regenerate-qr/{specimenId}', [SignatureController::class, 'regenerateQR']);
+      Route::delete('{specimenId}', [SignatureController::class, 'destroy']);
+
+      // NEW: Route for the clean QR code scanning flow
+      // This allows users to scan the QR code and hit the token endpoint
+      Route::get('token/{token}', [SignatureController::class, 'verifyByToken']);
+      // Admin-only routes
+      Route::middleware(['role:ADMIN'])->group(function () {
+        Route::post('verify/{specimenId}', [SignatureController::class, 'verify']);
+        Route::post('verify-qr', [SignatureController::class, 'verifyByQR']);
+        Route::post('reject/{specimenId}', [SignatureController::class, 'reject']);
+        Route::get('pending', [SignatureController::class, 'pending']);
+        Route::get('verified', [SignatureController::class, 'verified']);
+        Route::get('stats', [SignatureController::class, 'stats']);
+        Route::get('logs', [SignatureController::class, 'logs']);
+      });
     });
 
     // --------------------------------------------
@@ -618,16 +686,68 @@ Route::prefix('v1')->group(function () {
 
       // Role Management
       Route::prefix('roles')->group(function () {
+        // List all roles
         Route::get('/', [RoleController::class, 'index']);
-        Route::post('/', [RoleController::class, 'store']);
+
+        // List all roles with labels and descriptions
+        Route::get('/with-labels', [RoleController::class, 'indexWithLabels']);
+
+        // Get role options for dropdowns
+        Route::get('/options', [RoleController::class, 'options']);
+
+        // Search roles by name, label, or description
+        Route::get('/search', [RoleController::class, 'search']);
+
+        // Get users with their role information
+        Route::get('/users-with-roles', [RoleController::class, 'usersWithRoles']);
+
+        // Get all permissions
         Route::get('/permissions', [RoleController::class, 'permissions']);
+
+        // Get permissions grouped by module
         Route::get('/permissions/grouped', [RoleController::class, 'permissionsGrouped']);
+
+        // Get all permissions with descriptions
+        Route::get('/permissions/all', [RoleController::class, 'allPermissionsWithInfo']);
+
+        // Get role statistics
         Route::get('/stats', [RoleController::class, 'stats']);
+
+        // Get single role
         Route::get('/{id}', [RoleController::class, 'show']);
-        Route::put('/{id}', [RoleController::class, 'update']);
-        Route::delete('/{id}', [RoleController::class, 'destroy']);
-        Route::post('/{id}/permissions', [RoleController::class, 'assignPermissions']);
+
+        // Get single role with labels
+        Route::get('/{id}/with-labels', [RoleController::class, 'showWithLabels']);
+
+        // Get users assigned to a role
         Route::get('/{id}/users', [RoleController::class, 'roleUsers']);
+
+        // Create role
+        Route::post('/', [RoleController::class, 'store']);
+
+        // Update role
+        Route::put('/{id}', [RoleController::class, 'update']);
+
+        // Delete role
+        Route::delete('/{id}', [RoleController::class, 'destroy']);
+
+        // Assign permissions to role
+        Route::post('/{id}/assign-permissions', [RoleController::class, 'assignPermissions']);
+
+        // Grant single permission to role
+        Route::post('/{id}/grant-permission', [RoleController::class, 'grantPermission']);
+
+        // Revoke single permission from role
+        Route::post('/{id}/revoke-permission', [RoleController::class, 'revokePermission']);
+      });
+
+      // Role assignment endpoints (outside the roles prefix)
+      Route::prefix('roles')->group(function () {
+        // Assign role to user
+        Route::post('/assign-to-user', [RoleController::class, 'assignRoleToUser']);
+
+        // Remove role from user
+        Route::delete('/remove-role-from-user', [RoleController::class, 'removeRoleFromUser']);
       });
 
       // Audit Log Routes

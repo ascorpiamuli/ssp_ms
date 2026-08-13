@@ -1,4 +1,4 @@
-// hooks/useSuppliers.ts
+// frontend/src/hooks/useSuppliers.ts
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SupplierService, Supplier } from '@/services/supplier.service';

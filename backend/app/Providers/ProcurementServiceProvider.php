@@ -27,6 +27,7 @@ use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface
 use App\Services\Procurement\Utilities\NotificationDispatcher;
 use App\Services\Procurement\Contracts\Validators\ProcurementValidatorInterface;
 use App\Services\Procurement\Validators\ProcurementValidator;
+use App\Services\Signatures\Contracts\Services\QRCodeServiceInterface;
 
 class ProcurementServiceProvider extends ServiceProvider
 {
@@ -67,10 +68,19 @@ class ProcurementServiceProvider extends ServiceProvider
       ReferenceNumberGeneratorInterface::class,
       ReferenceNumberGenerator::class
     );
+
+    // ============================================
+    // PDF GENERATOR BINDING WITH QR CODE SERVICE
+    // ============================================
     $this->app->bind(
       PdfGeneratorInterface::class,
-      PdfGenerator::class
+      function ($app) {
+        return new PdfGenerator(
+          $app->make(QRCodeServiceInterface::class)
+        );
+      }
     );
+
     $this->app->bind(
       NotificationDispatcherInterface::class,
       NotificationDispatcher::class
@@ -80,7 +90,7 @@ class ProcurementServiceProvider extends ServiceProvider
       ProcurementValidator::class
     );
 
-    // Service Bindings (if needed)
+    // Service Bindings
     $this->app->bind(
       \App\Services\Procurement\Contracts\Services\QuotationServiceInterface::class,
       \App\Services\Procurement\Services\QuotationService::class

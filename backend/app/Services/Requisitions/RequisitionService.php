@@ -48,7 +48,6 @@ class RequisitionService
       ->with([
         'user:id,first_name,last_name,email',
         'department:id,name,code',
-        // ✅ LOAD ITEMS with all fields
         'items' => function ($query) {
           $query->select([
             'id',
@@ -72,7 +71,6 @@ class RequisitionService
             'updated_at'
           ]);
         },
-        // ✅ LOAD APPROVALS - ONLY COLUMNS THAT EXIST
         'approvals' => function ($query) {
           $query->select([
             'id',
@@ -187,7 +185,6 @@ class RequisitionService
       'user:id,first_name,last_name,email,phone',
       'department:id,name,code',
       'supplier:id,company_name,company_email,company_phone',
-      // ✅ LOAD ITEMS with all fields
       'items' => function ($query) {
         $query->select([
           'id',
@@ -211,7 +208,6 @@ class RequisitionService
           'updated_at'
         ]);
       },
-      // ✅ LOAD APPROVALS - ONLY COLUMNS THAT EXIST
       'approvals' => function ($query) {
         $query->select([
           'id',
@@ -346,7 +342,6 @@ class RequisitionService
       $data['user_id'] = Auth::id();
       $data['status'] = 'draft';
 
-      // ✅ Keep reference_number in fillableData
       $fillableData = array_intersect_key($data, array_flip([
         'reference_number',
         'user_id',
@@ -419,7 +414,6 @@ class RequisitionService
 
       DB::commit();
 
-      // ✅ Return with ALL item fields
       return $requisition->fresh(['items' => function ($query) {
         $query->select([
           'id',
@@ -483,7 +477,53 @@ class RequisitionService
   }
 
   /**
-   * Update requisition - OPTIMIZED
+   * Check if user has permission to modify a requisition
+   *
+   * @param Requisition $requisition
+   * @param string $action
+   * @return bool
+   */
+  protected function canModify(Requisition $requisition, string $action = 'edit'): bool
+  {
+    $user = Auth::user();
+    $userId = $user->id;
+
+    // Admin can modify any requisition
+    if ($user->hasRole('admin')) {
+      return true;
+    }
+
+    // Only the creator can modify draft/returned requisitions
+    if (in_array($requisition->status, ['draft', 'returned'])) {
+      return $requisition->user_id === $userId;
+    }
+
+    // For other statuses, only admin can modify
+    return false;
+  }
+
+  /**
+   * Check if user has permission to delete a requisition
+   *
+   * @param Requisition $requisition
+   * @return bool
+   */
+  protected function canDelete(Requisition $requisition): bool
+  {
+    $user = Auth::user();
+    $userId = $user->id;
+
+    // Admin can delete any draft requisition
+    if ($user->hasRole('admin')) {
+      return $requisition->status === 'draft';
+    }
+
+    // Only the creator can delete their own draft requisitions
+    return $requisition->user_id === $userId && $requisition->status === 'draft';
+  }
+
+  /**
+   * Update requisition - WITH OWNERSHIP CHECK
    *
    * @param int $id
    * @param array $data
@@ -496,6 +536,22 @@ class RequisitionService
       DB::beginTransaction();
 
       $requisition = $this->getById($id);
+      $user = Auth::user();
+
+      // ✅ Check if user can edit this requisition
+      if (!$this->canModify($requisition, 'edit')) {
+        Log::warning('⚠️ Unauthorized requisition edit attempt', [
+          'requisition_id' => $requisition->id,
+          'requisition_creator_id' => $requisition->user_id,
+          'attempted_by_user_id' => $user->id,
+          'attempted_by_user_email' => $user->email,
+          'requisition_status' => $requisition->status,
+        ]);
+
+        throw new RequisitionException(
+          'You do not have permission to edit this requisition. Only the creator can edit draft/returned requisitions.'
+        );
+      }
 
       // Check if requisition can be updated
       if (!$requisition->isEditable) {
@@ -596,13 +652,17 @@ class RequisitionService
       }]);
     } catch (\Exception $e) {
       DB::rollBack();
-      Log::error('Failed to update requisition: ' . $e->getMessage());
+      Log::error('Failed to update requisition: ' . $e->getMessage(), [
+        'requisition_id' => $id,
+        'user_id' => Auth::id(),
+        'trace' => $e->getTraceAsString()
+      ]);
       throw new RequisitionException('Failed to update requisition: ' . $e->getMessage());
     }
   }
 
   /**
-   * Delete requisition - OPTIMIZED
+   * Delete requisition - WITH OWNERSHIP CHECK
    *
    * @param int $id
    * @return bool
@@ -614,6 +674,22 @@ class RequisitionService
       DB::beginTransaction();
 
       $requisition = Requisition::findOrFail($id);
+      $user = Auth::user();
+
+      // ✅ Check if user can delete this requisition
+      if (!$this->canDelete($requisition)) {
+        Log::warning('⚠️ Unauthorized requisition delete attempt', [
+          'requisition_id' => $requisition->id,
+          'requisition_creator_id' => $requisition->user_id,
+          'attempted_by_user_id' => $user->id,
+          'attempted_by_user_email' => $user->email,
+          'requisition_status' => $requisition->status,
+        ]);
+
+        throw new RequisitionException(
+          'You do not have permission to delete this requisition. Only the creator can delete draft requisitions.'
+        );
+      }
 
       // Check if requisition can be deleted
       if (!$requisition->isDraft()) {
@@ -637,17 +713,27 @@ class RequisitionService
 
       DB::commit();
 
+      Log::info('✅ Requisition deleted successfully', [
+        'requisition_id' => $requisition->id,
+        'deleted_by_user_id' => $user->id,
+      ]);
+
       return $result;
     } catch (\Exception $e) {
       DB::rollBack();
-      Log::error('Failed to delete requisition: ' . $e->getMessage());
+      Log::error('Failed to delete requisition: ' . $e->getMessage(), [
+        'requisition_id' => $id,
+        'user_id' => Auth::id(),
+        'trace' => $e->getTraceAsString()
+      ]);
       throw new RequisitionException('Failed to delete requisition: ' . $e->getMessage());
     }
   }
 
   /**
-   * Submit requisition for approval - OPTIMIZED
+   * Submit requisition for approval - WITH CREATOR CHECK
    * Allows both draft and returned requisitions to be submitted
+   * ONLY the requisition creator can submit it
    *
    * @param int $id
    * @param array $data
@@ -661,6 +747,22 @@ class RequisitionService
       DB::beginTransaction();
 
       $requisition = $this->getById($id);
+      $user = Auth::user();
+      $userId = $user->id;
+
+      // ✅ CRITICAL: Check if the current user is the creator
+      if ($requisition->user_id !== $userId) {
+        Log::warning('⚠️ Unauthorized requisition submission attempt', [
+          'requisition_id' => $requisition->id,
+          'requisition_creator_id' => $requisition->user_id,
+          'attempted_by_user_id' => $userId,
+          'attempted_by_user_email' => $user->email,
+        ]);
+
+        throw new RequisitionException(
+          'Only the requisition creator can submit this requisition for approval.'
+        );
+      }
 
       // ✅ Allow both draft AND returned requisitions
       $allowedStatuses = ['draft', 'returned'];
@@ -683,6 +785,7 @@ class RequisitionService
         Log::info('🔄 Resubmitting returned requisition', [
           'requisition_id' => $requisition->id,
           'return_count' => $requisition->return_count,
+          'submitted_by' => $userId,
         ]);
 
         // Delete previous approvals to start fresh
@@ -696,7 +799,7 @@ class RequisitionService
           'last_returned_at' => null,
           'return_count' => ($requisition->return_count ?? 0) + 1,
           'last_resubmitted_at' => now(),
-          'resubmitted_by' => Auth::id(),
+          'resubmitted_by' => $userId,
         ]);
 
         Log::info('🔄 Reset returned requisition for resubmission', [
@@ -709,7 +812,7 @@ class RequisitionService
       $requisition->update([
         'status' => 'submitted',
         'submitted_at' => now(),
-        'submitted_by' => Auth::id(),
+        'submitted_by' => $userId,
         'sla_started_at' => now(),
       ]);
 
@@ -726,6 +829,7 @@ class RequisitionService
       $logData = [
         'previous_status' => $requisition->getOriginal('status'),
         'new_status' => 'submitted',
+        'submitted_by' => $userId,
       ];
 
       if ($requisition->getOriginal('status') === 'returned') {
@@ -749,6 +853,7 @@ class RequisitionService
         'requisition_id' => $requisition->id,
         'previous_status' => $requisition->getOriginal('status'),
         'is_resubmission' => $requisition->getOriginal('status') === 'returned',
+        'submitted_by_user_id' => $userId,
       ]);
 
       return $requisition->fresh(['items' => function ($query) {
@@ -773,6 +878,7 @@ class RequisitionService
       DB::rollBack();
       Log::error('Failed to submit requisition: ' . $e->getMessage(), [
         'requisition_id' => $id,
+        'user_id' => Auth::id(),
         'trace' => $e->getTraceAsString()
       ]);
       throw new RequisitionException('Failed to submit requisition: ' . $e->getMessage());
@@ -780,7 +886,7 @@ class RequisitionService
   }
 
   /**
-   * Return requisition for revision - OPTIMIZED
+   * Return requisition for revision - WITH APPROVER CHECK
    *
    * @param int $id
    * @param array $data
@@ -793,21 +899,52 @@ class RequisitionService
       DB::beginTransaction();
 
       $requisition = Requisition::findOrFail($id);
+      $user = Auth::user();
 
       // Check if requisition can be returned
       if (!$requisition->isApprovable) {
         throw new RequisitionException('Requisition cannot be returned in current status');
       }
 
+      // Check if user is the current approver
+      $currentApproval = Approval::where('requisition_id', $requisition->id)
+        ->where('status', 'pending')
+        ->where(function ($q) use ($user) {
+          $q->where('approver_id', $user->id)
+            ->orWhere('delegate_id', $user->id);
+        })
+        ->first();
+
+      if (!$currentApproval && !$user->hasRole('admin')) {
+        Log::warning('⚠️ Unauthorized requisition return attempt', [
+          'requisition_id' => $requisition->id,
+          'attempted_by_user_id' => $user->id,
+          'attempted_by_user_email' => $user->email,
+        ]);
+
+        throw new RequisitionException(
+          'You are not authorized to return this requisition. Only the current approver can return it.'
+        );
+      }
+
       // Update status
       $requisition->update([
         'status' => 'returned',
         'returned_at' => now(),
-        'returned_by' => Auth::id(),
+        'returned_by' => $user->id,
         'return_reason' => $data['reason'] ?? null,
         'return_count' => $requisition->return_count + 1,
         'last_returned_at' => now(),
       ]);
+
+      // Update the approval status
+      if ($currentApproval) {
+        $currentApproval->update([
+          'status' => 'returned',
+          'returned_at' => now(),
+          'return_reason' => $data['reason'] ?? null,
+        ]);
+      }
 
       // Log return
       $this->historyService->log(
@@ -820,16 +957,26 @@ class RequisitionService
 
       DB::commit();
 
+      Log::info('✅ Requisition returned for revision', [
+        'requisition_id' => $requisition->id,
+        'returned_by_user_id' => $user->id,
+        'return_count' => $requisition->return_count,
+      ]);
+
       return $requisition->fresh();
     } catch (\Exception $e) {
       DB::rollBack();
-      Log::error('Failed to return requisition: ' . $e->getMessage());
+      Log::error('Failed to return requisition: ' . $e->getMessage(), [
+        'requisition_id' => $id,
+        'user_id' => Auth::id(),
+        'trace' => $e->getTraceAsString()
+      ]);
       throw new RequisitionException('Failed to return requisition: ' . $e->getMessage());
     }
   }
 
   /**
-   * Cancel requisition - OPTIMIZED
+   * Cancel requisition - WITH OWNERSHIP CHECK
    *
    * @param int $id
    * @param array $data
@@ -842,6 +989,42 @@ class RequisitionService
       DB::beginTransaction();
 
       $requisition = Requisition::findOrFail($id);
+      $user = Auth::user();
+
+      // ✅ Check if user can cancel this requisition
+      $canCancel = false;
+      $reason = '';
+
+      // Admin can cancel any requisition
+      if ($user->hasRole('admin')) {
+        $canCancel = true;
+        $reason = 'admin';
+      }
+      // Creator can cancel their own draft/returned requisitions
+      elseif ($requisition->user_id === $user->id && in_array($requisition->status, ['draft', 'returned'])) {
+        $canCancel = true;
+        $reason = 'creator';
+      }
+      // HOD can cancel requisitions from their department (if configured)
+      elseif ($user->hasRole('hod') && $requisition->department_id === $user->department_id) {
+        $canCancel = true;
+        $reason = 'hod';
+      }
+
+      if (!$canCancel) {
+        Log::warning('⚠️ Unauthorized requisition cancellation attempt', [
+          'requisition_id' => $requisition->id,
+          'requisition_creator_id' => $requisition->user_id,
+          'requisition_status' => $requisition->status,
+          'attempted_by_user_id' => $user->id,
+          'attempted_by_user_email' => $user->email,
+          'user_roles' => $user->roles->pluck('name')->toArray(),
+        ]);
+
+        throw new RequisitionException(
+          'You do not have permission to cancel this requisition.'
+        );
+      }
 
       // Check if requisition can be cancelled
       if ($requisition->isApproved()) {
@@ -852,7 +1035,7 @@ class RequisitionService
       $requisition->update([
         'status' => 'cancelled',
         'cancelled_at' => now(),
-        'cancelled_by' => Auth::id(),
+        'cancelled_by' => $user->id,
         'cancellation_reason' => $data['reason'] ?? null,
       ]);
 
@@ -872,10 +1055,21 @@ class RequisitionService
 
       DB::commit();
 
+      Log::info('✅ Requisition cancelled successfully', [
+        'requisition_id' => $requisition->id,
+        'cancelled_by_user_id' => $user->id,
+        'cancellation_reason' => $data['reason'] ?? null,
+        'cancelled_by_role' => $reason,
+      ]);
+
       return $requisition->fresh();
     } catch (\Exception $e) {
       DB::rollBack();
-      Log::error('Failed to cancel requisition: ' . $e->getMessage());
+      Log::error('Failed to cancel requisition: ' . $e->getMessage(), [
+        'requisition_id' => $id,
+        'user_id' => Auth::id(),
+        'trace' => $e->getTraceAsString()
+      ]);
       throw new RequisitionException('Failed to cancel requisition: ' . $e->getMessage());
     }
   }
@@ -925,8 +1119,7 @@ class RequisitionService
   /**
    * Get requisitions pending approval for a user - LOADS ITEMS AND APPROVALS
    *
-   * @param int $userId
-   * @param array $filters
+   * @param int $userId   * @param array $filters
    * @param int $perPage
    * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
    */
@@ -952,7 +1145,6 @@ class RequisitionService
         ])->with([
           'user:id,first_name,last_name,email',
           'department:id,name,code',
-          // ✅ LOAD ITEMS for pending approvals
           'items' => function ($query) {
             $query->select([
               'id',
@@ -964,7 +1156,6 @@ class RequisitionService
               'unit_of_measure'
             ]);
           },
-          // ✅ LOAD APPROVALS for pending approvals - ONLY COLUMNS THAT EXIST
           'approvals' => function ($query) {
             $query->select([
               'id',

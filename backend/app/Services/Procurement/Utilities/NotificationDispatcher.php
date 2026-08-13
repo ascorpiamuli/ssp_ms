@@ -7,6 +7,7 @@ namespace App\Services\Procurement\Utilities;
 
 use App\Models\User;
 use App\Models\ProcurementNotification;
+use App\Models\QuotationRequest;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -22,6 +23,7 @@ use App\Notifications\Procurement\ApprovalStatusNotification;
 use App\Notifications\Procurement\ContractNotification;
 use App\Notifications\Procurement\TenderNotification;
 use App\Notifications\Procurement\ReminderNotification;
+use App\Notifications\Procurement\ProcurementStartedNotification;
 
 class NotificationDispatcher implements NotificationDispatcherInterface
 {
@@ -36,9 +38,17 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
   public function notify(string $event, array $data): void
   {
+    Log::info('🔔 [NotificationDispatcher::notify]', [
+      'event' => $event,
+      'data_keys' => array_keys($data)
+    ]);
+
     if (!$this->eventExists($event)) {
       throw new \Exception("Unknown notification event: {$event}");
     }
+
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
 
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
@@ -60,6 +70,9 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       throw new \Exception("Unknown notification event: {$event}");
     }
 
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
+
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
     $this->sendNotification($user, $notificationClass, $data);
@@ -67,11 +80,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
   public function notifySupplier(int $supplierId, string $event, array $data): void
   {
-    $supplier = User::where('id', $supplierId)
-      ->where('role', 'supplier')
-      ->first();
+    // 🔧 FIX: Get supplier from suppliers table
+    $supplier = \App\Models\Supplier::with('user')->find($supplierId);
 
-    if (!$supplier) {
+    if (!$supplier || !$supplier->user) {
       return;
     }
 
@@ -79,15 +91,19 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       throw new \Exception("Unknown notification event: {$event}");
     }
 
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
+
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
-    $this->sendNotification($supplier, $notificationClass, $data);
+    $this->sendNotification($supplier->user, $notificationClass, $data);
   }
 
   public function notifyRole(string $role, string $event, array $data): void
   {
-    $users = User::where('role', $role)
-      ->where('is_active', true)
+    // 🔧 FIX: Use Spatie Permission role checking
+    $users = User::where('is_active', true)
+      ->role($role)
       ->get();
 
     if ($users->isEmpty()) {
@@ -97,6 +113,9 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     if (!$this->eventExists($event)) {
       throw new \Exception("Unknown notification event: {$event}");
     }
+
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
 
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
@@ -124,6 +143,9 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       throw new \Exception("Unknown notification event: {$event}");
     }
 
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
+
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
 
@@ -138,10 +160,17 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       return;
     }
 
-    $suppliers = User::whereIn('id', $supplierIds)
-      ->where('role', 'supplier')
-      ->where('is_active', true)
-      ->get();
+    // 🔧 FIX: Get suppliers from suppliers table
+    $suppliers = \App\Models\Supplier::whereIn('id', $supplierIds)
+      ->with('user')
+      ->get()
+      ->filter(function ($supplier) {
+        return $supplier->user && $supplier->user->is_active;
+      })
+      ->map(function ($supplier) {
+        return $supplier->user;
+      })
+      ->filter();
 
     if ($suppliers->isEmpty()) {
       return;
@@ -151,12 +180,130 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       throw new \Exception("Unknown notification event: {$event}");
     }
 
+    // Ensure requisition_id is set
+    $data = $this->ensureRequisitionId($data);
+
     $config = $this->getEventConfig($event);
     $notificationClass = $config['class'];
 
-    foreach ($suppliers as $supplier) {
-      $this->sendNotification($supplier, $notificationClass, $data);
+    foreach ($suppliers as $user) {
+      $this->sendNotification($user, $notificationClass, $data);
     }
+  }
+
+  /**
+   * Ensure requisition_id is set in the data array
+   *
+   * @param array $data
+   * @return array
+   */
+  protected function ensureRequisitionId(array $data): array
+  {
+    // If requisition_id is already set and not null, return as is
+    if (isset($data['requisition_id']) && $data['requisition_id'] !== null) {
+      return $data;
+    }
+
+    Log::info('🔔 [NotificationDispatcher::ensureRequisitionId] requisition_id not set, attempting to find it');
+
+    // Try to get requisition_id from qtn_id
+    if (isset($data['qtn_id'])) {
+      try {
+        $quotation = QuotationRequest::find($data['qtn_id']);
+        if ($quotation && $quotation->requisition_id) {
+          $data['requisition_id'] = $quotation->requisition_id;
+          Log::info('✅ [NotificationDispatcher::ensureRequisitionId] Found requisition_id from qtn_id', [
+            'qtn_id' => $data['qtn_id'],
+            'requisition_id' => $data['requisition_id']
+          ]);
+          return $data;
+        }
+      } catch (\Exception $e) {
+        Log::warning('⚠️ [NotificationDispatcher::ensureRequisitionId] Failed to get requisition_id from qtn_id', [
+          'qtn_id' => $data['qtn_id'],
+          'error' => $e->getMessage()
+        ]);
+      }
+    }
+
+    // Try to get requisition_id from rfq_id (alias for qtn_id)
+    if (isset($data['rfq_id'])) {
+      try {
+        $quotation = QuotationRequest::find($data['rfq_id']);
+        if ($quotation && $quotation->requisition_id) {
+          $data['requisition_id'] = $quotation->requisition_id;
+          Log::info('✅ [NotificationDispatcher::ensureRequisitionId] Found requisition_id from rfq_id', [
+            'rfq_id' => $data['rfq_id'],
+            'requisition_id' => $data['requisition_id']
+          ]);
+          return $data;
+        }
+      } catch (\Exception $e) {
+        Log::warning('⚠️ [NotificationDispatcher::ensureRequisitionId] Failed to get requisition_id from rfq_id', [
+          'rfq_id' => $data['rfq_id'],
+          'error' => $e->getMessage()
+        ]);
+      }
+    }
+
+    // Try to get requisition_id from data array if it exists but is null
+    if (isset($data['data']) && is_array($data['data'])) {
+      if (isset($data['data']['qtn_id'])) {
+        try {
+          $quotation = QuotationRequest::find($data['data']['qtn_id']);
+          if ($quotation && $quotation->requisition_id) {
+            $data['requisition_id'] = $quotation->requisition_id;
+            Log::info('✅ [NotificationDispatcher::ensureRequisitionId] Found requisition_id from nested qtn_id', [
+              'qtn_id' => $data['data']['qtn_id'],
+              'requisition_id' => $data['requisition_id']
+            ]);
+            return $data;
+          }
+        } catch (\Exception $e) {
+          Log::warning('⚠️ [NotificationDispatcher::ensureRequisitionId] Failed to get requisition_id from nested qtn_id', [
+            'error' => $e->getMessage()
+          ]);
+        }
+      }
+    }
+
+    // If we still don't have a requisition_id, log a warning and use a fallback
+    Log::warning('⚠️ [NotificationDispatcher::ensureRequisitionId] Could not find requisition_id, using fallback', [
+      'data' => $data
+    ]);
+
+    // Try to get the latest requisition_id from the current user's context
+    if (auth()->check() && auth()->user()) {
+      // Try to find any requisition created by the current user
+      $requisition = \App\Models\Requisition::where('created_by', auth()->id())
+        ->orWhere('user_id', auth()->id())
+        ->latest()
+        ->first();
+
+      if ($requisition) {
+        $data['requisition_id'] = $requisition->id;
+        Log::info('✅ [NotificationDispatcher::ensureRequisitionId] Using fallback requisition_id from user context', [
+          'requisition_id' => $data['requisition_id']
+        ]);
+        return $data;
+      }
+    }
+
+    // Last resort: throw an exception if requisition_id is still null and it's a critical notification
+    // For non-critical notifications, we can use a placeholder
+    $criticalEvents = ['qtn_sent', 'qtn_reminder', 'supplier_selected', 'po_generated', 'po_sent'];
+    if (in_array($data['type'] ?? '', $criticalEvents) || in_array($data['event'] ?? '', $criticalEvents)) {
+      Log::error('❌ [NotificationDispatcher::ensureRequisitionId] Critical notification missing requisition_id', [
+        'data' => $data
+      ]);
+      // Don't throw exception, use a default placeholder
+      $data['requisition_id'] = 0; // Use 0 as a placeholder for critical notifications
+    } else {
+      // For non-critical notifications, we can proceed with null
+      $data['requisition_id'] = null;
+    }
+
+    return $data;
   }
 
   public function getUserChannels(int $userId): array
@@ -168,12 +315,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
     $channels = ['database'];
 
-    // Check if user has email preference
     if ($user->email && ($user->email_notifications ?? true)) {
       $channels[] = 'mail';
     }
 
-    // Check if user has SMS preference
     if ($user->phone && ($user->sms_notifications ?? false)) {
       $channels[] = 'nexmo';
     }
@@ -183,18 +328,16 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
   public function getSupplierChannels(int $supplierId): array
   {
-    $supplier = User::where('id', $supplierId)
-      ->where('role', 'supplier')
-      ->first();
+    // 🔧 FIX: Get supplier from suppliers table
+    $supplier = \App\Models\Supplier::with('user')->find($supplierId);
 
-    if (!$supplier) {
+    if (!$supplier || !$supplier->user) {
       return ['database'];
     }
 
     $channels = ['database'];
 
-    // Suppliers always get emails
-    if ($supplier->email) {
+    if ($supplier->user->email) {
       $channels[] = 'mail';
     }
 
@@ -248,8 +391,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
   public function queueNotification(string $event, array $data, ?\DateTime $delay = null): void
   {
-    // Queue the notification for later delivery
-    // This would use Laravel's queue system
     dispatch(function () use ($event, $data) {
       $this->notify($event, $data);
     })->delay($delay ?? now()->addMinutes(5));
@@ -301,13 +442,14 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       ->count();
   }
 
-  /**
-   * Register default notification events.
-   */
   protected function registerDefaultEvents(): void
   {
     $this->eventMap = [
-      // Quotation events
+      'procurement_started' => [
+        'class' => ProcurementStartedNotification::class,
+        'roles' => ['procurement', 'admin'],
+        'priority' => 'normal',
+      ],
       'qtn_generated' => [
         'class' => QuotationRequestNotification::class,
         'roles' => ['procurement'],
@@ -333,7 +475,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['supplier', 'hod'],
         'priority' => 'high',
       ],
-      // Purchase Order events
       'po_generated' => [
         'class' => PurchaseOrderNotification::class,
         'roles' => ['supplier', 'procurement', 'accountant'],
@@ -349,7 +490,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['procurement', 'accountant'],
         'priority' => 'normal',
       ],
-      // GRN/SAN events
       'grn_generated' => [
         'class' => GoodsReceivedNotification::class,
         'roles' => ['accountant', 'procurement'],
@@ -365,7 +505,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['accountant', 'procurement'],
         'priority' => 'normal',
       ],
-      // Invoice events
       'invoice_submitted' => [
         'class' => InvoiceNotification::class,
         'roles' => ['accountant'],
@@ -381,7 +520,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['supplier', 'accountant'],
         'priority' => 'normal',
       ],
-      // Payment events
       'voucher_prepared' => [
         'class' => PaymentVoucherNotification::class,
         'roles' => ['principal', 'diocesan_accountant'],
@@ -397,7 +535,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['accountant'],
         'priority' => 'normal',
       ],
-      // Contract events
       'contract_created' => [
         'class' => ContractNotification::class,
         'roles' => ['supplier', 'procurement'],
@@ -413,7 +550,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['procurement', 'supplier'],
         'priority' => 'normal',
       ],
-      // Tender events
       'tender_published' => [
         'class' => TenderNotification::class,
         'roles' => ['supplier'],
@@ -424,7 +560,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['supplier', 'procurement'],
         'priority' => 'high',
       ],
-      // Approval events
       'approval_required' => [
         'class' => ApprovalRequiredNotification::class,
         'roles' => ['hod', 'accountant', 'principal', 'final_approver'],
@@ -438,14 +573,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     ];
   }
 
-  /**
-   * Get recipients for an event.
-   */
   protected function getRecipients(string $event, array $data, array $roles): array
   {
     $recipients = [];
 
-    // Check for specific recipients in data
     if (isset($data['user_ids']) && is_array($data['user_ids'])) {
       $users = User::whereIn('id', $data['user_ids'])
         ->where('is_active', true)
@@ -454,23 +585,38 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     }
 
     if (isset($data['supplier_ids']) && is_array($data['supplier_ids'])) {
-      $suppliers = User::whereIn('id', $data['supplier_ids'])
-        ->where('role', 'supplier')
-        ->where('is_active', true)
-        ->get();
-      $recipients = array_merge($recipients, $suppliers->toArray());
+      // 🔧 FIX: Get suppliers from suppliers table
+      $suppliers = \App\Models\Supplier::whereIn('id', $data['supplier_ids'])
+        ->with('user')
+        ->get()
+        ->filter(function ($supplier) {
+          return $supplier->user && $supplier->user->is_active;
+        })
+        ->map(function ($supplier) {
+          return $supplier->user;
+        })
+        ->filter()
+        ->toArray();
+      $recipients = array_merge($recipients, $suppliers);
     }
 
-    // Get recipients by roles
     foreach ($roles as $role) {
       if ($role === 'supplier') {
         if (isset($data['supplier_ids']) && !empty($data['supplier_ids'])) {
           continue;
         }
-        $users = User::where('role', 'supplier')
-          ->where('is_active', true)
-          ->get();
-        $recipients = array_merge($recipients, $users->toArray());
+        // 🔧 FIX: Get users who are suppliers via Supplier model
+        $supplierUsers = \App\Models\Supplier::with('user')
+          ->get()
+          ->filter(function ($supplier) {
+            return $supplier->user && $supplier->user->is_active;
+          })
+          ->map(function ($supplier) {
+            return $supplier->user;
+          })
+          ->filter()
+          ->toArray();
+        $recipients = array_merge($recipients, $supplierUsers);
       } elseif ($role === 'requisition_creator') {
         if (isset($data['requisition_id'])) {
           $requisition = \App\Models\Requisition::find($data['requisition_id']);
@@ -479,14 +625,15 @@ class NotificationDispatcher implements NotificationDispatcherInterface
           }
         }
       } else {
-        $users = User::where('role', $role)
-          ->where('is_active', true)
-          ->get();
-        $recipients = array_merge($recipients, $users->toArray());
+        // 🔧 FIX: Use Spatie Permission's role checking
+        $users = User::where('is_active', true)
+          ->role($role)
+          ->get()
+          ->toArray();
+        $recipients = array_merge($recipients, $users);
       }
     }
 
-    // Remove duplicates
     $seen = [];
     $uniqueRecipients = [];
     foreach ($recipients as $recipient) {
@@ -500,9 +647,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     return User::whereIn('id', $userIds)->get()->toArray();
   }
 
-  /**
-   * Send notification to a recipient.
-   */
   protected function sendNotification($recipient, string $notificationClass, array $data): void
   {
     $user = $recipient instanceof User ? $recipient : User::find($recipient['id'] ?? $recipient);
@@ -524,24 +668,116 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       ]);
     }
 
-    // Save notification record
+    // Ensure requisition_id is set before saving
+    $data = $this->ensureRequisitionId($data);
     $this->saveNotificationRecord($user->id, $data);
   }
 
-  /**
-   * Save notification record for audit.
-   */
   protected function saveNotificationRecord(int $userId, array $data): void
   {
-    ProcurementNotification::create([
+    // Ensure requisition_id is not null
+    $requisitionId = $data['requisition_id'] ?? null;
+
+    // If requisition_id is null, try to find it from the data
+    if ($requisitionId === null) {
+      Log::warning('⚠️ [NotificationDispatcher::saveNotificationRecord] requisition_id is null, attempting to find it', [
+        'data' => $data
+      ]);
+
+      // Try to get from qtn_id
+      if (isset($data['qtn_id'])) {
+        try {
+          $quotation = QuotationRequest::find($data['qtn_id']);
+          if ($quotation && $quotation->requisition_id) {
+            $requisitionId = $quotation->requisition_id;
+            Log::info('✅ [NotificationDispatcher::saveNotificationRecord] Found requisition_id from qtn_id', [
+              'qtn_id' => $data['qtn_id'],
+              'requisition_id' => $requisitionId
+            ]);
+          }
+        } catch (\Exception $e) {
+          Log::warning('⚠️ [NotificationDispatcher::saveNotificationRecord] Failed to get requisition_id from qtn_id', [
+            'error' => $e->getMessage()
+          ]);
+        }
+      }
+
+      // Try to get from rfq_id
+      if ($requisitionId === null && isset($data['rfq_id'])) {
+        try {
+          $quotation = QuotationRequest::find($data['rfq_id']);
+          if ($quotation && $quotation->requisition_id) {
+            $requisitionId = $quotation->requisition_id;
+            Log::info('✅ [NotificationDispatcher::saveNotificationRecord] Found requisition_id from rfq_id', [
+              'rfq_id' => $data['rfq_id'],
+              'requisition_id' => $requisitionId
+            ]);
+          }
+        } catch (\Exception $e) {
+          Log::warning('⚠️ [NotificationDispatcher::saveNotificationRecord] Failed to get requisition_id from rfq_id', [
+            'error' => $e->getMessage()
+          ]);
+        }
+      }
+
+      // Try to get from nested data
+      if ($requisitionId === null && isset($data['data']) && is_array($data['data'])) {
+        if (isset($data['data']['qtn_id'])) {
+          try {
+            $quotation = QuotationRequest::find($data['data']['qtn_id']);
+            if ($quotation && $quotation->requisition_id) {
+              $requisitionId = $quotation->requisition_id;
+              Log::info('✅ [NotificationDispatcher::saveNotificationRecord] Found requisition_id from nested data', [
+                'qtn_id' => $data['data']['qtn_id'],
+                'requisition_id' => $requisitionId
+              ]);
+            }
+          } catch (\Exception $e) {
+            Log::warning('⚠️ [NotificationDispatcher::saveNotificationRecord] Failed to get requisition_id from nested data', [
+              'error' => $e->getMessage()
+            ]);
+          }
+        }
+      }
+    }
+
+    // If we still don't have a requisition_id, log error but use a fallback
+    if ($requisitionId === null) {
+      Log::error('❌ [NotificationDispatcher::saveNotificationRecord] requisition_id is null after all attempts', [
+        'user_id' => $userId,
+        'data' => $data
+      ]);
+      // Use 0 as a fallback to avoid database error
+      $requisitionId = 0;
+    }
+
+    // Prepare the notification data
+    $notificationData = [
       'user_id' => $userId,
-      'requisition_id' => $data['requisition_id'] ?? null,
-      'type' => $data['type'] ?? 'general',
+      'requisition_id' => $requisitionId,
+      'type' => $data['type'] ?? $data['event'] ?? 'general',
       'subject' => $data['subject'] ?? 'Procurement Notification',
-      'message' => $data['message'] ?? null,
-      'data' => $data,
-      'sent_by' => auth()->id(),
+      'message' => $data['message'] ?? $data['description'] ?? null,
+      'data' => json_encode($data),
+      'sent_by' => auth()->id() ?? $data['sent_by'] ?? null,
       'sent_at' => now(),
-    ]);
+      'created_at' => now(),
+      'updated_at' => now(),
+    ];
+
+    try {
+      ProcurementNotification::create($notificationData);
+      Log::info('✅ [NotificationDispatcher::saveNotificationRecord] Notification saved successfully', [
+        'user_id' => $userId,
+        'requisition_id' => $requisitionId
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ [NotificationDispatcher::saveNotificationRecord] Failed to save notification', [
+        'user_id' => $userId,
+        'error' => $e->getMessage(),
+        'data' => $notificationData
+      ]);
+      throw $e;
+    }
   }
 }

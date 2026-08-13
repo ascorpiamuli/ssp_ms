@@ -20,8 +20,38 @@ export default function AuthLayoutClient({
     ? 'w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-2xl'
     : 'w-full max-w-md sm:max-w-md md:max-w-md'
 
+  // Apply default font (Manrope) for auth pages
   useEffect(() => {
     setMounted(true)
+
+    // Apply Manrope as default font for auth pages
+    // This ensures consistent font even when not authenticated
+    const fontFamily = 'Manrope, sans-serif'
+    document.body.style.setProperty('font-family', fontFamily, 'important')
+    document.body.style.setProperty('--font-family', fontFamily, 'important')
+    document.documentElement.style.setProperty('font-family', fontFamily, 'important')
+
+    // Also ensure the font class is applied
+    const classes = document.documentElement.className.split(' ')
+    const filteredClasses = classes.filter(cls => !cls.includes('font-'))
+    document.documentElement.className = filteredClasses.join(' ')
+    document.documentElement.classList.add('font-manrope')
+
+    // Set default brand colors for auth pages
+    const styleElement = document.getElementById('auth-brand-styles')
+    if (!styleElement) {
+      const style = document.createElement('style')
+      style.id = 'auth-brand-styles'
+      style.textContent = `
+        :root {
+          --primary-color: #1a237e !important;
+          --secondary-color: #3498db !important;
+          --accent-color: #ffc107 !important;
+          --primary-color-rgb: 26, 35, 126 !important;
+        }
+      `
+      document.head.appendChild(style)
+    }
   }, [])
 
   if (!mounted) {
@@ -32,17 +62,10 @@ export default function AuthLayoutClient({
     <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8 overflow-hidden">
       <AccessibilityWidget />
 
-      {/* ============================================
-          CLEAN WHITE BACKGROUND WITH ANIMATIONS
-          ============================================ */}
+      {/* Background */}
       <div className="absolute inset-0 z-0">
-        {/* Base white */}
         <div className="absolute inset-0 bg-white dark:bg-slate-950" />
-
-        {/* Animated gradient mesh */}
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-50/80 via-white to-indigo-50/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900 animate-gradient-xy" />
-
-        {/* Animated grid/netted pattern */}
         <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]">
           <svg className="absolute inset-0 w-full h-full animate-grid-pulse">
             <defs>
@@ -72,14 +95,12 @@ export default function AuthLayoutClient({
           </svg>
         </div>
 
-        {/* Floating geometric shapes */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-10 right-10 w-64 h-64 bg-blue-100/30 dark:bg-blue-500/5 rounded-full blur-2xl animate-float-slow" />
           <div className="absolute bottom-10 left-10 w-48 h-48 bg-indigo-100/30 dark:bg-indigo-500/5 rounded-full blur-2xl animate-float-slower" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-50/20 dark:bg-purple-500/5 rounded-full blur-3xl animate-pulse-glow" />
         </div>
 
-        {/* Clean wave at bottom */}
         <svg
           className="absolute bottom-0 left-0 w-full h-32 md:h-40"
           preserveAspectRatio="none"
@@ -100,18 +121,13 @@ export default function AuthLayoutClient({
         </svg>
       </div>
 
-      {/* ============================================
-          MAIN CONTAINER
-          ============================================ */}
+      {/* Main Container */}
       <div className={`relative z-10 ${containerWidth}`}>
 
-        {/* ============================================
-            LOGO SECTION
-            ============================================ */}
+        {/* Logo Section */}
         <div className={`text-center ${isRegisterPage ? 'mb-1' : 'mb-1'}`}>
           <div className="flex justify-center items-center ">
             <div className="relative">
-              {/* Logo with subtle glow */}
               <Image
                 src="/images/pasbest-logo.png"
                 alt="PASBEST VENTURES - Transforming Ideas Into Digital Reality"
@@ -123,7 +139,6 @@ export default function AuthLayoutClient({
             </div>
           </div>
 
-          {/* Welcome Text */}
           <div className="space-y-1.5">
             <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
               {isRegisterPage ? 'Create Your Account' : 'Welcome Back'}
@@ -142,31 +157,21 @@ export default function AuthLayoutClient({
           </div>
         </div>
 
-        {/* ============================================
-            AUTH CARD
-            ============================================ */}
+        {/* Auth Card */}
         <div className="relative">
-          {/* Card shadow */}
           <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-purple-500/20 rounded-xl blur" />
-
-          {/* Card */}
           <div className={`relative bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl shadow-2xl border border-blue-100/50 dark:border-blue-900/30 ${isRegisterPage
             ? 'p-6 sm:p-8 md:p-10'
             : 'p-8 sm:p-10 md:p-12'
             }`}>
-            {/* Inner subtle gradient */}
             <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-50/30 to-indigo-50/30 dark:from-blue-900/5 dark:to-indigo-900/5 pointer-events-none" />
-
-            {/* Content */}
             <div className="relative">
               {children}
             </div>
           </div>
         </div>
 
-        {/* ============================================
-            FOOTER
-            ============================================ */}
+        {/* Footer */}
         <div className="mt-8 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="w-8 h-px bg-gradient-to-r from-transparent to-blue-400/50" />
@@ -184,9 +189,7 @@ export default function AuthLayoutClient({
         </div>
       </div>
 
-      {/* ============================================
-          CUSTOM ANIMATIONS
-          ============================================ */}
+      {/* Animations */}
       <style jsx global>{`
         @keyframes gradient-xy {
           0%, 100% {

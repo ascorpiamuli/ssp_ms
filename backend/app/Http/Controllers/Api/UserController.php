@@ -44,6 +44,32 @@ class UserController extends Controller
   }
 
   /**
+   * List all users with role labels.
+   */
+  public function indexWithRoleLabels(Request $request)
+  {
+    try {
+      $users = $this->userService->getAllUsersWithRoleLabels($request->all());
+
+      return response()->json([
+        'success' => true,
+        'data' => $users->items(),
+        'meta' => [
+          'total' => $users->total(),
+          'per_page' => $users->perPage(),
+          'current_page' => $users->currentPage(),
+          'last_page' => $users->lastPage(),
+        ],
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch users: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
    * Get single user.
    */
   public function show($id)
@@ -66,6 +92,33 @@ class UserController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to fetch user: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get single user with role information.
+   */
+  public function showWithRoleInfo($id)
+  {
+    try {
+      $userData = $this->userService->getUserWithRoleInfo($id);
+
+      if (!$userData) {
+        return response()->json([
+          'success' => false,
+          'message' => 'User not found',
+        ], 404);
+      }
+
+      return response()->json([
+        'success' => true,
+        'data' => $userData,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch user with role info: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -280,7 +333,7 @@ class UserController extends Controller
 
       return response()->json([
         'success' => true,
-        'data' => UserResource::collection($users),
+        'data' => $users,
       ]);
     } catch (\Exception $e) {
       return response()->json([
@@ -301,7 +354,7 @@ class UserController extends Controller
 
       return response()->json([
         'success' => true,
-        'data' => UserResource::collection($users),
+        'data' => $users,
       ]);
     } catch (\Exception $e) {
       return response()->json([
@@ -332,6 +385,86 @@ class UserController extends Controller
   }
 
   /**
+   * Get users by role.
+   */
+  public function usersByRole(Request $request)
+  {
+    try {
+      $request->validate([
+        'role' => 'required|string',
+      ]);
+
+      $users = $this->userService->getUsersByRole($request->role);
+
+      return response()->json([
+        'success' => true,
+        'data' => $users,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch users by role: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get available roles for dropdown.
+   */
+  public function availableRoles()
+  {
+    try {
+      $roles = $this->userService->getAvailableRoles();
+
+      return response()->json([
+        'success' => true,
+        'data' => $roles,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch available roles: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get user's role information.
+   */
+  public function userRoleInfo(Request $request)
+  {
+    try {
+      $request->validate([
+        'user_id' => 'required|exists:users,id',
+      ]);
+
+      $roleInfo = $this->userService->getUserRoleInfo($request->user_id);
+
+      return response()->json([
+        'success' => true,
+        'data' => $roleInfo,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch user role info: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
    * Bulk action on users.
    */
   public function bulkAction(Request $request)
@@ -340,19 +473,21 @@ class UserController extends Controller
       $request->validate([
         'user_ids' => 'required|array',
         'user_ids.*' => 'exists:users,id',
-        'action' => 'required|string|in:activate,deactivate,approve,delete,assign_role',
-        'role' => 'required_if:action,assign_role|string|exists:roles,name',
+        'action' => 'required|string|in:activate,deactivate,approve,delete,restore,force_delete,assign_role,assign_roles',
+        'role' => 'required_if:action,assign_role|string',
+        'roles' => 'required_if:action,assign_roles|array',
+        'roles.*' => 'string',
       ]);
 
       $results = $this->userService->bulkAction(
         $request->user_ids,
         $request->action,
-        $request->only(['role'])
+        $request->only(['role', 'roles'])
       );
 
       return response()->json([
         'success' => true,
-        'message' => 'Bulk action completed',
+        'message' => 'Bulk action completed successfully',
         'data' => $results,
       ]);
     } catch (\Illuminate\Validation\ValidationException $e) {
@@ -365,6 +500,47 @@ class UserController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to perform bulk action: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Restore soft-deleted user.
+   */
+  public function restore($id)
+  {
+    try {
+      $user = $this->userService->restoreUser($id);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'User restored successfully',
+        'data' => new UserResource($user),
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to restore user: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Force delete user (permanent).
+   */
+  public function forceDelete($id)
+  {
+    try {
+      $this->userService->forceDeleteUser($id);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'User permanently deleted',
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to permanently delete user: ' . $e->getMessage(),
       ], 500);
     }
   }

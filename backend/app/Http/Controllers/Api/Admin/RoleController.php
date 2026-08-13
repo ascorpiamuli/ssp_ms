@@ -38,12 +38,61 @@ class RoleController extends Controller
   }
 
   /**
+   * List all roles with labels and descriptions.
+   */
+  public function indexWithLabels(Request $request)
+  {
+    try {
+      $roles = $this->roleService->getAllRolesWithLabels();
+
+      return response()->json([
+        'success' => true,
+        'data' => $roles,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch roles: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
    * Get single role.
    */
   public function show($id)
   {
     try {
-      $role = $this->roleService->getRoleById($id);
+      $roleId = (int) $id;
+      $role = $this->roleService->getRoleById($roleId);
+
+      if (!$role) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Role not found',
+        ], 404);
+      }
+
+      return response()->json([
+        'success' => true,
+        'data' => $role,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch role: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get single role with labels and descriptions.
+   */
+  public function showWithLabels($id)
+  {
+    try {
+      $roleId = (int) $id;
+      $role = $this->roleService->getRoleWithLabels($roleId);
 
       if (!$role) {
         return response()->json([
@@ -70,7 +119,8 @@ class RoleController extends Controller
   public function store(RoleRequest $request)
   {
     try {
-      $role = $this->roleService->createRole($request->validated());
+      $validated = $request->validated();
+      $role = $this->roleService->createRole($validated);
 
       return response()->json([
         'success' => true,
@@ -97,7 +147,13 @@ class RoleController extends Controller
   public function update(RoleRequest $request, $id)
   {
     try {
-      $role = $this->roleService->updateRole($id, $request->validated());
+      $roleId = (int) $id;
+      $validated = $request->validated();
+
+      // Remove 'name' from validated data to prevent it from being updated
+      unset($validated['name']);
+
+      $role = $this->roleService->updateRole($roleId, $validated);
 
       return response()->json([
         'success' => true,
@@ -124,7 +180,8 @@ class RoleController extends Controller
   public function destroy($id)
   {
     try {
-      $this->roleService->deleteRole($id);
+      $roleId = (int) $id;
+      $this->roleService->deleteRole($roleId);
 
       return response()->json([
         'success' => true,
@@ -144,7 +201,8 @@ class RoleController extends Controller
   public function assignPermissions(RolePermissionRequest $request, $id)
   {
     try {
-      $role = $this->roleService->assignPermissions($id, $request->permissions);
+      $roleId = (int) $id;
+      $role = $this->roleService->assignPermissions($roleId, $request->permissions);
 
       return response()->json([
         'success' => true,
@@ -161,6 +219,70 @@ class RoleController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to assign permissions: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Grant a single permission to a role.
+   */
+  public function grantPermission(Request $request, $id)
+  {
+    try {
+      $request->validate([
+        'permission' => 'required|string|exists:permissions,name',
+      ]);
+
+      $roleId = (int) $id;
+      $role = $this->roleService->grantPermission($roleId, $request->permission);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Permission granted successfully',
+        'data' => $role,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to grant permission: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Revoke a single permission from a role.
+   */
+  public function revokePermission(Request $request, $id)
+  {
+    try {
+      $request->validate([
+        'permission' => 'required|string|exists:permissions,name',
+      ]);
+
+      $roleId = (int) $id;
+      $role = $this->roleService->revokePermission($roleId, $request->permission);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Permission revoked successfully',
+        'data' => $role,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to revoke permission: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -211,7 +333,8 @@ class RoleController extends Controller
   public function roleUsers($id)
   {
     try {
-      $users = $this->roleService->getRoleUsers($id);
+      $roleId = (int) $id;
+      $users = $this->roleService->getRoleUsers($roleId);
 
       return response()->json([
         'success' => true,
@@ -221,6 +344,26 @@ class RoleController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to fetch role users: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get users with their roles.
+   */
+  public function usersWithRoles(Request $request)
+  {
+    try {
+      $users = $this->roleService->getUsersWithRoles();
+
+      return response()->json([
+        'success' => true,
+        'data' => $users,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch users with roles: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -253,7 +396,7 @@ class RoleController extends Controller
     try {
       $request->validate([
         'user_id' => 'required|exists:users,id',
-        'role' => 'required|string|exists:roles,name',
+        'role' => 'required|string',
       ]);
 
       $this->roleService->assignRoleToUser($request->user_id, $request->role);
@@ -261,6 +404,10 @@ class RoleController extends Controller
       return response()->json([
         'success' => true,
         'message' => 'Role assigned to user successfully',
+        'data' => [
+          'user_id' => $request->user_id,
+          'role' => $request->role,
+        ],
       ]);
     } catch (\Illuminate\Validation\ValidationException $e) {
       return response()->json([
@@ -272,6 +419,37 @@ class RoleController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to assign role: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Remove role from user.
+   */
+  public function removeRoleFromUser(Request $request)
+  {
+    try {
+      $request->validate([
+        'user_id' => 'required|exists:users,id',
+        'role' => 'required|string',
+      ]);
+
+      $this->roleService->removeRoleFromUser($request->user_id, $request->role);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Role removed from user successfully',
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to remove role: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -302,6 +480,97 @@ class RoleController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to fetch user roles: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get role options for dropdowns.
+   */
+  public function options()
+  {
+    try {
+      $options = $this->roleService->getRoleOptions();
+
+      return response()->json([
+        'success' => true,
+        'data' => $options,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch role options: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Search roles.
+   */
+  public function search(Request $request)
+  {
+    try {
+      $request->validate([
+        'search' => 'required|string|min:2',
+      ]);
+
+      $roles = $this->roleService->searchRoles($request->search);
+
+      return response()->json([
+        'success' => true,
+        'data' => $roles,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to search roles: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get all permissions with their descriptions.
+   */
+  public function allPermissionsWithInfo()
+  {
+    try {
+      $permissions = $this->roleService->getAllPermissions();
+
+      // Group by module for better organization
+      $grouped = [];
+      foreach ($permissions as $permission) {
+        $parts = explode('.', $permission->name);
+        $module = $parts[0] ?? 'general';
+        $action = $parts[1] ?? $permission->name;
+
+        if (!isset($grouped[$module])) {
+          $grouped[$module] = [];
+        }
+
+        $grouped[$module][] = [
+          'id' => $permission->id,
+          'name' => $permission->name,
+          'display_name' => ucfirst(str_replace('_', ' ', $action)),
+          'module' => ucfirst($module),
+          'guard_name' => $permission->guard_name,
+          'created_at' => $permission->created_at,
+        ];
+      }
+
+      return response()->json([
+        'success' => true,
+        'data' => $grouped,
+      ]);
+    } catch (\Exception $e) {
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch permissions: ' . $e->getMessage(),
       ], 500);
     }
   }

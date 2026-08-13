@@ -13,9 +13,10 @@ import {
   TwoFactorEnableRequest,
   TwoFactorVerifyRequest,
   TwoFactorRecoveryRequest,
-  User,
   AuthResponse,
   AuthData,
+  User,
+  Role,
 } from '@/types/auth.types';
 import { tokenManager, csrf } from '@/services/api';
 import { useToast } from '@/components/ui/toast-context';
@@ -121,7 +122,7 @@ export function useAuth() {
   });
 
   /**
-   * Get available roles (for dropdowns)
+   * Get available roles (for dropdowns) - now includes label and description
    */
   const { data: rolesResponse, refetch: refetchRoles, isLoading: isLoadingRoles } = useQuery({
     queryKey: ['roles', 'available'],
@@ -173,6 +174,77 @@ export function useAuth() {
   };
 
   // ============================================
+  // USER ROLE HELPERS (with labels)
+  // ============================================
+
+  /**
+   * Get the user's primary role label
+   */
+  const getRoleLabel = (): string | null => {
+    if (!user) return null;
+    return user.role_label || null;
+  };
+
+  /**
+   * Get the user's primary role description
+   */
+  const getRoleDescription = (): string | null => {
+    if (!user) return null;
+    return user.role_description || null;
+  };
+
+  /**
+   * Get the user's primary role name
+   */
+  const getRoleName = (): string | null => {
+    if (!user) return null;
+    return user.role || null;
+  };
+
+  /**
+   * Get the user's display name (label with fallback to formatted name)
+   */
+  const getRoleDisplayName = (): string => {
+    if (!user) return 'No Role Assigned';
+    if (user.role_label) return user.role_label;
+    if (user.role) return user.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return 'No Role Assigned';
+  };
+
+  /**
+   * Get all user roles with labels and descriptions
+   */
+  const getUserRolesWithDetails = (): Role[] => {
+    if (!user || !user.role_details) return [];
+    return user.role_details;
+  };
+
+  /**
+   * Check if user has a specific role by name or label
+   */
+  const hasRoleByNameOrLabel = (roleNameOrLabel: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+
+    // Check by role name
+    if (user.role === roleNameOrLabel) return true;
+    if (roles.includes(roleNameOrLabel)) return true;
+
+    // Check by role label
+    if (user.role_label === roleNameOrLabel) return true;
+
+    // Check in role_details
+    if (user.role_details) {
+      return user.role_details.some(role =>
+        role.name === roleNameOrLabel ||
+        role.label === roleNameOrLabel
+      );
+    }
+
+    return false;
+  };
+
+  // ============================================
   // MUTATIONS
   // ============================================
 
@@ -213,10 +285,16 @@ export function useAuth() {
         localStorage.setItem('token', token);
         sessionStorage.setItem('token', token);
 
-        // Save user
+        // Save user with role labels
         if (user) {
-          localStorage.setItem('user', JSON.stringify(user));
-          console.log('✅ User saved:', user.email);
+          // Ensure user has role_label and role_description fields
+          const userWithLabels = {
+            ...user,
+            role_label: user.role_label || null,
+            role_description: user.role_description || null,
+          };
+          localStorage.setItem('user', JSON.stringify(userWithLabels));
+          console.log('✅ User saved:', user.email, 'Role:', user.role_label || user.role);
         }
 
         // Update query cache
@@ -380,7 +458,11 @@ export function useAuth() {
       if (response?.success) {
         // Update user with new avatar
         if (user && response.data?.avatar) {
-          const updatedUser = { ...user, avatar: response.data.avatar };
+          const updatedUser = {
+            ...user,
+            avatar: response.data.avatar,
+            profile_photo: response.data.avatar,
+          };
           // Update local storage
           localStorage.setItem('user', JSON.stringify(updatedUser));
           sessionStorage.setItem('user', JSON.stringify(updatedUser));
@@ -543,18 +625,83 @@ export function useAuth() {
   };
 
   // ============================================
-  // ROLE HELPERS
+  // ROLE HELPERS (Updated with label support)
   // ============================================
 
-  const isAdmin = (): boolean => user?.role === 'ADMIN' || user?.roles?.includes('ADMIN') || false;
-  const isSupplier = (): boolean => user?.roles?.includes('SUPPLIER') || false;
-  const isHOD = (): boolean => user?.role === 'HOD' || user?.roles?.includes('HOD') || false;
-  const isAccountant = (): boolean => user?.role === 'ACCOUNTANT' || user?.roles?.includes('ACCOUNTANT') || false;
-  const isPrincipal = (): boolean => user?.role === 'PRINCIPAL' || user?.roles?.includes('PRINCIPAL') || false;
-  const isFinalApprover = (): boolean => user?.role === 'FINAL_APPROVER' || user?.roles?.includes('FINAL_APPROVER') || false;
-  const isStaff = (): boolean => user?.role === 'STAFF' || user?.roles?.includes('STAFF') || false;
-  const isAuditor = (): boolean => user?.role === 'AUDITOR' || user?.roles?.includes('AUDITOR') || false;
-  const isProcurement = (): boolean => user?.role === 'PROCUREMENT' || user?.roles?.includes('PROCUREMENT') || false;
+  const isAdmin = (): boolean => {
+    if (!user) return false;
+    return user.role === 'ADMIN' ||
+      user.roles?.includes('ADMIN') ||
+      user.role_label?.toUpperCase() === 'ADMIN' ||
+      user.role_label?.toUpperCase() === 'ADMINISTRATOR' ||
+      false;
+  };
+
+  const isSupplier = (): boolean => {
+    if (!user) return false;
+    return user.roles?.includes('SUPPLIER') ||
+      user.role_label?.toUpperCase() === 'SUPPLIER' ||
+      false;
+  };
+
+  const isHOD = (): boolean => {
+    if (!user) return false;
+    return user.role === 'HOD' ||
+      user.roles?.includes('HOD') ||
+      user.role_label?.toUpperCase() === 'HEAD OF DEPARTMENT' ||
+      user.role_label?.toUpperCase() === 'HOD' ||
+      false;
+  };
+
+  const isAccountant = (): boolean => {
+    if (!user) return false;
+    return user.role === 'ACCOUNTANT' ||
+      user.roles?.includes('ACCOUNTANT') ||
+      user.role_label?.toUpperCase() === 'ACCOUNTANT' ||
+      false;
+  };
+
+  const isPrincipal = (): boolean => {
+    if (!user) return false;
+    return user.role === 'PRINCIPAL' ||
+      user.roles?.includes('PRINCIPAL') ||
+      user.role_label?.toUpperCase() === 'PRINCIPAL' ||
+      false;
+  };
+
+  const isFinalApprover = (): boolean => {
+    if (!user) return false;
+    return user.role === 'FINAL_APPROVER' ||
+      user.roles?.includes('FINAL_APPROVER') ||
+      user.role_label?.toUpperCase() === 'FINAL APPROVER' ||
+      user.role_label?.toUpperCase() === 'FINAL_APPROVER' ||
+      false;
+  };
+
+  const isStaff = (): boolean => {
+    if (!user) return false;
+    return user.role === 'STAFF' ||
+      user.roles?.includes('STAFF') ||
+      user.role_label?.toUpperCase() === 'STAFF' ||
+      false;
+  };
+
+  const isAuditor = (): boolean => {
+    if (!user) return false;
+    return user.role === 'AUDITOR' ||
+      user.roles?.includes('AUDITOR') ||
+      user.role_label?.toUpperCase() === 'AUDITOR' ||
+      false;
+  };
+
+  const isProcurement = (): boolean => {
+    if (!user) return false;
+    return user.role === 'PROCUREMENT' ||
+      user.roles?.includes('PROCUREMENT') ||
+      user.role_label?.toUpperCase() === 'PROCUREMENT' ||
+      user.role_label?.toUpperCase() === 'PROCUREMENT OFFICER' ||
+      false;
+  };
 
   // ============================================
   // PROFILE COMPLETION HELPERS
@@ -593,6 +740,14 @@ export function useAuth() {
     roles,
     isAuthenticated,
     isLoading: isLoadingUser || loginMutation.isPending || registerMutation.isPending || isLoadingDepartments || isLoadingRoles || isLoadingCategories || !isInitialized,
+
+    // User role helpers (new)
+    getRoleLabel,
+    getRoleDescription,
+    getRoleName,
+    getRoleDisplayName,
+    getUserRolesWithDetails,
+    hasRoleByNameOrLabel,
 
     // Auth methods
     login: loginMutation.mutateAsync,
@@ -637,7 +792,7 @@ export function useAuth() {
     hasPermission,
     hasRole,
 
-    // Role helpers
+    // Role helpers (updated with label support)
     isAdmin,
     isSupplier,
     isHOD,

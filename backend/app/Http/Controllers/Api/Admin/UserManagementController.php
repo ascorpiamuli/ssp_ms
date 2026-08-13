@@ -71,6 +71,49 @@ class UserManagementController extends Controller
   }
 
   /**
+   * List all users with role labels.
+   */
+  public function indexWithRoleLabels(Request $request)
+  {
+    try {
+      Log::info('📋 UserManagementController::indexWithRoleLabels - Fetching users with role labels', [
+        'filters' => $request->all(),
+        'user_id' => auth()->id()
+      ]);
+
+      $users = $this->userService->getAllUsersWithRoleLabels($request->all());
+
+      Log::info('✅ UserManagementController::indexWithRoleLabels - Users with role labels fetched successfully', [
+        'total' => $users->total(),
+        'count' => $users->count()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $users->items(),
+        'meta' => [
+          'total' => $users->total(),
+          'per_page' => $users->perPage(),
+          'current_page' => $users->currentPage(),
+          'last_page' => $users->lastPage(),
+        ],
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::indexWithRoleLabels - Failed to fetch users', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'filters' => $request->all(),
+        'user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch users: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
    * Get single user.
    */
   public function show($id)
@@ -116,6 +159,55 @@ class UserManagementController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to fetch user: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get single user with role information.
+   */
+  public function showWithRoleInfo($id)
+  {
+    try {
+      Log::info('📋 UserManagementController::showWithRoleInfo - Fetching user with role info', [
+        'user_id' => $id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      $userData = $this->userService->getUserWithRoleInfo($id);
+
+      if (!$userData) {
+        Log::warning('⚠️ UserManagementController::showWithRoleInfo - User not found', [
+          'user_id' => $id,
+          'auth_user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+          'success' => false,
+          'message' => 'User not found',
+        ], 404);
+      }
+
+      Log::info('✅ UserManagementController::showWithRoleInfo - User with role info fetched successfully', [
+        'user_id' => $id,
+        'has_role' => !is_null($userData['primary_role'])
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $userData,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::showWithRoleInfo - Failed to fetch user with role info', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'user_id' => $id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch user with role info: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -551,7 +643,7 @@ class UserManagementController extends Controller
 
       return response()->json([
         'success' => true,
-        'data' => UserResource::collection($users),
+        'data' => $users,
       ]);
     } catch (\Exception $e) {
       Log::error('❌ UserManagementController::pending - Failed to fetch pending users', [
@@ -589,7 +681,7 @@ class UserManagementController extends Controller
 
       return response()->json([
         'success' => true,
-        'data' => UserResource::collection($users),
+        'data' => $users,
       ]);
     } catch (\Exception $e) {
       Log::error('❌ UserManagementController::recent - Failed to fetch recent users', [
@@ -645,6 +737,147 @@ class UserManagementController extends Controller
   }
 
   /**
+   * Get users by role.
+   */
+  public function usersByRole(Request $request)
+  {
+    try {
+      $request->validate([
+        'role' => 'required|string',
+      ]);
+
+      Log::info('📋 UserManagementController::usersByRole - Fetching users by role', [
+        'role' => $request->role,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      $users = $this->userService->getUsersByRole($request->role);
+
+      Log::info('✅ UserManagementController::usersByRole - Users by role fetched', [
+        'role' => $request->role,
+        'count' => $users->count(),
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $users,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('⚠️ UserManagementController::usersByRole - Validation failed', [
+        'errors' => $e->errors(),
+        'data' => $request->all()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::usersByRole - Failed to fetch users by role', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'role' => $request->role,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch users by role: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get available roles for dropdown.
+   */
+  public function availableRoles()
+  {
+    try {
+      Log::info('📋 UserManagementController::availableRoles - Fetching available roles', [
+        'auth_user_id' => auth()->id()
+      ]);
+
+      $roles = $this->userService->getAvailableRoles();
+
+      Log::info('✅ UserManagementController::availableRoles - Available roles fetched', [
+        'count' => $roles->count(),
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $roles,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::availableRoles - Failed to fetch available roles', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch available roles: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get user's role information.
+   */
+  public function userRoleInfo(Request $request)
+  {
+    try {
+      $request->validate([
+        'user_id' => 'required|exists:users,id',
+      ]);
+
+      Log::info('📋 UserManagementController::userRoleInfo - Fetching user role info', [
+        'user_id' => $request->user_id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      $roleInfo = $this->userService->getUserRoleInfo($request->user_id);
+
+      Log::info('✅ UserManagementController::userRoleInfo - User role info fetched', [
+        'user_id' => $request->user_id,
+        'has_role' => $roleInfo['has_role'] ?? false,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $roleInfo,
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('⚠️ UserManagementController::userRoleInfo - Validation failed', [
+        'errors' => $e->errors(),
+        'data' => $request->all()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::userRoleInfo - Failed to fetch user role info', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'user_id' => $request->user_id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to fetch user role info: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
    * Bulk action on users.
    */
   public function bulkAction(Request $request)
@@ -661,14 +894,16 @@ class UserManagementController extends Controller
       $request->validate([
         'user_ids' => 'required|array',
         'user_ids.*' => 'exists:users,id',
-        'action' => 'required|string|in:activate,deactivate,approve,delete,assign_role',
-        'role' => 'required_if:action,assign_role|string|exists:roles,name',
+        'action' => 'required|string|in:activate,deactivate,approve,delete,restore,force_delete,assign_role,assign_roles',
+        'role' => 'required_if:action,assign_role|string',
+        'roles' => 'required_if:action,assign_roles|array',
+        'roles.*' => 'string',
       ]);
 
       $results = $this->userService->bulkAction(
         $request->user_ids,
         $request->action,
-        $request->only(['role'])
+        $request->only(['role', 'roles'])
       );
 
       Log::info('✅ UserManagementController::bulkAction - Bulk action completed', [
@@ -681,7 +916,7 @@ class UserManagementController extends Controller
 
       return response()->json([
         'success' => true,
-        'message' => 'Bulk action completed',
+        'message' => 'Bulk action completed successfully',
         'data' => $results,
       ]);
     } catch (\Illuminate\Validation\ValidationException $e) {
@@ -709,6 +944,46 @@ class UserManagementController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to perform bulk action: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Restore soft-deleted user.
+   */
+  public function restore($id)
+  {
+    try {
+      Log::info('📋 UserManagementController::restore - Restoring user', [
+        'user_id' => $id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      $user = $this->userService->restoreUser($id);
+
+      Log::info('✅ UserManagementController::restore - User restored successfully', [
+        'user_id' => $id,
+        'email' => $user->email,
+        'full_name' => $user->full_name,
+        'restored_by' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'User restored successfully',
+        'data' => new UserResource($user),
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ UserManagementController::restore - Failed to restore user', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'user_id' => $id,
+        'auth_user_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to restore user: ' . $e->getMessage(),
       ], 500);
     }
   }

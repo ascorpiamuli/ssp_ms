@@ -183,6 +183,17 @@ export const privateApi = {
     return extractData<T>(response.data);
   },
   getClient: (): AxiosInstance => privateApiClient,
+
+  /**
+   * Direct download method that returns full response with headers
+   * Used for PDF downloads where we need to access Content-Disposition header
+   */
+  download: async (url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> => {
+    return privateApiClient.get(url, {
+      ...config,
+      responseType: 'blob',
+    });
+  },
 };
 
 // ─── Public API Methods ───

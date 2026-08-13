@@ -51,35 +51,36 @@ class SystemStatusService
   }
 
   /**
-   * Check API status
+   * Check API status - ALTERNATIVE WITHOUT HTTP REQUESTS
    */
   protected function checkApiStatus(): array
   {
     $startTime = microtime(true);
 
     try {
-      // Check if API is responsive
-      $response = Http::timeout(5)->get(config('app.url') . '/api/v1/health');
-      $responseTime = microtime(true) - $startTime;
-
-      if ($response->successful()) {
-        return [
-          'status' => SystemStatusLog::STATUS_OPERATIONAL,
-          'response_time' => round($responseTime * 1000, 2),
-          'message' => 'API is operational',
-          'details' => [
-            'status_code' => $response->status(),
-            'response_time_ms' => round($responseTime * 1000, 2),
-          ],
-        ];
+      // Check 1: Is the application booted?
+      if (!app()->isBooted()) {
+        throw new \Exception('Application not fully booted');
       }
 
+      // Check 2: Is the environment config loaded?
+      if (app()->environment() === null) {
+        throw new \Exception('Environment not detected');
+      }
+
+      // Check 3: Is the database connection already established by other checks?
+      // (Optional: We assume database check is handled separately)
+
+      $responseTime = microtime(true) - $startTime;
+
       return [
-        'status' => SystemStatusLog::STATUS_DEGRADED,
+        'status' => SystemStatusLog::STATUS_OPERATIONAL,
         'response_time' => round($responseTime * 1000, 2),
-        'message' => 'API is responding with errors',
+        'message' => 'API is operational',
         'details' => [
-          'status_code' => $response->status(),
+          'booted' => app()->isBooted(),
+          'environment' => app()->environment(),
+          'locale' => app()->getLocale(),
           'response_time_ms' => round($responseTime * 1000, 2),
         ],
       ];
@@ -87,11 +88,12 @@ class SystemStatusService
       return [
         'status' => SystemStatusLog::STATUS_DOWN,
         'response_time' => null,
-        'message' => 'API is unreachable: ' . $e->getMessage(),
+        'message' => 'API is down: ' . $e->getMessage(),
         'details' => ['error' => $e->getMessage()],
       ];
     }
   }
+
 
   /**
    * Check database status

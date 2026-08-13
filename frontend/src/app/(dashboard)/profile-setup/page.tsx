@@ -1,6 +1,8 @@
+// frontend/src/app/(dashboard)/profile-setup/page.tsx
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Building2,
@@ -18,6 +20,23 @@ import {
   Save,
   X,
   RefreshCw,
+  Sparkles,
+  User,
+  Store,
+  BriefcaseBusiness,
+  Package,
+  Award,
+  Banknote,
+  Calendar,
+  Users,
+  CreditCard,
+  UserCog,
+  MailCheck,
+  PhoneCall,
+  MapPinned,
+  Link,
+  Check,
+  ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +59,17 @@ import { useSuppliers } from '@/hooks/useSuppliers'
 import { Supplier } from '@/services/supplier.service'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
 import { cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
+
+// ============================================
+// CATEGORY OPTIONS WITH ICONS
+// ============================================
+
+const CATEGORY_OPTIONS = [
+  { value: 'goods', label: 'Goods Supplier', icon: Package, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+  { value: 'services', label: 'Services Provider', icon: BriefcaseBusiness, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/30' },
+  { value: 'both', label: 'Both Goods & Services', icon: Store, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+]
 
 // ============================================
 // SUPPLIER PROFILE COMPLETION STATUS
@@ -56,7 +86,7 @@ const SupplierProfileStatus = ({
     <div className="flex items-center gap-3">
       <Badge
         variant={isComplete ? 'success' : 'warning'}
-        className="flex items-center gap-1.5 px-3 py-1"
+        className="flex items-center gap-1.5 px-3 py-1 rounded-full"
       >
         {isComplete ? (
           <CheckCircle className="h-3.5 w-3.5" />
@@ -66,10 +96,13 @@ const SupplierProfileStatus = ({
         {isComplete ? 'Complete' : `${percentage}% Complete`}
       </Badge>
       <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-        <div
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.8 }}
           className={cn(
-            "h-full transition-all duration-500 rounded-full",
-            isComplete ? "bg-emerald-500" : "bg-blue-500"
+            "h-full rounded-full",
+            isComplete ? "bg-emerald-500" : "bg-gradient-to-r from-blue-500 to-indigo-600"
           )}
           style={{ width: `${percentage}%` }}
         />
@@ -88,10 +121,10 @@ const UserProfileCard = ({ user }: { user: any }) => {
   const initials = user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || '?'
 
   return (
-    <Card className="mb-6 border-l-4 border-l-blue-500">
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl border-l-4 border-l-blue-500">
       <CardContent className="pt-6">
         <div className="flex items-start gap-4">
-          <Avatar className="h-14 w-14 ring-4 ring-blue-100 dark:ring-blue-900/30">
+          <Avatar className="h-14 w-14 ring-4 ring-blue-100 dark:ring-blue-900/30 shadow-lg">
             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-lg font-medium">
               {initials}
             </AvatarFallback>
@@ -101,12 +134,21 @@ const UserProfileCard = ({ user }: { user: any }) => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {user.full_name || 'User'}
               </h3>
-              <Badge variant="secondary" className="flex items-center gap-1.5">
+              <Badge variant="secondary" className="flex items-center gap-1.5 rounded-full">
                 <Shield className="h-3 w-3" />
                 {user.role?.toUpperCase() || 'USER'}
               </Badge>
+              {user.roles?.includes('supplier') && (
+                <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded-full">
+                  <Store className="h-3 w-3 mr-1" />
+                  Supplier
+                </Badge>
+              )}
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{user.email}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              {user.email}
+            </p>
             {user.phone && (
               <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
                 <Phone className="h-3.5 w-3.5" />
@@ -117,6 +159,64 @@ const UserProfileCard = ({ user }: { user: any }) => {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// ============================================
+// CATEGORY SELECTOR COMPONENT
+// ============================================
+
+interface CategorySelectorProps {
+  value: string
+  onChange: (value: string) => void
+  error?: string
+  disabled?: boolean
+  categories: any[]
+}
+
+const CategorySelector = ({ value, onChange, error, disabled, categories }: CategorySelectorProps) => {
+  // Use predefined options or fallback to categories from API
+  const options = categories.length > 0 ? categories : CATEGORY_OPTIONS
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-2 text-sm font-medium">
+        <Briefcase className="h-4 w-4 text-muted-foreground" />
+        Business Category <span className="text-red-500">*</span>
+      </Label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {options.map((option) => {
+          const Icon = option.icon || Package
+          const isSelected = value === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all duration-200",
+                isSelected
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm shadow-blue-500/10"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50",
+                error && "border-red-500",
+                disabled && "opacity-50 cursor-not-allowed"
+              )}
+              disabled={disabled}
+            >
+              <Icon className={cn("h-4 w-4", option.color || 'text-muted-foreground')} />
+              <span className="text-sm font-medium">{option.label}</span>
+              {isSelected && (
+                <CheckCircle className="h-4 w-4 text-blue-500" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {error && (
+        <p className="text-sm text-red-500">{error}</p>
+      )}
+      <p className="text-xs text-muted-foreground">Select the category that best describes your business.</p>
+    </div>
   )
 }
 
@@ -166,10 +266,8 @@ export default function ProfileSetupPage() {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  // Helper to get supplier as Supplier type
   const getSupplier = (): Supplier | null => {
     if (!supplierData) return null
-    // The supplier data is the supplier object directly
     return supplierData as unknown as Supplier
   }
 
@@ -295,8 +393,7 @@ export default function ProfileSetupPage() {
 
   const categories = categoriesData?.data || []
 
-  // Calculate supplier profile completion percentage
-  const calculateCompletionPercentage = () => {
+  const completionPercentage = useMemo(() => {
     if (!existingSupplier) return 0
 
     const fields: (keyof Supplier)[] = [
@@ -313,9 +410,8 @@ export default function ProfileSetupPage() {
     })
 
     return Math.round((filled.length / fields.length) * 100)
-  }
+  }, [existingSupplier])
 
-  const completionPercentage = calculateCompletionPercentage()
   const isSupplierProfileComplete = completionPercentage === 100
 
   // Show loading state
@@ -324,7 +420,8 @@ export default function ProfileSetupPage() {
       <PageTemplate
         title="Supplier Profile Setup"
         description="Setting up your supplier profile"
-        icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        icon={<Building2 className="h-5 w-5 text-blue-600" />}
+        background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex flex-col items-center gap-4">
@@ -342,9 +439,10 @@ export default function ProfileSetupPage() {
       <PageTemplate
         title="Supplier Profile Setup"
         description="Supplier profile setup"
-        icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        icon={<Building2 className="h-5 w-5 text-blue-600" />}
+        background="gradient"
       >
-        <Card>
+        <Card className="max-w-md mx-auto border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
           <CardContent className="pt-6 text-center py-12">
             <div className="mx-auto w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center mb-4">
               <AlertCircle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
@@ -365,7 +463,12 @@ export default function ProfileSetupPage() {
     <PageTemplate
       title="Supplier Profile Setup"
       description={isEditing ? 'Update your company information' : 'Complete your supplier profile to start receiving procurement opportunities'}
-      icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Building2 className="h-5 w-5 text-blue-600" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Profile Setup' },
+      ]}
       actions={
         <div className="flex items-center gap-3">
           <SupplierProfileStatus
@@ -377,7 +480,7 @@ export default function ProfileSetupPage() {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="gap-2 h-9"
+            className="gap-2 h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
             Refresh
@@ -389,15 +492,15 @@ export default function ProfileSetupPage() {
       <UserProfileCard user={user} />
 
       {/* Form Card */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-4">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
+        <CardHeader className="border-b border-gray-200/50 dark:border-gray-700/50">
           <CardTitle className="flex items-center gap-2.5 text-xl">
-            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-              <Briefcase className="h-5 w-5 text-blue-600" />
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20">
+              <Briefcase className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             {isEditing ? 'Update Your Supplier Profile' : 'Complete Your Supplier Profile'}
           </CardTitle>
-          <CardDescription className="text-sm">
+          <CardDescription className="text-sm text-muted-foreground">
             {isEditing
               ? 'Update your company information to continue as a supplier'
               : 'Fill in your company details to complete your supplier profile'
@@ -406,17 +509,17 @@ export default function ProfileSetupPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <Alert variant="destructive" className="mb-6">
+            <Alert variant="destructive" className="mb-6 rounded-xl border-red-200 dark:border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {success && (
-            <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
+            <Alert className="mb-6 rounded-xl border-green-500/50 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
-                {isEditing ? 'Supplier profile updated successfully!' : 'Supplier profile created successfully!'}
+                ✅ {isEditing ? 'Supplier profile updated successfully!' : 'Supplier profile created successfully!'}
                 {' '}Redirecting to dashboard...
               </AlertDescription>
             </Alert>
@@ -427,7 +530,7 @@ export default function ProfileSetupPage() {
               {/* Company Name */}
               <div className="space-y-2">
                 <Label htmlFor="company_name" className="flex items-center gap-2 text-sm font-medium">
-                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
                   Company Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -437,7 +540,7 @@ export default function ProfileSetupPage() {
                   onChange={(e) => handleChange('company_name', e.target.value)}
                   disabled={isLoading || success}
                   className={cn(
-                    "h-10",
+                    "h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700",
                     formErrors.company_name && "border-red-500 focus-visible:ring-red-500"
                   )}
                 />
@@ -449,7 +552,7 @@ export default function ProfileSetupPage() {
               {/* Company Email */}
               <div className="space-y-2">
                 <Label htmlFor="company_email" className="flex items-center gap-2 text-sm font-medium">
-                  <Mail className="h-4 w-4 text-gray-400" />
+                  <Mail className="h-4 w-4 text-muted-foreground" />
                   Company Email <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -460,7 +563,7 @@ export default function ProfileSetupPage() {
                   onChange={(e) => handleChange('company_email', e.target.value)}
                   disabled={isLoading || success}
                   className={cn(
-                    "h-10",
+                    "h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700",
                     formErrors.company_email && "border-red-500 focus-visible:ring-red-500"
                   )}
                 />
@@ -472,7 +575,7 @@ export default function ProfileSetupPage() {
               {/* Company Phone */}
               <div className="space-y-2">
                 <Label htmlFor="company_phone" className="flex items-center gap-2 text-sm font-medium">
-                  <Phone className="h-4 w-4 text-gray-400" />
+                  <Phone className="h-4 w-4 text-muted-foreground" />
                   Company Phone
                 </Label>
                 <Input
@@ -481,14 +584,14 @@ export default function ProfileSetupPage() {
                   value={formData.company_phone}
                   onChange={(e) => handleChange('company_phone', e.target.value)}
                   disabled={isLoading || success}
-                  className="h-10"
+                  className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
                 />
               </div>
 
               {/* Company Registration */}
               <div className="space-y-2">
                 <Label htmlFor="company_registration" className="flex items-center gap-2 text-sm font-medium">
-                  <Hash className="h-4 w-4 text-gray-400" />
+                  <Hash className="h-4 w-4 text-muted-foreground" />
                   Registration Number <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -498,7 +601,7 @@ export default function ProfileSetupPage() {
                   onChange={(e) => handleChange('company_registration', e.target.value)}
                   disabled={isLoading || success}
                   className={cn(
-                    "h-10",
+                    "h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700",
                     formErrors.company_registration && "border-red-500 focus-visible:ring-red-500"
                   )}
                 />
@@ -510,7 +613,7 @@ export default function ProfileSetupPage() {
               {/* Company Website */}
               <div className="space-y-2">
                 <Label htmlFor="company_website" className="flex items-center gap-2 text-sm font-medium">
-                  <Globe className="h-4 w-4 text-gray-400" />
+                  <Globe className="h-4 w-4 text-muted-foreground" />
                   Company Website
                 </Label>
                 <Input
@@ -520,7 +623,7 @@ export default function ProfileSetupPage() {
                   onChange={(e) => handleChange('company_website', e.target.value)}
                   disabled={isLoading || success}
                   className={cn(
-                    "h-10",
+                    "h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700",
                     formErrors.company_website && "border-red-500 focus-visible:ring-red-500"
                   )}
                 />
@@ -532,7 +635,7 @@ export default function ProfileSetupPage() {
               {/* Tax ID */}
               <div className="space-y-2">
                 <Label htmlFor="tax_id" className="flex items-center gap-2 text-sm font-medium">
-                  <FileText className="h-4 w-4 text-gray-400" />
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                   Tax ID
                 </Label>
                 <Input
@@ -541,52 +644,25 @@ export default function ProfileSetupPage() {
                   value={formData.tax_id}
                   onChange={(e) => handleChange('tax_id', e.target.value)}
                   disabled={isLoading || success}
-                  className="h-10"
+                  className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
                 />
               </div>
 
               {/* Category - Full width */}
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="category" className="flex items-center gap-2 text-sm font-medium">
-                  <Briefcase className="h-4 w-4 text-gray-400" />
-                  Business Category <span className="text-red-500">*</span>
-                </Label>
-                <Select
+              <div className="md:col-span-2">
+                <CategorySelector
                   value={formData.category}
-                  onValueChange={(value) => handleChange('category', value)}
+                  onChange={(value) => handleChange('category', value)}
+                  error={formErrors.category}
                   disabled={isLoading || success}
-                >
-                  <SelectTrigger className={cn(
-                    "h-10",
-                    formErrors.category && "border-red-500 focus-visible:ring-red-500"
-                  )}>
-                    <SelectValue placeholder="Select your business category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.length > 0 ? (
-                      categories.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <>
-                        <SelectItem value="goods">Goods</SelectItem>
-                        <SelectItem value="services">Services</SelectItem>
-                        <SelectItem value="both">Both</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                {formErrors.category && (
-                  <p className="text-sm text-red-500">{formErrors.category}</p>
-                )}
+                  categories={categories}
+                />
               </div>
 
               {/* Company Address - Full width */}
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="company_address" className="flex items-center gap-2 text-sm font-medium">
-                  <MapPin className="h-4 w-4 text-gray-400" />
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
                   Company Address <span className="text-red-500">*</span>
                 </Label>
                 <Textarea
@@ -596,7 +672,7 @@ export default function ProfileSetupPage() {
                   onChange={(e) => handleChange('company_address', e.target.value)}
                   disabled={isLoading || success}
                   className={cn(
-                    "min-h-[80px] resize-none",
+                    "min-h-[80px] resize-none rounded-xl dark:bg-gray-900 dark:border-gray-700",
                     formErrors.company_address && "border-red-500 focus-visible:ring-red-500"
                   )}
                   rows={3}
@@ -607,13 +683,13 @@ export default function ProfileSetupPage() {
               </div>
             </div>
 
-            <Separator />
+            <Separator className="dark:bg-gray-700" />
 
             {/* Submit Buttons */}
             <div className="flex items-center gap-3">
               <Button
                 type="submit"
-                className="gap-2 px-8 min-w-[140px]"
+                className="gap-2 px-8 min-w-[140px] h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
                 disabled={isLoading || success}
               >
                 {isLoading ? (
@@ -634,7 +710,7 @@ export default function ProfileSetupPage() {
                   variant="outline"
                   onClick={() => router.push('/dashboard')}
                   disabled={isLoading}
-                  className="gap-2"
+                  className="gap-2 h-12 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -643,10 +719,19 @@ export default function ProfileSetupPage() {
             </div>
           </form>
         </CardContent>
-        <CardFooter className="border-t border-gray-200 dark:border-gray-700 py-4 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            <span className="text-red-500">*</span> Required fields. Your information will be reviewed by administrators.
-          </p>
+        <CardFooter className="border-t border-gray-200/50 dark:border-gray-700/50 py-4 px-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-b-xl">
+          <div className="flex justify-between items-center w-full">
+            <p className="text-xs text-muted-foreground">
+              <span className="text-red-500">*</span> Required fields. Your information will be reviewed by administrators.
+            </p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-[10px] rounded-full px-2.5 py-0">
+                  Secure
+                </Badge>
+              </span>
+            </div>
+          </div>
         </CardFooter>
       </Card>
     </PageTemplate>

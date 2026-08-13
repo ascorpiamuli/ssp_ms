@@ -10,7 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
 
-abstract class BaseProcurementNotification extends Notification implements ShouldQueue
+abstract class BaseProcurementNotification extends Notification
 {
   use Queueable;
 
@@ -21,7 +21,12 @@ abstract class BaseProcurementNotification extends Notification implements Shoul
   public function __construct(array $data = [])
   {
     $this->data = $data;
-    $this->requisitionId = $data['requisition_id'] ?? null;
+
+    // Handle requisition_id - convert to string if it exists
+    $this->requisitionId = isset($data['requisition_id'])
+      ? (string) $data['requisition_id']
+      : null;
+
     $this->referenceNumber = $data['reference_number'] ?? null;
     $this->onQueue('notifications');
   }
@@ -75,6 +80,24 @@ abstract class BaseProcurementNotification extends Notification implements Shoul
     ];
   }
 
+  /**
+   * Get the database notification representation.
+   */
+  public function toDatabase($notifiable): array
+  {
+    return [
+      'type' => $this->getType(),
+      'title' => $this->getTitle(),
+      'message' => $this->getMessage(),
+      'requisition_id' => $this->requisitionId,
+      'reference_number' => $this->referenceNumber,
+      'data' => $this->data,
+      'action_url' => $this->getActionUrl(),
+      'action_text' => $this->getActionText(),
+      'created_at' => now()->toDateTimeString(),
+    ];
+  }
+
   abstract protected function getType(): string;
   abstract protected function getTitle(): string;
   abstract protected function getMessage(): string;
@@ -86,7 +109,7 @@ abstract class BaseProcurementNotification extends Notification implements Shoul
 
   protected function getGreeting($notifiable): string
   {
-    $name = $notifiable->full_name ?? 'User';
+    $name = $notifiable->full_name ?? $notifiable->name ?? 'User';
     return "Hello {$name},";
   }
 

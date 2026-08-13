@@ -51,14 +51,29 @@ class RequisitionResource extends JsonResource
       'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
       'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
 
-      // ✅ User with avatar_url
+      // ✅ User with role label and description
       'user' => $this->whenLoaded('user', function () {
+        $user = $this->user;
+
+        // Get the user's primary role with label and description
+        $primaryRole = $user->roles()->first();
+
         return [
-          'id' => $this->user->id,
-          'full_name' => $this->user->full_name,
-          'email' => $this->user->email,
-          'avatar_url' => $this->user->avatar_url ?? null,
-          'avatar' => $this->user->avatar ?? null, // Fallback field name
+          'id' => $user->id,
+          'full_name' => $user->full_name,
+          'email' => $user->email,
+          'avatar_url' => $user->avatar_url ?? null,
+          'avatar' => $user->avatar ?? null,
+          'role' => $primaryRole ? $primaryRole->name : null,
+          'role_label' => $primaryRole ? ($primaryRole->label ?? null) : null,
+          'role_description' => $primaryRole ? ($primaryRole->description ?? null) : null,
+          'roles' => $user->roles->map(function ($role) {
+            return [
+              'name' => $role->name,
+              'label' => $role->label,
+              'description' => $role->description,
+            ];
+          })->toArray(),
         ];
       }),
 
@@ -107,7 +122,7 @@ class RequisitionResource extends JsonResource
         });
       }, []),
 
-      // ✅ APPROVALS - Loaded from relationship
+      // ✅ APPROVALS - Loaded from relationship with role labels
       'approvals' => $this->whenLoaded('approvals', function () {
         return $this->approvals->map(function ($approval) {
           return [
@@ -120,6 +135,8 @@ class RequisitionResource extends JsonResource
               'email' => $approval->approver->email,
               'avatar_url' => $approval->approver->avatar_url ?? null,
               'avatar' => $approval->approver->avatar ?? null,
+              'role' => $approval->approver->roles->first() ? $approval->approver->roles->first()->name : null,
+              'role_label' => $approval->approver->roles->first() ? ($approval->approver->roles->first()->label ?? null) : null,
             ] : null,
             'delegate_id' => $approval->delegate_id,
             'delegate' => $approval->delegate ? [
@@ -128,6 +145,8 @@ class RequisitionResource extends JsonResource
               'email' => $approval->delegate->email,
               'avatar_url' => $approval->delegate->avatar_url ?? null,
               'avatar' => $approval->delegate->avatar ?? null,
+              'role' => $approval->delegate->roles->first() ? $approval->delegate->roles->first()->name : null,
+              'role_label' => $approval->delegate->roles->first() ? ($approval->delegate->roles->first()->label ?? null) : null,
             ] : null,
             'level' => $approval->level,
             'level_name' => $approval->level_name ?? $approval->level,

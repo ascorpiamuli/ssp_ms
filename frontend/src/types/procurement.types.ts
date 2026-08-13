@@ -1,6 +1,7 @@
 // frontend/src/types/procurement.types.ts
 
 import { ApiResponse } from './common.types';
+import { Requisition } from './requisition.types';
 
 export type ProcurementStatus =
   | 'not_started'
@@ -94,3 +95,29 @@ export type ProcurementStatusResponseData = ApiResponse<ProcurementStatusRespons
 export type ProcurementSummaryResponse = ApiResponse<ProcurementSummary>;
 export type ProcurementMetricsResponse = ApiResponse<ProcurementMetrics>;
 export type ProcurementTimelineResponse = ApiResponse<ProcurementTimelineItem[]>;
+export interface ProcurementStatistics {
+  ready_for_procurement: number;
+  has_qtns: number;
+  with_qtns: number;
+  without_qtns: number;
+  in_progress: number;
+  completed: number;
+  total: number;
+}
+
+export interface RequisitionWithQtn extends Requisition {
+  qtn?: {
+    id: number;
+    qtn_number: string;
+    status: string;
+    created_at: string;
+    closing_date: string;
+  };
+}
+
+export interface ReadyRequisitionFilters {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  department_id?: number;
+}

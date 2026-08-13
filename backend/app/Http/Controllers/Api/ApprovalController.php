@@ -90,18 +90,34 @@ class ApprovalController extends Controller
         'message' => 'Approval processed successfully'
       ]);
     } catch (ApprovalException $e) {
+      $statusCode = $e->getCode() ?: 400;
+
+      // ✅ Map specific exception types to 422 status code
+      // Check if this is a sequential order violation or validation error
+      $message = $e->getMessage();
+      if (
+        str_contains($message, 'previous level') ||
+        str_contains($message, 'not yet approved') ||
+        str_contains($message, 'sequential') ||
+        str_contains($message, 'order') ||
+        $e->getCode() === 422
+      ) {
+        $statusCode = 422;
+      }
+
       Log::warning('ApprovalController::process - ApprovalException', [
         'requisition_id' => $requisitionId,
         'level' => $level,
         'message' => $e->getMessage(),
-        'context' => $e->getContext()
+        'context' => $e->getContext(),
+        'status_code' => $statusCode
       ]);
 
       return response()->json([
         'success' => false,
         'message' => $e->getMessage(),
         'errors' => $e->getContext()
-      ], $e->getCode() ?: 400);
+      ], $statusCode);
     } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
       Log::warning('ApprovalController::process - Model not found', [
         'requisition_id' => $requisitionId,
@@ -112,6 +128,18 @@ class ApprovalController extends Controller
         'success' => false,
         'message' => 'Approval not found'
       ], 404);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('ApprovalController::process - Validation Exception', [
+        'requisition_id' => $requisitionId,
+        'level' => $level,
+        'errors' => $e->errors()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors()
+      ], 422);
     } catch (\Exception $e) {
       Log::error('ApprovalController::process - Failed', [
         'requisition_id' => $requisitionId,
@@ -156,16 +184,31 @@ class ApprovalController extends Controller
         'message' => 'Approval delegated successfully'
       ]);
     } catch (ApprovalException $e) {
+      $statusCode = $e->getCode() ?: 400;
+
+      // ✅ Map specific exception types to 422 status code
+      $message = $e->getMessage();
+      if (
+        str_contains($message, 'delegate') ||
+        str_contains($message, 'already delegated') ||
+        str_contains($message, 'cannot delegate') ||
+        $e->getCode() === 422
+      ) {
+        $statusCode = 422;
+      }
+
       Log::warning('ApprovalController::delegate - ApprovalException', [
         'approval_id' => $approvalId,
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'context' => $e->getContext(),
+        'status_code' => $statusCode
       ]);
 
       return response()->json([
         'success' => false,
         'message' => $e->getMessage(),
         'errors' => $e->getContext()
-      ], $e->getCode() ?: 400);
+      ], $statusCode);
     } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
       Log::warning('ApprovalController::delegate - Model not found', [
         'approval_id' => $approvalId
@@ -281,6 +324,7 @@ class ApprovalController extends Controller
       ], 500);
     }
   }
+
   /**
    * Get pending approvals for the authenticated user.
    * ✅ Maps display names (e.g., "head of institution") to database level names (e.g., "principal")

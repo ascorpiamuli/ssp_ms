@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   History,
@@ -51,6 +51,13 @@ import {
   Receipt,
   FileCheck,
   TrendingUp,
+  Sparkles,
+  ChevronRight,
+  Activity,
+  Package,
+  Shield,
+  Award as AwardIcon,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,6 +91,7 @@ import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 
 // Hooks
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -92,6 +100,9 @@ import {
   useRequisitionHistory,
 } from '@/hooks/useRequisitionQueries';
 import { useDepartments } from '@/hooks/useDepartments';
+import {
+  useProcurementSummary,
+} from '@/hooks/useProcurement';
 
 // Types
 import type { Requisition, RequisitionFilters, RequisitionHistory } from '@/types/requisition.types';
@@ -100,34 +111,52 @@ import type { Requisition, RequisitionFilters, RequisitionHistory } from '@/type
 // CONSTANTS
 // ============================================
 
+const ROLE_LABELS: Record<string, string> = {
+  'ADMIN': 'Administrator',
+  'HOD': 'Head of Department',
+  'ACCOUNTANT': 'Accountant/Finance',
+  'HEAD OF INSTITUTION': 'Principal/Head of Institution',
+  'FINAL_APPROVER': 'Director/Finance Administrator',
+  'PROCUREMENT': 'Procurement Officer',
+  'SUPPLIER': 'Supplier/Vendor',
+  'AUDITOR': 'Auditorial Staff Officer',
+  'SUPER_ADMIN': 'Super Administrator',
+};
+
+const getRoleLabel = (roleName: string): string => {
+  if (!roleName) return 'Unknown Role';
+  const upperRole = roleName.toUpperCase();
+  return ROLE_LABELS[upperRole] || roleName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
 const APPROVAL_LEVELS = [
-  { key: 'hod', label: 'HOD', icon: UserCog, color: 'blue' },
-  { key: 'accountant', label: 'Accountant', icon: CreditCard, color: 'indigo' },
-  { key: 'principal', label: 'Principal', icon: Crown, color: 'purple' },
-  { key: 'final', label: 'Final Approver', icon: Award, color: 'green' },
+  { key: 'hod', label: 'HOD', fullLabel: 'Head of Department', icon: UserCog, color: 'blue' },
+  { key: 'accountant', label: 'Accountant', fullLabel: 'Accountant/Finance', icon: CreditCard, color: 'indigo' },
+  { key: 'principal', label: 'Principal', fullLabel: 'Principal/Head of Institution', icon: Crown, color: 'purple' },
+  { key: 'final', label: 'Final Approver', fullLabel: 'Director/Finance Administrator', icon: Award, color: 'green' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-  submitted: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  hod_approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  hod_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  accountant_approved: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-  accountant_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  principal_approved: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  principal_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  final_approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  final_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  returned: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  revised: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  cancelled: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+  submitted: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+  hod_approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+  hod_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+  accountant_approved: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+  accountant_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+  principal_approved: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+  principal_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+  final_approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
+  final_declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+  returned: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  revised: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+  cancelled: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-700',
 };
 
-const PRIORITY_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
-  low: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: Leaf, label: 'Low' },
-  medium: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', icon: MinusCircle, label: 'Medium' },
-  high: { color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', icon: Flame, label: 'High' },
-  emergency: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: Zap, label: 'Emergency' },
+const PRIORITY_CONFIG: Record<string, { color: string; icon: any; label: string; bg: string }> = {
+  low: { color: 'text-blue-600 dark:text-blue-400', icon: Leaf, label: 'Low', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+  medium: { color: 'text-yellow-600 dark:text-yellow-400', icon: MinusCircle, label: 'Medium', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
+  high: { color: 'text-orange-600 dark:text-orange-400', icon: Flame, label: 'High', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+  emergency: { color: 'text-red-600 dark:text-red-400', icon: Zap, label: 'Emergency', bg: 'bg-red-50 dark:bg-red-950/30' },
 };
 
 const HISTORY_ACTION_CONFIG: Record<string, { color: string; icon: any; label: string; description: string }> = {
@@ -136,30 +165,69 @@ const HISTORY_ACTION_CONFIG: Record<string, { color: string; icon: any; label: s
   submitted: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', icon: Send, label: 'Submitted', description: 'Requisition was submitted for approval' },
   hod_approved: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: UserCheck, label: 'HOD Approved', description: 'Approved by Head of Department' },
   hod_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: UserX, label: 'HOD Declined', description: 'Declined by Head of Department' },
-  accountant_approved: { color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800', icon: CreditCard, label: 'Accountant Approved', description: 'Approved by Accountant' },
-  accountant_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: CreditCard, label: 'Accountant Declined', description: 'Declined by Accountant' },
-  principal_approved: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: Crown, label: 'Principal Approved', description: 'Approved by Principal' },
-  principal_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: Crown, label: 'Principal Declined', description: 'Declined by Principal' },
-  final_approved: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', icon: Award, label: 'Final Approved', description: 'Final approval granted' },
-  final_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: Award, label: 'Final Declined', description: 'Final approval declined' },
+  accountant_approved: { color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800', icon: CreditCard, label: 'Accountant Approved', description: 'Approved by Accountant/Finance' },
+  accountant_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: CreditCard, label: 'Accountant Declined', description: 'Declined by Accountant/Finance' },
+  principal_approved: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: Crown, label: 'Principal Approved', description: 'Approved by Principal/Head of Institution' },
+  principal_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: Crown, label: 'Principal Declined', description: 'Declined by Principal/Head of Institution' },
+  final_approved: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', icon: Award, label: 'Final Approved', description: 'Final approval granted by Director/Finance Administrator' },
+  final_declined: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: Award, label: 'Final Declined', description: 'Final approval declined by Director/Finance Administrator' },
   returned: { color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800', icon: RotateCcw, label: 'Returned', description: 'Returned for revision' },
   cancelled: { color: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-700', icon: X, label: 'Cancelled', description: 'Requisition was cancelled' },
   commented: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: MessageSquare, label: 'Commented', description: 'Comment added to requisition' },
   revised: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: Edit, label: 'Revised', description: 'Requisition was revised' },
   escalated: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: AlertCircle, label: 'Escalated', description: 'Requisition was escalated' },
   delegated: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: User, label: 'Delegated', description: 'Approval was delegated' },
-  item_added: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', icon: Box, label: 'Item Added', description: 'Item was added to requisition' },
-  item_removed: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: Box, label: 'Item Removed', description: 'Item was removed from requisition' },
-  item_updated: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', icon: Edit, label: 'Item Updated', description: 'Item details were updated' },
-  attachment_added: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: FileText, label: 'Attachment Added', description: 'Attachment was added' },
-  attachment_removed: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: FileText, label: 'Attachment Removed', description: 'Attachment was removed' },
+  procurement_started: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: ShoppingCart, label: 'Procurement Started', description: 'Procurement process initiated' },
+  procurement_completed: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', icon: CheckCircle, label: 'Procurement Completed', description: 'Procurement process completed' },
+  procurement_cancelled: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', icon: X, label: 'Procurement Cancelled', description: 'Procurement was cancelled' },
+  qtn_generated: { color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800', icon: FileCheck, label: 'QTN Generated', description: 'Quotation Request generated' },
+  qtn_sent: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: Send, label: 'QTN Sent', description: 'Quotation Request sent to suppliers' },
+  quote_received: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', icon: Users, label: 'Quote Received', description: 'Supplier quotation received' },
+  supplier_selected: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: CheckCircle, label: 'Supplier Selected', description: 'Supplier selected for procurement' },
+  lpo_generated: { color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', icon: ShoppingCart, label: 'LPO/LSO Generated', description: 'Purchase/Service order generated' },
+  grn_generated: { color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800', icon: Truck, label: 'GRN/SAN Generated', description: 'Goods received note generated' },
+  payment_voucher: { color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800', icon: Receipt, label: 'Payment Voucher', description: 'Payment voucher generated' },
+  cheque_issued: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', icon: DollarSign, label: 'Cheque Issued', description: 'Cheque issued for payment' },
 };
 
 const ITEMS_PER_PAGE = 10;
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPERS
 // ============================================
+
+// Safe get helper for nested properties - returns any with proper fallback
+const safeGet = (obj: any, path: string, fallback: any = null): any => {
+  if (!obj || typeof obj !== 'object') return fallback;
+  const keys = path.split('.');
+  let result = obj;
+  for (const key of keys) {
+    if (result === null || result === undefined || typeof result !== 'object') {
+      return fallback;
+    }
+    result = result[key];
+  }
+  return (result === undefined || result === null) ? fallback : result;
+};
+
+// Safe check if value equals target
+const safeEquals = (obj: any, path: string, target: string): boolean => {
+  const value = safeGet(obj, path, '');
+  return String(value) === target;
+};
+
+// Stage weights for completion calculation
+const STAGE_WEIGHTS: Record<string, number> = {
+  'initiated': 10,
+  'quotation_in_progress': 25,
+  'awaiting_quotations': 30,
+  'evaluating_quotations': 45,
+  'supplier_selected': 60,
+  'goods_receipt_pending': 75,
+  'invoicing_pending': 85,
+  'payment_pending': 95,
+  'completed': 100,
+};
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-KE', {
@@ -245,12 +313,10 @@ const getDeviceName = (userAgent?: string | null): string => {
   return 'Desktop';
 };
 
-// Filter function to exclude drafts from the table display
 const filterSubmittedOnly = (requisitions: Requisition[]): Requisition[] => {
   return requisitions.filter(req => req.status !== 'draft');
 };
 
-// Check if requisition has been declined at any level
 const hasBeenDeclined = (requisition: Requisition): boolean => {
   if (!requisition.approvals) return false;
   return requisition.approvals.some((a: any) =>
@@ -258,28 +324,151 @@ const hasBeenDeclined = (requisition: Requisition): boolean => {
   );
 };
 
-// Check if requisition status is a declined status
 const isDeclinedStatus = (status: string): boolean => {
   const declinedStatuses = ['hod_declined', 'accountant_declined', 'principal_declined', 'final_declined'];
   return declinedStatuses.includes(status);
 };
 
-// Check if procurement has started (based on available fields)
 const hasProcurementStarted = (requisition: Requisition): boolean => {
   return requisition.is_procurement_created === true || requisition.procurement_created_at !== null;
 };
 
-// Check if procurement is complete (payment processed)
 const isProcurementComplete = (requisition: Requisition): boolean => {
-  // Check if the requisition has a payment voucher or cheque recorded
-  // Using available fields - we'll check if there's a payment record
-  // This would come from the backend if we had payment tracking fields
-  // For now, we'll use a combination of fields
   return requisition.is_procurement_created === true &&
     requisition.status === 'final_approved' &&
-    // Check if there's any indication of payment in metadata or through history
     (requisition.metadata?.payment_completed === true ||
       requisition.metadata?.cheque_issued === true);
+};
+
+// Get procurement progress from summary
+const getProcurementProgress = (summary: any): number => {
+  if (!summary) return 0;
+
+  const isCompleted = safeGet(summary, 'procurement.is_completed', false);
+  if (isCompleted) return 100;
+
+  const status = safeGet(summary, 'procurement.status', '');
+  const steps = safeGet(summary, 'procurement.steps', {});
+
+  // Use stage weights if status is known
+  if (status && STAGE_WEIGHTS[status]) {
+    let progress = STAGE_WEIGHTS[status];
+
+    // Add extra progress for completed steps within the stage
+    const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
+    if (status === 'evaluating_quotations' && String(sqStatus) === 'completed') {
+      progress += 5;
+    }
+
+    const pgStatus = safeGet(steps, 'po_generation.status', '');
+    if (status === 'supplier_selected' && (String(pgStatus) === 'completed' || String(pgStatus) === 'in_progress')) {
+      progress += 5;
+    }
+
+    return Math.min(progress, 99);
+  }
+
+  // Fallback: calculate from steps
+  let progress = 0;
+
+  // Quotation step
+  const qtnStatus = safeGet(steps, 'quotation.status', '');
+  if (String(qtnStatus) === 'closed' || String(qtnStatus) === 'completed') {
+    progress += 20;
+  } else if (String(qtnStatus) === 'sent' || String(qtnStatus) === 'responded') {
+    progress += 15;
+  }
+
+  // Supplier quotations step
+  const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
+  const sqReceived = safeGet(steps, 'supplier_quotations.quotes_received', 0);
+  if (String(sqStatus) === 'completed') {
+    progress += 20;
+  } else if (Number(sqReceived) > 0) {
+    progress += 15;
+  }
+
+  // Supplier selection step
+  const ssStatus = safeGet(steps, 'supplier_selection.status', '');
+  if (String(ssStatus) === 'completed') {
+    progress += 20;
+  } else if (String(ssStatus) === 'in_progress') {
+    progress += 10;
+  }
+
+  // PO generation step
+  const pgStatus = safeGet(steps, 'po_generation.status', '');
+  if (String(pgStatus) === 'completed') {
+    progress += 15;
+  } else if (String(pgStatus) === 'in_progress') {
+    progress += 10;
+  }
+
+  // Delivery step
+  const delStatus = safeGet(steps, 'delivery.status', '');
+  if (String(delStatus) === 'completed') {
+    progress += 15;
+  } else if (String(delStatus) === 'in_progress') {
+    progress += 10;
+  }
+
+  // Payment step
+  const payStatus = safeGet(steps, 'payment.status', '');
+  if (String(payStatus) === 'completed') {
+    progress += 10;
+  } else if (String(payStatus) === 'in_progress') {
+    progress += 5;
+  }
+
+  return Math.min(progress, 99);
+};
+
+const getProcurementStatusLabel = (summary: any): string => {
+  if (!summary) return 'Not Started';
+
+  const isCompleted = safeGet(summary, 'procurement.is_completed', false);
+  if (isCompleted) return 'Complete';
+
+  const status = safeGet(summary, 'procurement.status', '');
+  const steps = safeGet(summary, 'procurement.steps', {});
+
+  const statusMap: Record<string, string> = {
+    'initiated': 'Initiated',
+    'quotation_in_progress': 'Quotation in Progress',
+    'awaiting_quotations': 'Awaiting Quotations',
+    'evaluating_quotations': 'Evaluating Quotations',
+    'supplier_selected': 'Supplier Selected',
+    'goods_receipt_pending': 'Goods Receipt Pending',
+    'invoicing_pending': 'Invoicing Pending',
+    'payment_pending': 'Payment Pending',
+    'completed': 'Completed',
+  };
+
+  if (statusMap[status]) return statusMap[status];
+
+  // Fallback based on steps
+  const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
+  const ssStatus = safeGet(steps, 'supplier_selection.status', '');
+  const pgStatus = safeGet(steps, 'po_generation.status', '');
+  const delStatus = safeGet(steps, 'delivery.status', '');
+  const payStatus = safeGet(steps, 'payment.status', '');
+
+  if (String(payStatus) === 'completed') return 'Payment Processed';
+  if (String(delStatus) === 'completed') return 'Goods Received';
+  if (String(pgStatus) === 'completed') return 'LPO/LSO Issued';
+  if (String(ssStatus) === 'completed') return 'Supplier Selected';
+  if (String(sqStatus) === 'completed') return 'Quotes Evaluated';
+  if (String(sqStatus) === 'in_progress') return 'Awaiting Quotes';
+
+  return status?.replace(/_/g, ' ') || 'In Progress';
+};
+
+const getProcurementProgressColor = (progress: number): string => {
+  if (progress >= 80) return 'text-emerald-600 dark:text-emerald-400';
+  if (progress >= 60) return 'text-blue-600 dark:text-blue-400';
+  if (progress >= 40) return 'text-indigo-600 dark:text-indigo-400';
+  if (progress >= 20) return 'text-amber-600 dark:text-amber-400';
+  return 'text-gray-600 dark:text-gray-400';
 };
 
 // ============================================
@@ -292,7 +481,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   const isDeclined = isDeclinedStatus(status);
 
   return (
-    <Badge className={cn("font-medium", colorClass, isDeclined && "line-through")}>
+    <Badge className={cn("font-medium border rounded-full", colorClass, isDeclined && "line-through")}>
       {label}
     </Badge>
   );
@@ -303,78 +492,121 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
   const Icon = config.icon;
 
   return (
-    <Badge variant="outline" className={cn("flex items-center gap-1 text-xs", config.color)}>
+    <Badge variant="outline" className={cn("flex items-center gap-1 text-xs rounded-full", config.bg, config.color)}>
       <Icon className="h-3 w-3" />
       {config.label}
     </Badge>
   );
 };
 
-const ApprovalStatusBadge = ({ status, isDeclined }: { status: string; isDeclined?: boolean }) => {
-  if (isDeclined) {
+// ============================================
+// APPROVAL FLOW BADGE
+// ============================================
+
+interface ApprovalFlowBadgeProps {
+  approvals: any[];
+  status: string;
+}
+
+const ApprovalFlowBadge = ({ approvals, status }: ApprovalFlowBadgeProps) => {
+  if (!approvals || approvals.length === 0) {
     return (
-      <Badge variant="outline" className="flex items-center gap-1.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800">
-        <XCircle className="h-3 w-3" />
-        Declined
+      <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700 rounded-full">
+        <CircleDashed className="h-3 w-3 mr-1" />
+        Waiting
       </Badge>
     );
   }
 
-  const statusConfig: Record<string, { color: string; icon: any; label: string; description: string }> = {
-    approved: {
-      color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
-      icon: CheckCircle,
-      label: 'Approved',
-      description: 'This level has been approved'
-    },
-    pending: {
-      color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
-      icon: Loader2,
-      label: 'Pending',
-      description: 'Awaiting approval from this level'
-    },
-    declined: {
-      color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
-      icon: XCircle,
-      label: 'Declined',
-      description: 'This level has declined the requisition'
-    },
-    returned: {
-      color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
-      icon: RotateCcw,
-      label: 'Returned',
-      description: 'This level has returned for revision'
-    },
-    'not-started': {
-      color: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700',
-      icon: CircleDashed,
-      label: 'Not Started',
-      description: 'Approval process not yet initiated at this level'
-    },
-  };
+  const levelOrder = ['hod', 'accountant', 'principal', 'final'];
+  const sortedApprovals = [...approvals].sort((a, b) => {
+    return levelOrder.indexOf(a.level) - levelOrder.indexOf(b.level);
+  });
 
-  const config = statusConfig[status] || statusConfig['not-started'];
-  const Icon = config.icon;
-  const isPending = status === 'pending';
+  const declinedApproval = sortedApprovals.find(a => a.status === 'declined' || a.status === 'cancelled');
+
+  if (declinedApproval) {
+    const declinedIndex = sortedApprovals.indexOf(declinedApproval);
+    const approvalsToShow = sortedApprovals.slice(0, declinedIndex + 1);
+
+    return (
+      <div className="flex items-center gap-1 flex-wrap">
+        {approvalsToShow.map((approval, index) => {
+          const levelInfo = APPROVAL_LEVELS.find(l => l.key === approval.level);
+          const isDeclined = approval.status === 'declined' || approval.status === 'cancelled';
+          const isApproved = approval.status === 'approved';
+
+          return (
+            <React.Fragment key={approval.id}>
+              <div className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                isApproved && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800",
+                isDeclined && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800",
+                !isApproved && !isDeclined && "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+              )}>
+                {isApproved && <CheckCircle className="h-2.5 w-2.5 mr-0.5" />}
+                {isDeclined && <XCircle className="h-2.5 w-2.5 mr-0.5" />}
+                {!isApproved && !isDeclined && <CircleDashed className="h-2.5 w-2.5 mr-0.5" />}
+                {levelInfo?.label || approval.level}
+              </div>
+              {index < approvalsToShow.length - 1 && (
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+              )}
+            </React.Fragment>
+          );
+        })}
+        {declinedApproval && (
+          <Badge variant="destructive" className="text-[10px] ml-1 rounded-full">
+            <XCircle className="h-2.5 w-2.5 mr-0.5" />
+            Declined
+          </Badge>
+        )}
+      </div>
+    );
+  }
+
+  const allApproved = sortedApprovals.every(a => a.status === 'approved');
+  const pendingApprovals = sortedApprovals.filter(a => a.status === 'pending');
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge variant="outline" className={cn("flex items-center gap-1.5 text-xs font-medium", config.color)}>
-            <Icon className={cn(
-              "h-3 w-3",
-              isPending && "animate-spin"
-            )} />
-            {config.label}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[200px] text-center">
-          <p className="font-medium">{config.label}</p>
-          <p className="text-xs text-muted-foreground">{config.description}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <div className="flex items-center gap-1 flex-wrap">
+      {sortedApprovals.map((approval, index) => {
+        const levelInfo = APPROVAL_LEVELS.find(l => l.key === approval.level);
+        const isApproved = approval.status === 'approved';
+        const isPending = approval.status === 'pending';
+
+        return (
+          <React.Fragment key={approval.id}>
+            <div className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+              isApproved && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800",
+              isPending && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800",
+              !isApproved && !isPending && "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+            )}>
+              {isApproved && <CheckCircle className="h-2.5 w-2.5 mr-0.5" />}
+              {isPending && <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />}
+              {!isApproved && !isPending && <CircleDashed className="h-2.5 w-2.5 mr-0.5" />}
+              {levelInfo?.label || approval.level}
+            </div>
+            {index < sortedApprovals.length - 1 && (
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            )}
+          </React.Fragment>
+        );
+      })}
+      {allApproved && (
+        <Badge className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 ml-1 rounded-full">
+          <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+          Fully Approved
+        </Badge>
+      )}
+      {pendingApprovals.length > 0 && !allApproved && (
+        <Badge className="text-[10px] bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 ml-1 rounded-full">
+          <Clock className="h-2.5 w-2.5 mr-0.5" />
+          {pendingApprovals.length} pending
+        </Badge>
+      )}
+    </div>
   );
 };
 
@@ -387,13 +619,29 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
 
   if (!isFullyApproved) return null;
 
+  const { data: summary, isLoading } = useProcurementSummary(requisition.id, {
+    enabled: isFullyApproved,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+        <span className="text-[10px] text-muted-foreground">Loading...</span>
+      </div>
+    );
+  }
+
   const started = hasProcurementStarted(requisition);
   const complete = isProcurementComplete(requisition);
+  const progress = getProcurementProgress(summary);
+  const statusLabel = getProcurementStatusLabel(summary);
+  const progressColor = getProcurementProgressColor(progress);
 
   if (!started) {
     return (
       <div className="mt-1.5 flex items-center gap-1.5">
-        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800">
+        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 rounded-full">
           <ShoppingCart className="h-3 w-3 mr-1" />
           Ready for Procurement
         </Badge>
@@ -404,7 +652,7 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
   if (complete) {
     return (
       <div className="mt-1.5 flex items-center gap-1.5">
-        <Badge variant="outline" className="text-[10px] bg-green-50 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800">
+        <Badge variant="outline" className="text-[10px] bg-green-50 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800 rounded-full">
           <CheckCircle className="h-3 w-3 mr-1" />
           Procurement Complete
         </Badge>
@@ -413,17 +661,23 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
   }
 
   return (
-    <div className="mt-1.5 flex items-center gap-1.5">
-      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
-        <TrendingUp className="h-3 w-3 mr-1" />
-        Procurement In Progress
-      </Badge>
+    <div className="mt-1.5 space-y-0.5">
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800 rounded-full">
+          <Activity className="h-3 w-3 mr-1" />
+          {statusLabel}
+        </Badge>
+        <span className={cn("text-xs font-medium", progressColor)}>
+          {progress}%
+        </span>
+      </div>
+      <Progress value={progress} className="h-1 w-24 bg-gray-200 dark:bg-gray-700" />
     </div>
   );
 };
 
 // ============================================
-// STATS CARDS - EXCLUDING DRAFTS
+// STATS CARDS
 // ============================================
 
 interface StatsCardsProps {
@@ -432,7 +686,6 @@ interface StatsCardsProps {
 }
 
 const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
-  // ✅ Calculate stats from submitted requisitions only (exclude drafts)
   const stats = useMemo(() => {
     if (!requisitions || requisitions.length === 0) {
       return {
@@ -442,12 +695,12 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
         declined: 0,
         returned: 0,
         cancelled: 0,
-        procurement_started: 0,
-        procurement_complete: 0,
+        readyForProcurement: 0,
+        inProcurement: 0,
+        procurementComplete: 0,
       };
     }
 
-    // ✅ Filter out drafts - only count submitted requisitions
     const submitted = requisitions.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
     const total = submitted.length;
     const pending = submitted.filter(r =>
@@ -466,13 +719,22 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
     const returned = submitted.filter(r => r.status === 'returned').length;
     const cancelled = requisitions.filter(r => r.status === 'cancelled').length;
 
-    // Procurement stats - using available fields
-    const procurementStarted = requisitions.filter(r =>
-      r.status === 'final_approved' && hasProcurementStarted(r)
+    // Procurement stats
+    const readyForProcurement = requisitions.filter(r =>
+      r.status === 'final_approved' &&
+      !hasProcurementStarted(r) &&
+      !isProcurementComplete(r)
+    ).length;
+
+    const inProcurement = requisitions.filter(r =>
+      r.status === 'final_approved' &&
+      hasProcurementStarted(r) &&
+      !isProcurementComplete(r)
     ).length;
 
     const procurementComplete = requisitions.filter(r =>
-      r.status === 'final_approved' && isProcurementComplete(r)
+      r.status === 'final_approved' &&
+      isProcurementComplete(r)
     ).length;
 
     return {
@@ -482,15 +744,11 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
       declined,
       returned,
       cancelled,
-      procurement_started: procurementStarted,
-      procurement_complete: procurementComplete,
+      readyForProcurement,
+      inProcurement,
+      procurementComplete,
     };
   }, [requisitions]);
-
-  // ✅ Log stats
-  useEffect(() => {
-    console.log('📊 StatsCards - Calculated from requisitions (excluding drafts):', stats);
-  }, [stats]);
 
   const statItems = useMemo(() => [
     {
@@ -515,26 +773,33 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
       description: 'Fully approved'
     },
     {
-      label: 'Declined',
-      value: stats.declined,
-      icon: XCircle,
-      color: 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400',
-      description: 'Declined requisitions'
+      label: 'Ready for Procurement',
+      value: stats.readyForProcurement,
+      icon: ShoppingCart,
+      color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400',
+      description: 'Approved, not started'
     },
     {
-      label: 'Returned',
-      value: stats.returned,
-      icon: RotateCcw,
+      label: 'In Procurement',
+      value: stats.inProcurement,
+      icon: Activity,
       color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400',
-      description: 'Returned for revision'
+      description: 'In progress'
+    },
+    {
+      label: 'Procurement Complete',
+      value: stats.procurementComplete,
+      icon: CheckCircle,
+      color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400',
+      description: 'Fully completed'
     },
   ], [stats]);
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i} className="animate-pulse">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="animate-pulse border-0 shadow-sm">
             <CardContent className="p-4">
               <div className="h-4 bg-gray-200 rounded dark:bg-gray-700 w-2/3 mb-2" />
               <div className="h-8 bg-gray-200 rounded dark:bg-gray-700 w-1/2" />
@@ -546,13 +811,13 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {statItems.map((item) => (
-        <Card key={item.label} className="hover:shadow-md transition-shadow">
+        <Card key={item.label} className="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
-              <div className={cn("p-2 rounded-lg", item.color)}>
+              <div className={cn("p-2 rounded-xl", item.color)}>
                 <item.icon className="h-4 w-4" />
               </div>
             </div>
@@ -566,7 +831,7 @@ const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
 };
 
 // ============================================
-// HISTORY DETAILS CARD COMPONENT
+// HISTORY DETAILS CARD
 // ============================================
 
 interface HistoryDetailsCardProps {
@@ -613,7 +878,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
     if (changes.length === 0) return null;
 
     return (
-      <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border dark:border-gray-700">
+      <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border dark:border-gray-700">
         <p className="text-xs font-medium text-muted-foreground mb-2">Changes:</p>
         <div className="space-y-1">
           {changes.map((change) => (
@@ -631,7 +896,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
 
   if (isLoading) {
     return (
-      <Card className="mt-4 dark:bg-gray-800/50">
+      <Card className="mt-4 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
         <CardContent className="p-6">
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
@@ -643,11 +908,11 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
   }
 
   return (
-    <Card className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg dark:bg-gray-800/80">
-      <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40">
+    <Card className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20 rounded-xl">
+      <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 rounded-t-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/50">
               <History className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
@@ -662,7 +927,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
               variant="ghost"
               size="sm"
               onClick={() => refetch()}
-              className="h-8 px-2"
+              className="h-8 px-2 rounded-xl"
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
@@ -670,14 +935,14 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="h-8 px-2"
+              className="h-8 px-2 rounded-xl"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-4 max-h-[500px] overflow-y-auto dark:bg-gray-800/50">
+      <CardContent className="p-4 max-h-[500px] overflow-y-auto">
         {historyItems.length === 0 ? (
           <div className="text-center py-8">
             <History className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
@@ -695,6 +960,13 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
               const Icon = config.icon;
               const isFirst = index === 0;
               const isDeclinedAction = history.action?.includes('declined') || false;
+              const isProcurementAction = history.action?.includes('procurement') ||
+                history.action?.includes('qtn') ||
+                history.action?.includes('lpo') ||
+                history.action?.includes('grn') ||
+                history.action?.includes('supplier');
+
+              const userRoleLabel = history.user?.role_label || getRoleLabel(history.user?.role || '');
 
               return (
                 <motion.div
@@ -703,9 +975,10 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   className={cn(
-                    "border rounded-lg p-4 transition-all hover:shadow-md dark:border-gray-700",
+                    "border rounded-xl p-4 transition-all hover:shadow-md dark:border-gray-700",
                     isFirst && "border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20",
-                    isDeclinedAction && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/20"
+                    isDeclinedAction && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/20",
+                    isProcurementAction && "border-green-200 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20"
                   )}
                 >
                   <div className="flex items-start gap-4">
@@ -718,17 +991,23 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={cn("text-xs font-medium", config.color)}>
+                        <Badge className={cn("text-xs font-medium rounded-full", config.color)}>
                           {config.label}
                         </Badge>
                         {isFirst && (
-                          <Badge variant="default" className="text-[10px] bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">
+                          <Badge variant="default" className="text-[10px] bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800 rounded-full">
                             Latest
                           </Badge>
                         )}
                         {history.is_status_change && history.new_status && (
-                          <Badge variant="outline" className="text-[10px] dark:border-gray-600">
+                          <Badge variant="outline" className="text-[10px] dark:border-gray-600 rounded-full">
                             Status: {history.new_status}
+                          </Badge>
+                        )}
+                        {isProcurementAction && (
+                          <Badge variant="outline" className="text-[10px] border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 rounded-full">
+                            <ShoppingCart className="h-2.5 w-2.5 mr-0.5" />
+                            Procurement
                           </Badge>
                         )}
                       </div>
@@ -738,7 +1017,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                       </p>
 
                       {history.comment && (
-                        <div className="mt-2 bg-muted/30 dark:bg-gray-800/50 rounded-lg p-2 border dark:border-gray-700">
+                        <div className="mt-2 bg-muted/30 dark:bg-gray-800/50 rounded-xl p-2 border dark:border-gray-700">
                           <p className="text-sm flex items-start gap-2">
                             <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                             <span className="dark:text-gray-300">{history.comment}</span>
@@ -757,6 +1036,9 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                               </AvatarFallback>
                             </Avatar>
                             <span>{getFullName(history.user)}</span>
+                            {history.user.role && (
+                              <span className="text-[10px] text-muted-foreground">({userRoleLabel})</span>
+                            )}
                           </div>
                         )}
                         <div className="flex items-center gap-1">
@@ -770,12 +1052,12 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 cursor-help bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded border dark:border-gray-700">
+                                <div className="flex items-center gap-1 cursor-help bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded-full border dark:border-gray-700">
                                   <Globe className="h-3 w-3" />
                                   <span className="font-mono">{history.ip_address}</span>
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent>
+                              <TooltipContent className="rounded-xl">
                                 <p>IP Address: {history.ip_address}</p>
                               </TooltipContent>
                             </Tooltip>
@@ -785,12 +1067,12 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 cursor-help bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded border dark:border-gray-700">
+                                <div className="flex items-center gap-1 cursor-help bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded-full border dark:border-gray-700">
                                   {getDeviceIcon(history.user_agent)}
                                   <span>{getDeviceName(history.user_agent)}</span>
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent className="max-w-xs">
+                              <TooltipContent className="max-w-xs rounded-xl">
                                 <p className="text-xs break-all">{history.user_agent}</p>
                               </TooltipContent>
                             </Tooltip>
@@ -824,13 +1106,13 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <Card className="mb-6 dark:bg-gray-800/50 dark:border-gray-700">
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">Filters</span>
-            <Badge variant="secondary" className="ml-2">
+            <Badge variant="secondary" className="ml-2 rounded-full">
               {Object.keys(filters).filter(key => filters[key as keyof RequisitionFilters]).length}
             </Badge>
           </div>
@@ -839,12 +1121,12 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
               variant="ghost"
               size="sm"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="gap-1"
+              className="gap-1 rounded-xl"
             >
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
               {isExpanded ? 'Hide' : 'Show'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onReset} className="gap-1">
+            <Button variant="ghost" size="sm" onClick={onReset} className="gap-1 rounded-xl">
               <RefreshCw className="h-4 w-4" />
               Reset
             </Button>
@@ -858,7 +1140,7 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
               placeholder="Search requisitions..."
               value={filters.search || ''}
               onChange={(e) => onFilterChange('search', e.target.value)}
-              className="pl-9"
+              className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
 
@@ -866,10 +1148,10 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
             value={filters.status as string || 'all'}
             onValueChange={(value) => onFilterChange('status', value === 'all' ? undefined : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="hod_approved">HOD Approved</SelectItem>
@@ -890,10 +1172,10 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
             value={filters.priority as string || 'all'}
             onValueChange={(value) => onFilterChange('priority', value === 'all' ? undefined : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
               <SelectValue placeholder="All Priorities" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
               <SelectItem value="all">All Priorities</SelectItem>
               <SelectItem value="low">Low</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
@@ -909,10 +1191,10 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
               value={filters.department_id?.toString() || 'all'}
               onValueChange={(value) => onFilterChange('department_id', value === 'all' ? undefined : parseInt(value))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue placeholder="All Departments" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                 <SelectItem value="all">All Departments</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id.toString()}>
@@ -926,14 +1208,14 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
               type="date"
               value={filters.date_from || ''}
               onChange={(e) => onFilterChange('date_from', e.target.value || undefined)}
-              className="h-10"
+              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
             />
 
             <Input
               type="date"
               value={filters.date_to || ''}
               onChange={(e) => onFilterChange('date_to', e.target.value || undefined)}
-              className="h-10"
+              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
         )}
@@ -954,6 +1236,10 @@ interface HistoryTableProps {
   expandedHistoryId: number | null;
   userId?: number;
   userRoles?: string[];
+  currentPage: number;
+  totalItems: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
 const HistoryTable = ({
@@ -964,6 +1250,10 @@ const HistoryTable = ({
   expandedHistoryId,
   userId,
   userRoles = [],
+  currentPage,
+  totalItems,
+  totalPages,
+  onPageChange,
 }: HistoryTableProps) => {
   if (isLoading) {
     return (
@@ -983,12 +1273,6 @@ const HistoryTable = ({
     );
   }
 
-  const getApprovalStatus = (requisition: Requisition, levelKey: string) => {
-    const approval = requisition.approvals?.find((a: any) => a.level === levelKey);
-    if (!approval) return 'not-started';
-    return approval.status;
-  };
-
   const isFullyApproved = (requisition: Requisition) => {
     return requisition.status === 'final_approved';
   };
@@ -1005,13 +1289,12 @@ const HistoryTable = ({
     return hasBeenDeclined(requisition) || isDeclinedStatus(requisition.status);
   };
 
-  // Check if user is Procurement Officer or Accountant
   const canViewProcurement = userRoles.some(role =>
     role === 'procurement' || role === 'accountant' || role === 'admin' || role === 'super_admin'
   );
 
   return (
-    <div className="border rounded-lg overflow-hidden dark:border-gray-700">
+    <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm">
       <ScrollArea className="w-full">
         <Table>
           <TableHeader>
@@ -1020,10 +1303,7 @@ const HistoryTable = ({
               <TableHead className="min-w-[200px]">Requisition</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Priority</TableHead>
-              <TableHead className="text-center min-w-[100px]">HOD</TableHead>
-              <TableHead className="text-center min-w-[100px]">Accountant</TableHead>
-              <TableHead className="text-center min-w-[100px]">Principal</TableHead>
-              <TableHead className="text-center min-w-[100px]">Final Approver</TableHead>
+              <TableHead className="min-w-[300px]">Approval Flow</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-center min-w-[120px]">Actions</TableHead>
             </TableRow>
@@ -1053,7 +1333,7 @@ const HistoryTable = ({
                     onClick={() => onView(req.id)}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {index + 1}
+                      {((currentPage - 1) * ITEMS_PER_PAGE) + index + 1}
                     </TableCell>
                     <TableCell>
                       <div>
@@ -1074,11 +1354,14 @@ const HistoryTable = ({
                           )}>
                             {req.user?.full_name || 'Unknown'}
                             {isOwn && " (You)"}
+                            {req.user?.role && (
+                              <span className="text-[10px] text-muted-foreground"> • {getRoleLabel(req.user.role)}</span>
+                            )}
                           </span>
                         </div>
                         {isDeclined && (
                           <div className="flex items-center gap-1 mt-0.5">
-                            <Badge variant="destructive" className="text-xs">
+                            <Badge variant="destructive" className="text-xs rounded-full">
                               <XCircle className="h-3 w-3 mr-1" />
                               Declined
                             </Badge>
@@ -1086,13 +1369,12 @@ const HistoryTable = ({
                         )}
                         {isCancelledStatus && (
                           <div className="flex items-center gap-1 mt-0.5">
-                            <Badge variant="secondary" className="text-xs bg-gray-200 dark:bg-gray-700">
+                            <Badge variant="secondary" className="text-xs bg-gray-200 dark:bg-gray-700 rounded-full">
                               <XCircle className="h-3 w-3 mr-1" />
                               Cancelled
                             </Badge>
                           </div>
                         )}
-                        {/* Procurement Progress */}
                         <ProcurementProgressIndicator requisition={req} />
                       </div>
                     </TableCell>
@@ -1105,21 +1387,12 @@ const HistoryTable = ({
                     <TableCell>
                       <PriorityBadge priority={req.priority} />
                     </TableCell>
-                    {APPROVAL_LEVELS.map((level) => {
-                      const status = getApprovalStatus(req, level.key);
-                      return (
-                        <TableCell key={level.key} className="text-center">
-                          {isCancelledStatus ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            <ApprovalStatusBadge
-                              status={status}
-                              isDeclined={isDeclined}
-                            />
-                          )}
-                        </TableCell>
-                      );
-                    })}
+                    <TableCell>
+                      <ApprovalFlowBadge
+                        approvals={req.approvals || []}
+                        status={req.status}
+                      />
+                    </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(req.total_amount || 0)}
                     </TableCell>
@@ -1131,7 +1404,7 @@ const HistoryTable = ({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0"
+                                className="h-8 w-8 p-0 rounded-xl"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onView(req.id);
@@ -1140,7 +1413,7 @@ const HistoryTable = ({
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View Details</TooltipContent>
+                            <TooltipContent className="rounded-xl">View Details</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
 
@@ -1151,7 +1424,7 @@ const HistoryTable = ({
                                 variant="ghost"
                                 size="sm"
                                 className={cn(
-                                  "h-8 w-8 p-0",
+                                  "h-8 w-8 p-0 rounded-xl",
                                   isHistoryExpanded ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/50" : ""
                                 )}
                                 onClick={(e) => {
@@ -1162,13 +1435,12 @@ const HistoryTable = ({
                                 <History className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent className="rounded-xl">
                               {isHistoryExpanded ? 'Hide History' : 'View History'}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
 
-                        {/* Show procurement action for approved requisitions */}
                         {isApproved && !isCancelledStatus && canViewProcurement && (
                           <TooltipProvider>
                             <Tooltip>
@@ -1177,7 +1449,7 @@ const HistoryTable = ({
                                   variant="ghost"
                                   size="sm"
                                   className={cn(
-                                    "h-8 w-8 p-0",
+                                    "h-8 w-8 p-0 rounded-xl",
                                     procurementComplete ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400" :
                                       procurementStarted ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400" :
                                         "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400"
@@ -1190,7 +1462,7 @@ const HistoryTable = ({
                                   <ShoppingCart className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>
+                              <TooltipContent className="rounded-xl">
                                 {procurementComplete ? 'Procurement Complete' :
                                   procurementStarted ? 'Continue Procurement' :
                                     'Start Procurement'}
@@ -1203,7 +1475,7 @@ const HistoryTable = ({
                   </TableRow>
                   {isHistoryExpanded && (
                     <TableRow>
-                      <TableCell colSpan={10} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <HistoryDetailsCard
                           requisitionId={req.id}
                           onClose={() => onViewHistory(req.id)}
@@ -1217,6 +1489,35 @@ const HistoryTable = ({
           </TableBody>
         </Table>
       </ScrollArea>
+
+      {/* Pagination */}
+      {totalItems > ITEMS_PER_PAGE && (
+        <div className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-700 bg-muted/30">
+          <p className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} of {totalItems}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="h-8 px-3 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="h-8 px-3 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1240,7 +1541,6 @@ export default function RequisitionHistoryPage() {
   });
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
 
-  // Get user roles
   const userRoles = useMemo(() => {
     const roles: string[] = [];
     if (user?.role) roles.push(user.role.toLowerCase());
@@ -1260,7 +1560,6 @@ export default function RequisitionHistoryPage() {
     return [];
   }, [departmentsData]);
 
-  // ✅ Fetch all requisitions
   const allRequisitionsQuery = useRequisitions(filters);
 
   const responseData = allRequisitionsQuery.data as any;
@@ -1285,11 +1584,9 @@ export default function RequisitionHistoryPage() {
     }
   }
 
-  // ✅ Filter out drafts for the table display only
   const data = filterSubmittedOnly(rawData);
   const isLoading = allRequisitionsQuery.isLoading || departmentsLoading;
 
-  // ✅ Stats are calculated from raw data (excluding drafts)
   const stats = useMemo(() => {
     if (!rawData || rawData.length === 0) {
       return {
@@ -1299,10 +1596,12 @@ export default function RequisitionHistoryPage() {
         declined: 0,
         returned: 0,
         cancelled: 0,
+        readyForProcurement: 0,
+        inProcurement: 0,
+        procurementComplete: 0,
       };
     }
 
-    // ✅ Exclude drafts from stats
     const submitted = rawData.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
     const total = submitted.length;
     const pending = submitted.filter(r =>
@@ -1321,6 +1620,23 @@ export default function RequisitionHistoryPage() {
     const returned = submitted.filter(r => r.status === 'returned').length;
     const cancelled = rawData.filter(r => r.status === 'cancelled').length;
 
+    const readyForProcurement = rawData.filter(r =>
+      r.status === 'final_approved' &&
+      !hasProcurementStarted(r) &&
+      !isProcurementComplete(r)
+    ).length;
+
+    const inProcurement = rawData.filter(r =>
+      r.status === 'final_approved' &&
+      hasProcurementStarted(r) &&
+      !isProcurementComplete(r)
+    ).length;
+
+    const procurementComplete = rawData.filter(r =>
+      r.status === 'final_approved' &&
+      isProcurementComplete(r)
+    ).length;
+
     return {
       total,
       pending,
@@ -1328,22 +1644,18 @@ export default function RequisitionHistoryPage() {
       declined,
       returned,
       cancelled,
+      readyForProcurement,
+      inProcurement,
+      procurementComplete,
     };
   }, [rawData]);
 
-  // ✅ Count procurement ready requisitions
   const procurementReady = useMemo(() => {
     return rawData.filter(r =>
       r.status === 'final_approved' &&
       !isProcurementComplete(r)
     ).length;
   }, [rawData]);
-
-  // ✅ Log stats
-  useEffect(() => {
-    console.log('📊 Raw requisitions:', rawData);
-    console.log('📊 Calculated stats (excluding drafts):', stats);
-  }, [rawData, stats]);
 
   const handleFilterChange = useCallback((key: keyof RequisitionFilters, value: any) => {
     setFilters(prev => ({
@@ -1382,7 +1694,6 @@ export default function RequisitionHistoryPage() {
   const totalItems = data.length;
   const totalPages = meta?.last_page || 1;
 
-  // Check if user is Procurement Officer, Accountant, or Admin
   const canManageProcurement = userRoles.some(role =>
     role === 'procurement' || role === 'accountant' || role === 'admin' || role === 'super_admin'
   );
@@ -1390,8 +1701,14 @@ export default function RequisitionHistoryPage() {
   return (
     <PageTemplate
       title="Requisition History"
-      description="View complete audit trail of all requisitions with detailed activity logs"
+      description="View complete audit trail of all requisitions with detailed activity logs and procurement tracking"
       icon={<History className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Requisitions', href: '/requisitions' },
+        { label: 'History' },
+      ]}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {procurementReady > 0 && canManageProcurement && (
@@ -1399,7 +1716,7 @@ export default function RequisitionHistoryPage() {
               variant="default"
               size="sm"
               onClick={() => router.push('/procurement')}
-              className="gap-2 h-9 bg-blue-600 hover:bg-blue-700"
+              className="gap-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20 rounded-xl"
             >
               <ShoppingCart className="h-4 w-4" />
               Procurement ({procurementReady})
@@ -1409,7 +1726,7 @@ export default function RequisitionHistoryPage() {
             variant="outline"
             size="sm"
             onClick={() => allRequisitionsQuery.refetch()}
-            className="gap-2 h-9"
+            className="gap-2 h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
             disabled={isLoading}
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
@@ -1419,7 +1736,7 @@ export default function RequisitionHistoryPage() {
             variant="default"
             size="sm"
             onClick={() => router.push('/requisitions/create')}
-            className="gap-2 h-9"
+            className="gap-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20 rounded-xl"
           >
             <FileText className="h-4 w-4" />
             New Requisition
@@ -1429,24 +1746,24 @@ export default function RequisitionHistoryPage() {
     >
       {/* Info Banner - Procurement Ready */}
       {procurementReady > 0 && canManageProcurement && (
-        <Card className="mb-6 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+        <Card className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex-shrink-0">
                 <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="flex-1">
                 <p className="font-medium text-blue-700 dark:text-blue-300">
                   {procurementReady} Approved Requisition{procurementReady > 1 ? 's' : ''} Ready for Procurement
                 </p>
-                <p className="text-sm text-blue-600 dark:text-blue-400">
+                <p className="text-sm text-blue-600 dark:text-blue-400/80">
                   These requisitions have been fully approved and can now proceed to the procurement phase.
                   Generate QTN and send to suppliers.
                 </p>
                 <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:shadow-blue-600/10 rounded-xl"
                     onClick={() => router.push('/procurement')}
                   >
                     <TrendingUp className="h-4 w-4 mr-2" />
@@ -1459,7 +1776,6 @@ export default function RequisitionHistoryPage() {
         </Card>
       )}
 
-      {/* ✅ StatsCards excludes drafts */}
       <StatsCards requisitions={rawData} isLoading={isLoading} />
 
       <div className="mt-6">
@@ -1478,35 +1794,11 @@ export default function RequisitionHistoryPage() {
           expandedHistoryId={expandedHistoryId}
           userId={user?.id}
           userRoles={userRoles}
+          currentPage={currentPage}
+          totalItems={totalItems}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
         />
-
-        {totalItems > ITEMS_PER_PAGE && (
-          <div className="mt-6 flex justify-end items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} of {totalItems}
-            </p>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="h-8 px-3"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="h-8 px-3"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </PageTemplate>
   );

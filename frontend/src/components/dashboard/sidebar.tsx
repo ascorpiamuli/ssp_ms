@@ -1,3 +1,5 @@
+// src/components/dashboard/sidebar.tsx
+
 "use client"
 
 import { Logo } from '@/components/ui/logo'
@@ -8,7 +10,8 @@ import {
   ChevronUp,
   Menu,
   X,
-  Dot,
+  Settings,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -17,6 +20,90 @@ import { cn } from '../../lib/utils'
 import { useNavigation } from '@/hooks/useNavigation'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import { useAuthContext } from '@/contexts/AuthContext'
+import { motion, AnimatePresence } from 'framer-motion'
+
+// ============================================
+// ANIMATION VARIANTS
+// ============================================
+
+const sidebarVariants = {
+  expanded: {
+    width: 280,
+    transition: { duration: 0.3 }
+  },
+  collapsed: {
+    width: 72,
+    transition: { duration: 0.3 }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -10 }
+}
+
+const sectionVariants = {
+  hidden: { opacity: 0, height: 0 },
+  visible: {
+    opacity: 1,
+    height: "auto",
+    transition: { duration: 0.3 }
+  },
+  exit: {
+    opacity: 0,
+    height: 0,
+    transition: { duration: 0.2 }
+  }
+}
+
+// ============================================
+// SIDEBAR LOADING SPINNER
+// ============================================
+
+const SidebarLoading = () => (
+  <div className="flex flex-col h-full bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30">
+    <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-center px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50">
+      <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500/20 to-indigo-500/20 animate-pulse" />
+    </div>
+
+    <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3">
+      <div className="space-y-2">
+        {[...Array(6)].map((_, index) => (
+          <div key={index} className="space-y-2">
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="h-4 w-4 rounded bg-gradient-to-r from-blue-200/50 to-indigo-200/50 dark:from-blue-800/30 dark:to-indigo-800/30 animate-pulse" />
+              <div className="flex-1 h-3 rounded bg-gradient-to-r from-blue-200/50 to-indigo-200/50 dark:from-blue-800/30 dark:to-indigo-800/30 animate-pulse" />
+              <div className="h-4 w-4 rounded bg-gradient-to-r from-blue-200/50 to-indigo-200/50 dark:from-blue-800/30 dark:to-indigo-800/30 animate-pulse" />
+            </div>
+            <div className="ml-6 pl-3 border-l-2 border-blue-200/30 dark:border-blue-800/30 space-y-1">
+              {[...Array(3)].map((_, childIndex) => (
+                <div key={childIndex} className="flex items-center gap-3 px-3 py-1.5">
+                  <div className="h-3 w-3 rounded bg-gradient-to-r from-blue-200/40 to-indigo-200/40 dark:from-blue-800/20 dark:to-indigo-800/20 animate-pulse" />
+                  <div className="flex-1 h-2.5 rounded bg-gradient-to-r from-blue-200/40 to-indigo-200/40 dark:from-blue-800/20 dark:to-indigo-800/20 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="flex-shrink-0 border-t border-blue-200/30 dark:border-blue-800/30 p-3 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50">
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500/30 to-indigo-500/30 animate-pulse" />
+        <div className="flex-1 space-y-1">
+          <div className="h-3 w-24 rounded bg-gradient-to-r from-blue-200/50 to-indigo-200/50 dark:from-blue-800/30 dark:to-indigo-800/30 animate-pulse" />
+          <div className="h-2 w-16 rounded bg-gradient-to-r from-blue-200/30 to-indigo-200/30 dark:from-blue-800/20 dark:to-indigo-800/20 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
+// ============================================
+// NAV ITEM COMPONENT
+// ============================================
 
 interface NavItemProps {
   item: any
@@ -24,6 +111,7 @@ interface NavItemProps {
   isActive: boolean
   isMobile?: boolean
   onItemClick?: () => void
+  collapsed?: boolean
 }
 
 function NavItem({
@@ -31,7 +119,8 @@ function NavItem({
   depth = 0,
   isActive,
   isMobile = false,
-  onItemClick
+  onItemClick,
+  collapsed = false
 }: NavItemProps) {
   const pathname = usePathname()
   const hasChildren = item.children && item.children.length > 0
@@ -75,14 +164,20 @@ function NavItem({
 
   // Render child items
   const renderChildren = () => {
-    if (!hasChildren || !isOpen) return null
+    if (!hasChildren || !isOpen || collapsed) return null
 
     return (
-      <div className={cn(
-        "mt-1 space-y-0.5",
-        depth === 0 ? "pl-3" : "pl-2"
-      )}>
-        {item.children.map((child: any) => {
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        variants={sectionVariants}
+        className={cn(
+          "mt-1 space-y-0.5",
+          depth === 0 ? "pl-3" : "pl-2"
+        )}
+      >
+        {item.children.map((child: any, index: number) => {
           const isChildActive = child.href === pathname ||
             (child.href !== '/' && pathname.startsWith(child.href)) ||
             (child.children && child.children.some((gc: any) =>
@@ -91,7 +186,6 @@ function NavItem({
 
           const ChildIcon = child.icon
 
-          // If child has grandchildren, render as nested
           if (child.children && child.children.length > 0) {
             return (
               <NavItem
@@ -101,83 +195,142 @@ function NavItem({
                 isActive={isChildActive}
                 isMobile={isMobile}
                 onItemClick={onItemClick}
+                collapsed={collapsed}
               />
             )
           }
 
           return (
-            <Link
+            <motion.div
               key={child.id || child.name}
-              href={child.href}
-              onClick={handleClick}
-              className={cn(
-                "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group",
-                isChildActive
-                  ? "bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-400 shadow-sm shadow-indigo-500/10"
-                  : "text-gray-600 hover:bg-indigo-50/80 dark:text-gray-300 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400",
-                isMobile && "py-3 text-base",
-                depth > 0 && "pl-8"
-              )}
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+              transition={{ delay: index * 0.05 }}
             >
-              {ChildIcon && (
-                <ChildIcon
-                  className={cn(
-                    "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                    isChildActive && "text-indigo-600 dark:text-indigo-400"
-                  )}
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate">{child.name}</span>
-                </div>
-                {child.description && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                    {child.description}
-                  </p>
+              <Link
+                href={child.href}
+                onClick={handleClick}
+                className={cn(
+                  "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group relative",
+                  isChildActive
+                    ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
+                    : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+                  isMobile && "py-3 text-base",
+                  depth > 0 && "pl-8"
                 )}
-              </div>
-            </Link>
+              >
+                {ChildIcon && (
+                  <ChildIcon
+                    className={cn(
+                      "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
+                      isChildActive && "text-blue-600 dark:text-blue-400"
+                    )}
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate">{child.label || child.name}</span>
+                    {child.badge && (
+                      <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                        {child.badge}
+                      </span>
+                    )}
+                  </div>
+                  {child.description && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                      {child.description}
+                    </p>
+                  )}
+                </div>
+                {!collapsed && isChildActive && (
+                  <motion.div
+                    className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
+                    layoutId="activeIndicator"
+                  />
+                )}
+              </Link>
+            </motion.div>
           )
         })}
-      </div>
+      </motion.div>
+    )
+  }
+
+  // If collapsed, render as icon only
+  if (collapsed) {
+    return (
+      <motion.div variants={itemVariants}>
+        <Link
+          href={item.href}
+          onClick={handleClick}
+          className={cn(
+            "flex items-center justify-center rounded-xl p-2.5 transition-all duration-200 group relative",
+            isActive || hasActiveChild
+              ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm"
+              : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+          )}
+          title={item.label || item.name}
+        >
+          {ItemIcon && <ItemIcon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />}
+          {isActive && (
+            <motion.div
+              className="absolute -right-1 w-0.5 h-6 bg-blue-500 rounded-full shadow-lg shadow-blue-500/30"
+              layoutId="activeIndicator"
+            />
+          )}
+        </Link>
+      </motion.div>
     )
   }
 
   // If this is a child item (depth > 0) without children, render as simple link
   if (depth > 0 && !hasChildren) {
     return (
-      <Link
-        href={item.href}
-        onClick={handleClick}
-        className={cn(
-          "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group",
-          isActive
-            ? "bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-400 shadow-sm shadow-indigo-500/10"
-            : "text-gray-600 hover:bg-indigo-50/80 dark:text-gray-300 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400",
-          isMobile && "py-3 text-base",
-          depth > 0 && "pl-8"
-        )}
-      >
-        {ItemIcon && (
-          <ItemIcon
-            className={cn(
-              "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-              isActive && "text-indigo-600 dark:text-indigo-400"
-            )}
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate">{item.name}</span>
-          </div>
-          {item.description && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-              {item.description}
-            </p>
+      <motion.div variants={itemVariants}>
+        <Link
+          href={item.href}
+          onClick={handleClick}
+          className={cn(
+            "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group",
+            isActive
+              ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
+              : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+            isMobile && "py-3 text-base",
+            depth > 0 && "pl-8"
           )}
-        </div>
-      </Link>
+        >
+          {ItemIcon && (
+            <ItemIcon
+              className={cn(
+                "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
+                isActive && "text-blue-600 dark:text-blue-400"
+              )}
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate">{item.label || item.name}</span>
+              {item.badge && (
+                <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                  {item.badge}
+                </span>
+              )}
+            </div>
+            {item.description && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                {item.description}
+              </p>
+            )}
+          </div>
+          {isActive && !collapsed && (
+            <motion.div
+              className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
+              layoutId="activeIndicator"
+            />
+          )}
+        </Link>
+      </motion.div>
     )
   }
 
@@ -189,8 +342,8 @@ function NavItem({
         className={cn(
           "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group w-full",
           isActive || hasActiveChild
-            ? "bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-400 shadow-sm shadow-indigo-500/10"
-            : "text-gray-600 hover:bg-indigo-50/80 dark:text-gray-300 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400",
+            ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
+            : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
           isMobile && "py-3 text-base",
           depth > 0 && "pl-8"
         )}
@@ -200,11 +353,16 @@ function NavItem({
             <ItemIcon
               className={cn(
                 "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                (isActive || hasActiveChild) && "text-indigo-600 dark:text-indigo-400"
+                (isActive || hasActiveChild) && "text-blue-600 dark:text-blue-400"
               )}
             />
           )}
-          <span className="truncate">{item.name}</span>
+          <span className="truncate">{item.label || item.name}</span>
+          {item.badge && (
+            <span className="flex-shrink-0 ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+              {item.badge}
+            </span>
+          )}
         </div>
         <ChevronDown
           className={cn(
@@ -217,6 +375,10 @@ function NavItem({
     </div>
   )
 }
+
+// ============================================
+// NAV SECTION COMPONENT
+// ============================================
 
 interface NavSectionProps {
   section: any
@@ -300,29 +462,43 @@ function NavSection({
 
   const SectionIcon = section.icon
 
+  // Collapsed view
   if (collapsed && !isMobile) {
     return (
       <div className="space-y-1">
-        {visibleItems.map((item: any) => {
+        {visibleItems.map((item: any, index: number) => {
           const isActive = activeTabId === item.id ||
             item.href === pathname ||
             (item.href !== '/' && pathname.startsWith(item.href))
           const ItemIcon = item.icon
           return (
-            <Link
+            <motion.div
               key={item.id || item.name}
-              href={item.href}
-              onClick={onItemClick}
-              className={cn(
-                "flex items-center justify-center rounded-xl p-3 text-sm font-medium transition-all duration-200 relative group",
-                isActive
-                  ? "bg-indigo-500/25 text-indigo-600 dark:bg-indigo-500/35 dark:text-indigo-400 shadow-lg shadow-indigo-500/25"
-                  : "text-gray-500 hover:bg-indigo-50/80 dark:text-gray-400 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400"
-              )}
-              title={`${item.name} - ${item.description || ''}`}
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+              transition={{ delay: index * 0.05 }}
             >
-              {ItemIcon && <ItemIcon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={onItemClick}
+                className={cn(
+                  "flex items-center justify-center rounded-xl p-2.5 transition-all duration-200 group relative",
+                  isActive
+                    ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm"
+                    : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+                )}
+                title={`${item.label || item.name}${item.description ? ` - ${item.description}` : ''}`}
+              >
+                {ItemIcon && <ItemIcon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />}
+                {isActive && (
+                  <motion.div
+                    className="absolute -right-1 w-0.5 h-6 bg-blue-500 rounded-full shadow-lg shadow-blue-500/30"
+                    layoutId="activeIndicator"
+                  />
+                )}
+              </Link>
+            </motion.div>
           )
         })}
       </div>
@@ -334,107 +510,139 @@ function NavSection({
       <button
         onClick={() => onToggleSection(section.id)}
         className={cn(
-          "flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200",
+          "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200",
           hasActiveItem
-            ? "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/20 shadow-sm"
-            : "text-gray-500 hover:bg-indigo-50/80 dark:text-gray-400 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400"
+            ? "text-blue-700 dark:text-blue-400 bg-blue-500/10 dark:bg-blue-500/15 shadow-sm"
+            : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
         )}
       >
-        <div className="flex items-center space-x-3 min-w-0">
+        <div className="flex items-center space-x-2.5 min-w-0">
           {SectionIcon && (
             <SectionIcon
               className={cn(
                 "h-4 w-4 flex-shrink-0 transition-all duration-200",
-                hasActiveItem && "text-indigo-600 dark:text-indigo-400"
+                hasActiveItem && "text-blue-600 dark:text-blue-400"
               )}
             />
           )}
-          <span className="truncate font-medium">{section.title}</span>
+          <span className="truncate font-medium text-xs">{section.title}</span>
           {section.department && (
-            <span className="text-[10px] bg-indigo-100 dark:bg-indigo-500/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full flex-shrink-0">
+            <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full flex-shrink-0">
               {section.department}
             </span>
           )}
         </div>
-        <div className="flex items-center space-x-2 flex-shrink-0">
-          <span className="text-xs bg-indigo-100 dark:bg-indigo-500/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-medium">
+        <div className="flex items-center space-x-1.5 flex-shrink-0">
+          <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-medium">
             {visibleItems.length}
           </span>
           {isOpen ? (
-            <ChevronUp className="h-4 w-4 flex-shrink-0 transition-transform duration-200" />
+            <ChevronUp className="h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200" />
           ) : (
-            <ChevronDown className="h-4 w-4 flex-shrink-0 transition-transform duration-200" />
+            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200" />
           )}
         </div>
       </button>
 
-      {isOpen && (
-        <div className="space-y-0.5 pl-4 border-l-2 border-indigo-200 dark:border-indigo-500/30 ml-3 animate-slideDown">
-          {visibleItems.map((item: any) => {
-            const isActive = activeTabId === item.id ||
-              item.href === pathname ||
-              (item.href !== '/' && pathname.startsWith(item.href))
+      <AnimatePresence>
+        {isOpen && !collapsed && (
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={sectionVariants}
+            className="space-y-0.5 pl-3 border-l-2 border-blue-200/30 dark:border-blue-500/30 ml-3"
+          >
+            {visibleItems.map((item: any) => {
+              const isActive = activeTabId === item.id ||
+                item.href === pathname ||
+                (item.href !== '/' && pathname.startsWith(item.href))
 
-            if (item.children && item.children.length > 0) {
-              return (
-                <NavItem
-                  key={item.id || item.name}
-                  item={item}
-                  depth={1}
-                  isActive={isActive}
-                  isMobile={isMobile}
-                  onItemClick={onItemClick}
-                />
-              )
-            }
-
-            const ItemIcon = item.icon
-
-            return (
-              <Link
-                key={item.id || item.name}
-                href={item.href}
-                onClick={onItemClick}
-                className={cn(
-                  "flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 group hover:scale-[1.02]",
-                  isActive
-                    ? "bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-400 shadow-sm shadow-indigo-500/10"
-                    : "text-gray-600 hover:bg-indigo-50/80 dark:text-gray-300 dark:hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400",
-                  isMobile && "py-3.5 text-base"
-                )}
-              >
-                {ItemIcon && (
-                  <ItemIcon
-                    className={cn(
-                      "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                      isActive && "text-indigo-600 dark:text-indigo-400"
-                    )}
+              if (item.children && item.children.length > 0) {
+                return (
+                  <NavItem
+                    key={item.id || item.name}
+                    item={item}
+                    depth={1}
+                    isActive={isActive}
+                    isMobile={isMobile}
+                    onItemClick={onItemClick}
+                    collapsed={collapsed}
                   />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{item.name}</span>
-                  </div>
-                  {item.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                      {item.description}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      )}
+                )
+              }
+
+              const ItemIcon = item.icon
+
+              return (
+                <motion.div
+                  key={item.id || item.name}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <Link
+                    href={item.href}
+                    onClick={onItemClick}
+                    className={cn(
+                      "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group hover:scale-[1.02]",
+                      isActive
+                        ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
+                        : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+                      isMobile && "py-3 text-base"
+                    )}
+                  >
+                    {ItemIcon && (
+                      <ItemIcon
+                        className={cn(
+                          "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
+                          isActive && "text-blue-600 dark:text-blue-400"
+                        )}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{item.label || item.name}</span>
+                        {item.badge && (
+                          <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                    {isActive && (
+                      <motion.div
+                        className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
+                        layoutId="activeIndicator"
+                      />
+                    )}
+                  </Link>
+                </motion.div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
+
+// ============================================
+// MAIN SIDEBAR COMPONENT
+// ============================================
 
 export function DashboardSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
 
   const {
@@ -484,6 +692,11 @@ export function DashboardSidebar() {
 
   useEffect(() => {
     setIsInitialized(true)
+    // Simulate loading of navigation items
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+    }, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -497,6 +710,19 @@ export function DashboardSidebar() {
       localStorage.setItem('openSections', JSON.stringify(Array.from(openSections)))
     }
   }, [openSections, isInitialized])
+
+  // Load saved collapsed state
+  useEffect(() => {
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed')
+    if (savedCollapsed !== null) {
+      setCollapsed(JSON.parse(savedCollapsed))
+    }
+  }, [])
+
+  // Save collapsed state
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(collapsed))
+  }, [collapsed])
 
   useEffect(() => {
     if (navigation.length > 0 && !initialLoadDone.current) {
@@ -612,21 +838,65 @@ export function DashboardSidebar() {
     }
   }, [isMobile])
 
-  if (!isInitialized || !userRole) {
+  const toggleCollapse = useCallback(() => {
+    setCollapsed(prev => !prev)
+  }, [])
+
+  // Show loading spinner while navigation is loading
+  if (isLoading || !isInitialized) {
+    return <SidebarLoading />
+  }
+
+  if (!userRole) {
     return null
   }
 
+  const isCollapsed = collapsed && !isMobile
+
   const sidebarContent = (
     <>
-      {/* Header with gradient - Indigo/Purple/Pink theme */}
-      <div className="sticky top-0 z-10 flex-shrink-0 flex h-20 items-center justify-between px-4 border-b border-indigo-200/30 dark:border-indigo-800/30 bg-gradient-to-r from-indigo-50/90 via-purple-50/90 to-pink-50/90 dark:from-indigo-950/50 dark:via-purple-950/50 dark:to-pink-950/50 backdrop-blur-xl">
-        <div className="flex items-center justify-center flex-1">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-between px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50 backdrop-blur-xl">
+        <div className={cn(
+          "flex items-center",
+          isCollapsed ? "justify-center w-full" : "flex-1"
+        )}>
           <Logo
-            collapsed={false}
-            showText={false}
+            collapsed={isCollapsed}
+            showText={!isCollapsed}
             companyLogo={companyLogo}
+            variant="compact"
+            className={cn(
+              "transition-all duration-300",
+              isCollapsed ? "scale-90" : "scale-100"
+            )}
           />
         </div>
+
+        {/* Toggle Button */}
+        {!isMobile && (
+          <button
+            onClick={toggleCollapse}
+            className={cn(
+              "flex items-center justify-center rounded-lg p-1.5",
+              "hover:bg-blue-100/50 dark:hover:bg-blue-800/30",
+              "transition-all duration-200 flex-shrink-0",
+              "text-blue-600 dark:text-blue-400",
+              isCollapsed
+                ? "absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 shadow-lg border border-blue-200/50 dark:border-blue-800/50 z-20"
+                : "relative",
+              "hover:scale-110 active:scale-95"
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+        )}
+
         {isMobile && (
           <button
             onClick={() => setMobileOpen(false)}
@@ -638,14 +908,17 @@ export function DashboardSidebar() {
         )}
       </div>
 
-      {/* Content with gradient - Indigo/Purple/Pink theme */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-3 bg-gradient-to-b from-indigo-50/20 via-white to-purple-50/20 dark:from-indigo-950/10 dark:via-gray-900/50 dark:to-purple-950/10">
-        <div className="space-y-3">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2.5 bg-gradient-to-b from-blue-50/20 via-white to-indigo-50/20 dark:from-blue-950/10 dark:via-gray-900/50 dark:to-indigo-950/10">
+        <div className={cn(
+          "space-y-2",
+          isCollapsed ? "flex flex-col items-center" : ""
+        )}>
           {navigation.map((section) => (
             <NavSection
               key={section.id}
               section={section}
-              collapsed={false}
+              collapsed={isCollapsed}
               isMobile={isMobile}
               userRole={userRole}
               openSections={openSections}
@@ -657,52 +930,45 @@ export function DashboardSidebar() {
         </div>
       </div>
 
-      {/* Footer with gradient - Indigo/Purple/Pink theme */}
-      <div className="flex-shrink-0 border-t border-indigo-200/30 dark:border-indigo-800/30 p-4 bg-gradient-to-r from-indigo-50/90 via-purple-50/90 to-pink-50/90 dark:from-indigo-950/50 dark:via-purple-950/50 dark:to-pink-950/50 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <div className="flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-medium shadow-lg shadow-indigo-500/25">
-              {user?.full_name?.[0] || user?.email?.[0] || 'U'}
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-              {user?.full_name || user?.email || 'User'}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">
-              {userRole || 'Guest'}
-            </p>
-          </div>
-        </div>
-      </div>
     </>
   )
 
   return (
     <>
+      {/* Mobile Menu Button */}
       {isMobile && !mobileOpen && (
         <button
           onClick={() => setMobileOpen(true)}
-          className="fixed top-4 left-4 z-[100] md:hidden bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2.5 rounded-lg shadow-lg border border-indigo-200/50 dark:border-indigo-800/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+          className="fixed top-4 left-4 z-[100] md:hidden bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2.5 rounded-lg shadow-lg border border-blue-200/50 dark:border-blue-800/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
         </button>
       )}
 
-      {isMobile && mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] md:hidden transition-opacity"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      {/* Mobile Overlay */}
+      <AnimatePresence>
+        {isMobile && mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
-      <div
+      {/* Sidebar */}
+      <motion.div
+        initial={false}
+        animate={isCollapsed ? 'collapsed' : 'expanded'}
+        variants={sidebarVariants}
         className={cn(
-          "flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-r border-indigo-200/30 dark:border-indigo-800/30 shadow-xl transition-all duration-300 ease-in-out relative overflow-hidden",
-          !isMobile && "w-80",
+          "flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30 shadow-xl relative overflow-hidden",
+          !isMobile && "h-screen sticky top-0",
           isMobile && cn(
-            "fixed top-0 left-0 h-screen w-80 shadow-2xl z-[200] transition-transform duration-300",
+            "fixed top-0 left-0 h-screen shadow-2xl z-[200]",
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           )
         )}
@@ -710,7 +976,7 @@ export function DashboardSidebar() {
         <div className="relative z-10 flex flex-col h-full w-full">
           {sidebarContent}
         </div>
-      </div>
+      </motion.div>
     </>
   )
 }

@@ -1,4 +1,4 @@
-// app/admin/audit-logs/page.tsx
+// app/(dashboard)/admin/audit-logs/page.tsx
 
 'use client'
 
@@ -30,6 +30,7 @@ import {
   FilterX,
   XCircle as XCircleIcon,
   Loader2,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +71,8 @@ import {
 } from '@/types/audit-log.types'
 import type { AuditLog } from '@/types/audit-log.types'
 import { format } from 'date-fns'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -219,7 +222,7 @@ const StatsCards = ({ stats, isLoading }: { stats: any; isLoading: boolean }) =>
 }
 
 // ============================================
-// VIEW LOG DETAILS MODAL
+// VIEW LOG DETAILS MODAL (Portal Ready)
 // ============================================
 
 const ViewLogModal = ({
@@ -238,16 +241,28 @@ const ViewLogModal = ({
   const displayName = getActionDisplayName(log.action)
   const moduleName = getModuleDisplayName(log.module)
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-5xl w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-5xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Shield className="h-5 w-5 text-blue-600" />
               Audit Log Details
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
               <XCircleIcon className="h-6 w-6" />
             </button>
           </div>
@@ -392,14 +407,25 @@ const ViewLogModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
@@ -462,14 +488,6 @@ export default function AuditLogsPage() {
   const modules = modulesQuery.data
   const actions = actionsQuery.data
 
-  // Debug logging
-  console.log('📊 [AuditLogs] Query data:', {
-    logsQueryData: logsQuery.data,
-    logsCount: logs.length,
-    meta,
-    filters,
-  })
-
   // Handlers
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -527,21 +545,28 @@ export default function AuditLogsPage() {
   // Check permissions
   if (!hasPermission('view_audit_logs') && !isAdmin()) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
-              <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Access Denied
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              You don't have permission to view audit logs.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageTemplate
+        title="Audit Logs"
+        description="View and monitor all system activities"
+        icon={<Shield className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to view audit logs.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
     )
   }
 
@@ -549,7 +574,44 @@ export default function AuditLogsPage() {
     <PageTemplate
       title="Audit Logs"
       description="View and monitor all system activities"
-      icon={<Shield className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Shield className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Audit Logs' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {meta?.total || 0} Logs
+          </Badge>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            size="sm"
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              logsQuery.refetch()
+              statsQuery.refetch()
+              modulesQuery.refetch()
+              actionsQuery.refetch()
+            }}
+            className="gap-2"
+            disabled={logsQuery.isLoading}
+          >
+            <RefreshCw className={cn("h-4 w-4", logsQuery.isLoading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+      }
     >
       {/* Stats */}
       <StatsCards stats={stats} isLoading={statsQuery.isLoading} />
@@ -565,7 +627,7 @@ export default function AuditLogsPage() {
                   placeholder="Search logs..."
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                  className="pl-9"
+                  className="pl-9 dark:bg-gray-900 dark:border-gray-700"
                 />
               </div>
             </div>
@@ -573,7 +635,7 @@ export default function AuditLogsPage() {
               value={filters.module}
               onValueChange={(value) => setFilters({ ...filters, module: value, page: 1 })}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue placeholder="All Modules" />
               </SelectTrigger>
               <SelectContent>
@@ -589,7 +651,7 @@ export default function AuditLogsPage() {
               value={filters.action}
               onValueChange={(value) => setFilters({ ...filters, action: value, page: 1 })}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue placeholder="All Actions" />
               </SelectTrigger>
               <SelectContent>
@@ -604,24 +666,10 @@ export default function AuditLogsPage() {
             <Button
               variant="outline"
               onClick={handleResetFilters}
-              className="gap-2"
+              className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
             >
               <FilterX className="h-4 w-4" />
               Clear
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                logsQuery.refetch()
-                statsQuery.refetch()
-                modulesQuery.refetch()
-                actionsQuery.refetch()
-              }}
-              className="gap-2"
-              disabled={logsQuery.isLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4", logsQuery.isLoading && "animate-spin")} />
-              Refresh
             </Button>
           </div>
         </CardContent>
@@ -649,15 +697,6 @@ export default function AuditLogsPage() {
             </Badge>
           )}
         </div>
-        <Button
-          variant="outline"
-          onClick={handleExport}
-          size="sm"
-          className="gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Export
-        </Button>
       </div>
 
       {/* Logs Table */}
@@ -816,7 +855,7 @@ export default function AuditLogsPage() {
               value={filters.per_page.toString()}
               onValueChange={handlePerPageChange}
             >
-              <SelectTrigger className="w-[80px]">
+              <SelectTrigger className="w-[80px] dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -832,7 +871,7 @@ export default function AuditLogsPage() {
                 size="sm"
                 onClick={() => handlePageChange(filters.page - 1)}
                 disabled={filters.page <= 1}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -845,7 +884,7 @@ export default function AuditLogsPage() {
                 size="sm"
                 onClick={() => handlePageChange(filters.page + 1)}
                 disabled={!meta || filters.page >= (meta?.last_page || 1)}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -854,7 +893,7 @@ export default function AuditLogsPage() {
         </CardFooter>
       </Card>
 
-      {/* View Log Modal */}
+      {/* View Log Modal - Using Portal */}
       <ViewLogModal
         isOpen={showDetailsModal}
         onClose={() => {

@@ -31,15 +31,12 @@ class UserManagementService extends BaseService
 
     // Handle soft delete filter
     if (isset($filters['deleted']) && $filters['deleted'] === 'only') {
-      // Only show soft-deleted users
       $query->onlyTrashed();
       Log::emergency('✅ Showing only deleted (soft-deleted) users');
     } elseif (isset($filters['deleted']) && $filters['deleted'] === 'with') {
-      // Show all users including soft-deleted
       $query->withTrashed();
       Log::emergency('✅ Showing all users including deleted');
     } else {
-      // Default: only show non-deleted users
       $query->whereNull('deleted_at');
       Log::emergency('✅ Default: showing only active (non-deleted) users');
     }
@@ -127,6 +124,32 @@ class UserManagementService extends BaseService
   }
 
   /**
+   * Get all users with formatted role labels.
+   */
+  public function getAllUsersWithRoleLabels(array $filters = [])
+  {
+    $users = $this->getAllUsers($filters);
+
+    // Transform users to include role labels
+    $users->getCollection()->transform(function ($user) {
+      $primaryRole = $user->roles()->first();
+      $user->role_label = $primaryRole ? ($primaryRole->label ?? $this->formatRoleName($primaryRole->name)) : null;
+      $user->role_description = $primaryRole ? $primaryRole->description : null;
+      return $user;
+    });
+
+    return $users;
+  }
+
+  /**
+   * Format role name to human-readable label.
+   */
+  protected function formatRoleName(string $name): string
+  {
+    return ucfirst(str_replace('_', ' ', $name));
+  }
+
+  /**
    * Get user by ID with all relationships.
    */
   public function getUserById(int $id, bool $withTrashed = false): ?User
@@ -148,6 +171,41 @@ class UserManagementService extends BaseService
     $user = $query->find($id);
     Log::emergency('✅ getUserById result', ['found' => $user ? true : false]);
     return $user;
+  }
+
+  /**
+   * Get user by ID with formatted role information.
+   */
+  public function getUserWithRoleInfo(int $id, bool $withTrashed = false): ?array
+  {
+    $user = $this->getUserById($id, $withTrashed);
+    if (!$user) {
+      return null;
+    }
+
+    $primaryRole = $user->roles()->first();
+    $allRoles = $user->roles()->get()->map(function ($role) {
+      return [
+        'id' => $role->id,
+        'name' => $role->name,
+        'label' => $role->label ?? $this->formatRoleName($role->name),
+        'description' => $role->description,
+        'guard_name' => $role->guard_name,
+      ];
+    });
+
+    return [
+      'user' => $user,
+      'primary_role' => $primaryRole ? [
+        'id' => $primaryRole->id,
+        'name' => $primaryRole->name,
+        'label' => $primaryRole->label ?? $this->formatRoleName($primaryRole->name),
+        'description' => $primaryRole->description,
+      ] : null,
+      'all_roles' => $allRoles,
+      'role_names' => $user->getRoleNames(),
+      'permissions' => $user->getAllPermissions()->pluck('name'),
+    ];
   }
 
   /**
@@ -173,16 +231,26 @@ class UserManagementService extends BaseService
         'date_of_birth' => $data['date_of_birth'] ?? null,
         'password' => Hash::make($data['password']),
         'department_id' => $data['department_id'] ?? null,
-        'role' => $data['role'],
         'is_active' => true,
         'is_approved' => $data['is_approved'] ?? false,
         'timezone' => $data['timezone'] ?? 'Africa/Nairobi',
       ]);
 
+      // Assign role by name or label
       if (isset($data['role'])) {
-        $role = Role::where('name', $data['role'])->first();
+        $role = $this->findRole($data['role']);
         if ($role) {
           $user->assignRole($role);
+        }
+      }
+
+      // Assign multiple roles if provided
+      if (isset($data['roles']) && is_array($data['roles'])) {
+        foreach ($data['roles'] as $roleName) {
+          $role = $this->findRole($roleName);
+          if ($role) {
+            $user->assignRole($role);
+          }
         }
       }
 
@@ -195,6 +263,16 @@ class UserManagementService extends BaseService
 
       return $user;
     });
+  }
+
+  /**
+   * Find role by name or label.
+   */
+  protected function findRole(string $roleNameOrLabel): ?Role
+  {
+    return Role::where('name', $roleNameOrLabel)
+      ->orWhere('label', $roleNameOrLabel)
+      ->first();
   }
 
   /**
@@ -214,13 +292,25 @@ class UserManagementService extends BaseService
       'timezone' => $data['timezone'] ?? $user->timezone,
     ]);
 
-    if (isset($data['role']) && $data['role'] !== $user->role) {
-      $user->role = $data['role'];
-      $user->save();
-
-      $role = Role::where('name', $data['role'])->first();
+    // Update role by name or label
+    if (isset($data['role'])) {
+      $role = $this->findRole($data['role']);
       if ($role) {
         $user->syncRoles([$role]);
+      }
+    }
+
+    // Update multiple roles
+    if (isset($data['roles']) && is_array($data['roles'])) {
+      $roles = [];
+      foreach ($data['roles'] as $roleName) {
+        $role = $this->findRole($roleName);
+        if ($role) {
+          $roles[] = $role;
+        }
+      }
+      if (!empty($roles)) {
+        $user->syncRoles($roles);
       }
     }
 
@@ -317,7 +407,7 @@ class UserManagementService extends BaseService
     Log::emergency('🔍 UserManagementService::deleteUser (soft delete)', ['user_id' => $id]);
 
     $user = User::findOrFail($id);
-    $user->delete(); // This sets deleted_at timestamp
+    $user->delete();
 
     Log::emergency('✅ User soft deleted', [
       'user_id' => $id,
@@ -335,7 +425,7 @@ class UserManagementService extends BaseService
     Log::emergency('🔍 UserManagementService::restoreUser', ['user_id' => $id]);
 
     $user = User::withTrashed()->findOrFail($id);
-    $user->restore(); // Removes deleted_at timestamp
+    $user->restore();
 
     Log::emergency('✅ User restored', [
       'user_id' => $id,
@@ -402,9 +492,14 @@ class UserManagementService extends BaseService
   {
     return User::where('is_approved', false)
       ->where('is_active', true)
-      ->with(['department', 'profile'])
+      ->with(['department', 'profile', 'roles'])
       ->orderBy('created_at', 'desc')
-      ->get();
+      ->get()
+      ->map(function ($user) {
+        $primaryRole = $user->roles()->first();
+        $user->role_label = $primaryRole ? ($primaryRole->label ?? $this->formatRoleName($primaryRole->name)) : null;
+        return $user;
+      });
   }
 
   /**
@@ -415,7 +510,12 @@ class UserManagementService extends BaseService
     return User::with(['department', 'roles'])
       ->orderBy('created_at', 'desc')
       ->limit($limit)
-      ->get();
+      ->get()
+      ->map(function ($user) {
+        $primaryRole = $user->roles()->first();
+        $user->role_label = $primaryRole ? ($primaryRole->label ?? $this->formatRoleName($primaryRole->name)) : null;
+        return $user;
+      });
   }
 
   /**
@@ -432,9 +532,15 @@ class UserManagementService extends BaseService
     $approved = User::where('is_approved', true)->count();
     $deleted = User::onlyTrashed()->count();
 
-    // Get counts by role
+    // Get counts by role with labels
     $roles = Role::withCount('users')->get()->mapWithKeys(function ($role) {
-      return [$role->name => $role->users_count];
+      return [
+        $role->name => [
+          'count' => $role->users_count,
+          'label' => $role->label ?? $this->formatRoleName($role->name),
+          'description' => $role->description,
+        ]
+      ];
     })->toArray();
 
     // Get counts by department
@@ -462,6 +568,28 @@ class UserManagementService extends BaseService
     Log::emergency('✅ User stats', $stats);
 
     return $stats;
+  }
+
+  /**
+   * Get users by role.
+   */
+  public function getUsersByRole(string $roleNameOrLabel)
+  {
+    $role = $this->findRole($roleNameOrLabel);
+    if (!$role) {
+      return collect();
+    }
+
+    return User::whereHas('roles', function ($query) use ($role) {
+      $query->where('id', $role->id);
+    })
+      ->with(['department', 'profile'])
+      ->get()
+      ->map(function ($user) use ($role) {
+        $user->role_label = $role->label ?? $this->formatRoleName($role->name);
+        $user->role_description = $role->description;
+        return $user;
+      });
   }
 
   /**
@@ -511,10 +639,27 @@ class UserManagementService extends BaseService
             if (isset($data['role'])) {
               $user = User::find($userId);
               if ($user) {
-                $role = Role::where('name', $data['role'])->first();
+                $role = $this->findRole($data['role']);
                 if ($role) {
                   $user->syncRoles([$role]);
-                  $user->update(['role' => $data['role']]);
+                  $results['success'][] = $userId;
+                }
+              }
+            }
+            break;
+          case 'assign_roles':
+            if (isset($data['roles']) && is_array($data['roles'])) {
+              $user = User::find($userId);
+              if ($user) {
+                $roles = [];
+                foreach ($data['roles'] as $roleName) {
+                  $role = $this->findRole($roleName);
+                  if ($role) {
+                    $roles[] = $role;
+                  }
+                }
+                if (!empty($roles)) {
+                  $user->syncRoles($roles);
                   $results['success'][] = $userId;
                 }
               }
@@ -555,5 +700,52 @@ class UserManagementService extends BaseService
     } catch (\Exception $e) {
       Log::warning('Failed to log user activity', ['error' => $e->getMessage()]);
     }
+  }
+
+  /**
+   * Get available roles for dropdown.
+   */
+  public function getAvailableRoles()
+  {
+    return Role::all()->map(function ($role) {
+      return [
+        'id' => $role->id,
+        'name' => $role->name,
+        'label' => $role->label ?? $this->formatRoleName($role->name),
+        'description' => $role->description,
+      ];
+    });
+  }
+
+  /**
+   * Get user's role information.
+   */
+  public function getUserRoleInfo(int $userId): ?array
+  {
+    $user = User::find($userId);
+    if (!$user) {
+      return null;
+    }
+
+    $primaryRole = $user->roles()->first();
+    if (!$primaryRole) {
+      return [
+        'has_role' => false,
+        'role' => null,
+      ];
+    }
+
+    return [
+      'has_role' => true,
+      'role' => [
+        'id' => $primaryRole->id,
+        'name' => $primaryRole->name,
+        'label' => $primaryRole->label ?? $this->formatRoleName($primaryRole->name),
+        'description' => $primaryRole->description,
+        'permissions' => $primaryRole->permissions->pluck('name')->toArray(),
+      ],
+      'all_roles' => $user->getRoleNames()->toArray(),
+      'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+    ];
   }
 }

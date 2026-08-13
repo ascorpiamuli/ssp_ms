@@ -9,6 +9,8 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Notifications\CustomResetPasswordNotification;
 use App\Notifications\ResetPasswordNotification;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
@@ -32,11 +34,11 @@ class User extends Authenticatable
     'rejection_reason',
     'last_login_at',
     'timezone',
-    'avatar', // Add this
-    'id_number', // Add this
-    'date_of_birth', // Add this
-    'profile_photo', // Add this
-    'avatar_upload_id', // Add this
+    'avatar',
+    'id_number',
+    'date_of_birth',
+    'profile_photo',
+    'avatar_upload_id',
   ];
 
   /**
@@ -45,6 +47,17 @@ class User extends Authenticatable
   protected $hidden = [
     'password',
     'remember_token',
+  ];
+
+  /**
+   * The accessors to append to the model's array form.
+   */
+  protected $appends = [
+    'full_name',
+    'initials',
+    'role_label',
+    'role_display_name',
+    'role_info',
   ];
 
   /**
@@ -60,6 +73,10 @@ class User extends Authenticatable
       'is_approved' => 'boolean',
     ];
   }
+
+    // ============================================
+    // ACCESSORS & MUTATORS
+    // ============================================
 
   /**
    * Get the user's full name.
@@ -85,9 +102,103 @@ class User extends Authenticatable
     return $this->avatar ?? null;
   }
 
-  // ============================================
-  // RELATIONSHIPS
-  // ============================================
+    // ============================================
+    // ROLE HELPERS (Using Spatie Permission)
+    // ============================================
+
+  /**
+   * Get the user's primary role.
+   */
+  public function getPrimaryRole()
+  {
+    return $this->roles()->first();
+  }
+
+  /**
+   * Get the role label (human-readable name).
+   */
+  public function getRoleLabelAttribute(): ?string
+  {
+    $role = $this->getPrimaryRole();
+    if (!$role) {
+      return null;
+    }
+    return $role->label ?? ucfirst(str_replace('_', ' ', $role->name));
+  }
+
+  /**
+   * Get the role display name (with fallback to formatted name).
+   */
+  public function getRoleDisplayNameAttribute(): ?string
+  {
+    $role = $this->getPrimaryRole();
+    if (!$role) {
+      return 'No Role Assigned';
+    }
+    return $role->label ?? ucfirst(str_replace('_', ' ', $role->name));
+  }
+
+  /**
+   * Get the role description.
+   */
+  public function getRoleDescriptionAttribute(): ?string
+  {
+    $role = $this->getPrimaryRole();
+    if (!$role) {
+      return null;
+    }
+    return $role->description;
+  }
+
+  /**
+   * Get complete role information.
+   */
+  public function getRoleInfoAttribute(): ?array
+  {
+    $role = $this->getPrimaryRole();
+    if (!$role) {
+      return null;
+    }
+
+    return [
+      'id' => $role->id,
+      'name' => $role->name,
+      'label' => $role->label ?? ucfirst(str_replace('_', ' ', $role->name)),
+      'description' => $role->description,
+      'guard_name' => $role->guard_name,
+    ];
+  }
+
+  /**
+   * Get all roles with their labels and descriptions.
+   */
+  public function getAllRolesWithLabels(): array
+  {
+    $roles = $this->roles()->get();
+    return $roles->map(function ($role) {
+      return [
+        'id' => $role->id,
+        'name' => $role->name,
+        'label' => $role->label ?? ucfirst(str_replace('_', ' ', $role->name)),
+        'description' => $role->description,
+      ];
+    })->toArray();
+  }
+
+  /**
+   * Check if user has a specific role by name or label.
+   */
+  public function hasRoleByNameOrLabel(string $roleNameOrLabel): bool
+  {
+    return $this->roles()
+      ->where('name', $roleNameOrLabel)
+      ->orWhere('label', $roleNameOrLabel)
+      ->exists();
+  }
+
+    // ============================================
+    // RELATIONSHIPS
+    // ============================================
 
   /**
    * Department relationship.
@@ -161,9 +272,9 @@ class User extends Authenticatable
     return $this->belongsTo(Upload::class, 'avatar_upload_id');
   }
 
-  // ============================================
-  // SCOPES
-  // ============================================
+    // ============================================
+    // SCOPES
+    // ============================================
 
   /**
    * Scope for active users.
@@ -189,16 +300,36 @@ class User extends Authenticatable
     return $query->where('is_approved', false)->where('is_active', true);
   }
 
-  // ============================================
-  // HELPER METHODS
-  // ============================================
+  /**
+   * Scope for users with a specific role.
+   */
+  public function scopeWithRole($query, string $roleName)
+  {
+    return $query->whereHas('roles', function ($q) use ($roleName) {
+      $q->where('name', $roleName);
+    });
+  }
 
   /**
-   * Check if user is a specific role.
+   * Scope for users with a specific role label.
    */
-  public function isRole(string $role): bool
+  public function scopeWithRoleLabel($query, string $roleLabel)
   {
-    return $this->role === $role;
+    return $query->whereHas('roles', function ($q) use ($roleLabel) {
+      $q->where('label', $roleLabel);
+    });
+  }
+
+    // ============================================
+    // HELPER METHODS
+    // ============================================
+
+  /**
+   * Check if user is a specific role (by name or label).
+   */
+  public function isRole(string $roleNameOrLabel): bool
+  {
+    return $this->hasRoleByNameOrLabel($roleNameOrLabel);
   }
 
   /**
@@ -206,7 +337,39 @@ class User extends Authenticatable
    */
   public function isAdmin(): bool
   {
-    return $this->hasRole('ADMIN');
+    return $this->hasRole('admin') || $this->hasRole('super_admin');
+  }
+
+  /**
+   * Check if user is a super admin.
+   */
+  public function isSuperAdmin(): bool
+  {
+    return $this->hasRole('super_admin');
+  }
+
+  /**
+   * Check if user is a department head.
+   */
+  public function isHOD(): bool
+  {
+    return $this->hasRole('hod');
+  }
+
+  /**
+   * Check if user is an accountant.
+   */
+  public function isAccountant(): bool
+  {
+    return $this->hasRole('accountant');
+  }
+
+  /**
+   * Check if user is a principal.
+   */
+  public function isPrincipal(): bool
+  {
+    return $this->hasRole('principal');
   }
 
   /**
@@ -225,19 +388,125 @@ class User extends Authenticatable
     return $this->is_active && $this->is_approved;
   }
 
-  // ============================================
-  // PASSWORD RESET NOTIFICATION
-  // ============================================
+    // ============================================
+    // PASSWORD RESET NOTIFICATION
+    // ============================================
 
   /**
    * Send the password reset notification.
-   * Overrides the default Laravel notification to use custom URL.
-   *
-   * @param  string  $token
-   * @return void
    */
   public function sendPasswordResetNotification($token)
   {
     $this->notify(new ResetPasswordNotification($token));
+  }
+
+
+
+      // ============================================
+    // SIGNATURE RELATIONSHIPS
+    // ============================================
+
+  /**
+   * Get the user's verified signature specimen
+   */
+  public function signatureSpecimen(): HasOne
+  {
+    return $this->hasOne(SignatureSpecimen::class)
+      ->where('is_verified', true)
+      ->where('status', 'approved');
+  }
+
+  /**
+   * Get all signature specimens for this user
+   */
+  public function signatureSpecimens(): HasMany
+  {
+    return $this->hasMany(SignatureSpecimen::class);
+  }
+
+  /**
+   * Get signatures verified by this user
+   */
+  public function verifiedSignatures(): HasMany
+  {
+    return $this->hasMany(SignatureSpecimen::class, 'verified_by');
+  }
+
+  /**
+   * Get all signature verifications for this user
+   */
+  public function signatureVerifications(): HasMany
+  {
+    return $this->hasMany(SignatureVerification::class);
+  }
+
+  /**
+   * Get verifications performed by this user
+   */
+  public function performedVerifications(): HasMany
+  {
+    return $this->hasMany(SignatureVerification::class, 'verified_by');
+  }
+
+    // ============================================
+    // SIGNATURE HELPER METHODS
+    // ============================================
+
+  /**
+   * Check if user has a verified signature
+   */
+  public function hasVerifiedSignature(): bool
+  {
+    return $this->signatureSpecimen()->exists();
+  }
+
+  /**
+   * Get the user's signature URL
+   */
+  public function getSignatureUrlAttribute(): ?string
+  {
+    return $this->signatureSpecimen?->signature_url;
+  }
+
+  /**
+   * Get the user's signature status
+   */
+  public function getSignatureStatusAttribute(): string
+  {
+    if ($this->hasVerifiedSignature()) {
+      return 'verified';
+    }
+
+    $pending = $this->signatureSpecimens()
+      ->where('status', 'pending')
+      ->exists();
+
+    return $pending ? 'pending' : 'none';
+  }
+
+  /**
+   * Get the signature status label
+   */
+  public function getSignatureStatusLabelAttribute(): string
+  {
+    return match ($this->signature_status) {
+      'verified' => 'Verified',
+      'pending' => 'Pending Verification',
+      'none' => 'No Signature',
+      default => 'Unknown',
+    };
+  }
+
+  /**
+   * Get the signature status color
+   */
+  public function getSignatureStatusColorAttribute(): string
+  {
+    return match ($this->signature_status) {
+      'verified' => 'success',
+      'pending' => 'warning',
+      'none' => 'secondary',
+      default => 'secondary',
+    };
   }
 }

@@ -80,11 +80,13 @@ return [
     'X-Device-ID',
   ],
 
+  // ✅ ADDED: Content-Disposition to exposed headers for PDF downloads
   'exposed_headers' => [
     'X-API-VERSION',
     'X-RateLimit-Limit',
     'X-RateLimit-Remaining',
     'X-Session-ID',
+    'Content-Disposition', // ✅ This allows frontend to read the filename
   ],
 
   'max_age' => 86400, // 24 hours cache for preflight requests

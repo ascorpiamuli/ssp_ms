@@ -87,6 +87,7 @@ class QuotationRequest extends Model
     'is_closing_soon',
     'response_count',
     'response_rate',
+    'total_quotations',
   ];
 
   // ============================================
@@ -111,6 +112,42 @@ class QuotationRequest extends Model
   public function supplierQuotations(): HasMany
   {
     return $this->hasMany(SupplierQuotation::class, 'quotation_request_id');
+  }
+
+  /**
+   * Get all submitted quotations (excluding drafts, pending, and cancelled).
+   */
+  public function submittedQuotations(): HasMany
+  {
+    return $this->supplierQuotations()
+      ->whereNotIn('status', ['draft', 'pending', 'cancelled']);
+  }
+
+  /**
+   * Get accepted quotations.
+   */
+  public function acceptedQuotations(): HasMany
+  {
+    return $this->supplierQuotations()
+      ->where('status', 'accepted');
+  }
+
+  /**
+   * Get rejected quotations.
+   */
+  public function rejectedQuotations(): HasMany
+  {
+    return $this->supplierQuotations()
+      ->where('status', 'rejected');
+  }
+
+  /**
+   * Get pending quotations.
+   */
+  public function pendingQuotations(): HasMany
+  {
+    return $this->supplierQuotations()
+      ->where('status', 'pending');
   }
 
   // ============================================
@@ -159,7 +196,7 @@ class QuotationRequest extends Model
 
   public function getIsExpiredAttribute(): bool
   {
-    return $this->closing_date && $this->closing_date->isPast() && $this->status !== 'closed';
+    return $this->isExpired();
   }
 
   public function getIsClosingSoonAttribute(): bool
@@ -170,18 +207,65 @@ class QuotationRequest extends Model
     return $this->closing_date->diffInDays(now()) <= 2 && !$this->isExpired();
   }
 
+  /**
+   * 🔧 FIXED: Get the count of responses (all submitted quotations except rejected/draft/cancelled).
+   * This counts ALL quotations that have been submitted, including rejected ones,
+   * because a rejection is still a response.
+   */
   public function getResponseCountAttribute(): int
   {
-    return $this->supplierQuotations()->where('status', 'submitted')->count();
+    // Count all quotations that are not draft, pending, or cancelled
+    // This includes rejected, evaluated, accepted, etc.
+    return $this->supplierQuotations()
+      ->whereNotIn('status', ['draft', 'pending', 'cancelled'])
+      ->count();
   }
 
+  /**
+   * Get the total number of quotations (including all statuses).
+   */
+  public function getTotalQuotationsAttribute(): int
+  {
+    return $this->supplierQuotations()->count();
+  }
+
+  /**
+   * 🔧 FIXED: Get the response rate based on responded suppliers.
+   * This uses the responded_suppliers array which tracks which suppliers actually responded.
+   */
   public function getResponseRateAttribute(): float
   {
-    $total = count($this->sent_to_suppliers ?? []);
-    if ($total === 0) {
+    $sentCount = count($this->sent_to_suppliers ?? []);
+    if ($sentCount === 0) {
       return 0;
     }
-    return round(($this->response_count / $total) * 100, 2);
+
+    $respondedCount = count($this->responded_suppliers ?? []);
+    return round(($respondedCount / $sentCount) * 100, 2);
+  }
+
+  /**
+   * Get the number of suppliers who responded.
+   */
+  public function getRespondedSuppliersCountAttribute(): int
+  {
+    return count($this->responded_suppliers ?? []);
+  }
+
+  /**
+   * Get the number of suppliers who declined.
+   */
+  public function getDeclinedSuppliersCountAttribute(): int
+  {
+    return count($this->declined_suppliers ?? []);
+  }
+
+  /**
+   * Get the number of suppliers who were sent the RFQ.
+   */
+  public function getSentSuppliersCountAttribute(): int
+  {
+    return count($this->sent_to_suppliers ?? []);
   }
 
   /**
@@ -262,6 +346,20 @@ class QuotationRequest extends Model
     return $query->where('status', $status);
   }
 
+  public function scopeWithResponses($query)
+  {
+    return $query->whereHas('supplierQuotations', function ($q) {
+      $q->whereNotIn('status', ['draft', 'pending', 'cancelled']);
+    });
+  }
+
+  public function scopeWithoutResponses($query)
+  {
+    return $query->whereDoesntHave('supplierQuotations', function ($q) {
+      $q->whereNotIn('status', ['draft', 'pending', 'cancelled']);
+    });
+  }
+
   // ============================================
   // HELPER METHODS
   // ============================================
@@ -291,9 +389,17 @@ class QuotationRequest extends Model
     return $this->status === 'cancelled';
   }
 
+  /**
+   * Check if the quotation has expired.
+   * A quotation is expired if:
+   * - closing_date is in the past
+   * - AND status is not 'closed' or 'cancelled'
+   */
   public function isExpired(): bool
   {
-    return $this->isExpiredAttribute();
+    return $this->closing_date
+      && $this->closing_date->isPast()
+      && !in_array($this->status, ['closed', 'cancelled']);
   }
 
   public function isTender(): bool
@@ -390,36 +496,60 @@ class QuotationRequest extends Model
 
   public function getLowestQuotation(): ?SupplierQuotation
   {
-    return $this->supplierQuotations()
-      ->where('status', 'submitted')
+    return $this->submittedQuotations()
       ->orderBy('net_amount', 'asc')
       ->first();
   }
 
   public function getHighestQuotation(): ?SupplierQuotation
   {
-    return $this->supplierQuotations()
-      ->where('status', 'submitted')
+    return $this->submittedQuotations()
       ->orderBy('net_amount', 'desc')
       ->first();
   }
 
   public function getAverageQuotation(): float
   {
-    return (float) $this->supplierQuotations()
-      ->where('status', 'submitted')
+    return (float) $this->submittedQuotations()
       ->avg('net_amount') ?? 0;
+  }
+
+  public function hasResponses(): bool
+  {
+    return $this->response_count > 0;
+  }
+
+  public function hasAllSuppliersResponded(): bool
+  {
+    $sent = count($this->sent_to_suppliers ?? []);
+    $responded = count($this->responded_suppliers ?? []);
+    return $sent > 0 && $responded >= $sent;
+  }
+
+  public function getResponseSummary(): array
+  {
+    return [
+      'sent' => $this->sent_suppliers_count,
+      'responded' => $this->responded_suppliers_count,
+      'declined' => $this->declined_suppliers_count,
+      'pending' => $this->sent_suppliers_count - $this->responded_suppliers_count - $this->declined_suppliers_count,
+      'rate' => $this->response_rate,
+    ];
   }
 
   public static function generateQtnNumber(): string
   {
     $year = date('Y');
     $last = self::whereYear('created_at', $year)->count() + 1;
-    return 'QTN-' . $year . '-' . str_pad((string) $last, 5, '0', STR_PAD_LEFT);
+    return 'RFQ-' . $year . '-' . str_pad((string) $last, 5, '0', STR_PAD_LEFT);
   }
 
-  public function logActivity(string $action, ?array $oldValues = null, ?array $newValues = null, ?string $comment = null): void
-  {
+  public function logActivity(
+    string $action,
+    ?array $oldValues = null,
+    ?array $newValues = null,
+    ?string $comment = null
+  ): void {
     ProcurementHistory::create([
       'requisition_id' => $this->requisition_id,
       'user_id' => auth()->id(),
@@ -432,5 +562,23 @@ class QuotationRequest extends Model
       'ip_address' => request()->ip(),
       'user_agent' => request()->userAgent(),
     ]);
+  }
+
+  /**
+   * Override toArray to ensure calculated attributes are included.
+   */
+  public function toArray()
+  {
+    $array = parent::toArray();
+
+    // Ensure all calculated attributes are included
+    $array['response_count'] = $this->response_count;
+    $array['response_rate'] = $this->response_rate;
+    $array['total_quotations'] = $this->total_quotations;
+    $array['responded_suppliers_count'] = $this->responded_suppliers_count;
+    $array['declined_suppliers_count'] = $this->declined_suppliers_count;
+    $array['sent_suppliers_count'] = $this->sent_suppliers_count;
+
+    return $array;
   }
 }

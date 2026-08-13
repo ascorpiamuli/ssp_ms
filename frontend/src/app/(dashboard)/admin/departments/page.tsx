@@ -1,4 +1,4 @@
-// app/admin/departments/page.tsx
+// app/(dashboard)/admin/departments/page.tsx
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -11,20 +11,15 @@ import {
   Loader2,
   RefreshCw,
   Save,
-  Pencil,
   AlertTriangle,
   Users,
   UserCheck,
   UserX,
   Eye,
-  ChevronDown,
-  ChevronUp,
   MoreVertical,
   AlertCircle,
   Check,
   X,
-  Grid,
-  List,
   UserPlus,
   UserMinus,
   Crown,
@@ -32,7 +27,15 @@ import {
   Phone,
   Shield,
   XCircle,
-  User
+  User,
+  Sparkles,
+  FilterX,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Clock,
+  Award,
+  Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,7 +64,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast-context'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { useDepartments } from '@/hooks/useDepartments'
@@ -76,6 +79,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // TYPES
@@ -95,6 +100,7 @@ interface Department {
     full_name: string
     email: string
     phone?: string
+    avatar_url?: string
   }
   users_count: number
   created_at: string
@@ -126,14 +132,34 @@ const formatDate = (date: string | null) => {
   })
 }
 
+const formatTimeAgo = (date: string | null) => {
+  if (!date) return 'Never'
+  const now = new Date()
+  const past = new Date(date)
+  const diffMs = now.getTime() - past.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return formatDate(date)
+}
+
 const getStatusColor = (isActive: boolean) => {
   return isActive
-    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
+    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+    : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-red-200 dark:border-red-800'
+}
+
+const getStatusIcon = (isActive: boolean) => {
+  return isActive ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />
 }
 
 // ============================================
-// MODAL COMPONENTS
+// MODAL COMPONENTS (Portal Ready)
 // ============================================
 
 // Create/Edit Department Modal
@@ -185,21 +211,33 @@ const DepartmentFormModal = ({
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEdit ? 'Edit Department' : 'Create New Department'}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <XCircle className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 bg-white dark:bg-gray-900">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Department Name <span className="text-red-500">*</span>
@@ -211,7 +249,7 @@ const DepartmentFormModal = ({
                 setFormData({ ...formData, name: e.target.value })
                 if (formErrors.name) setFormErrors({ ...formErrors, name: '' })
               }}
-              className={formErrors.name ? 'border-red-500' : ''}
+              className={cn("dark:bg-gray-800 dark:border-gray-700 dark:text-white", formErrors.name ? 'border-red-500' : '')}
             />
             {formErrors.name && (
               <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
@@ -228,7 +266,7 @@ const DepartmentFormModal = ({
                 setFormData({ ...formData, code: e.target.value.toUpperCase() })
                 if (formErrors.code) setFormErrors({ ...formErrors, code: '' })
               }}
-              className={formErrors.code ? 'border-red-500' : ''}
+              className={cn("dark:bg-gray-800 dark:border-gray-700 dark:text-white", formErrors.code ? 'border-red-500' : '')}
             />
             {formErrors.code && (
               <p className="text-xs text-red-500 mt-1">{formErrors.code}</p>
@@ -242,6 +280,7 @@ const DepartmentFormModal = ({
               placeholder="Brief description of the department"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
           </div>
 
@@ -249,14 +288,14 @@ const DepartmentFormModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
@@ -272,9 +311,20 @@ const DepartmentFormModal = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // View Department Modal
@@ -289,70 +339,72 @@ const ViewDepartmentModal = ({
 }) => {
   if (!isOpen || !department) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
           <div className="flex justify-between items-start">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Department Details: {department.name}
-            </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                {department.name}
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary">{department.code}</Badge>
+                <Badge className={cn("text-xs", getStatusColor(department.is_active))}>
+                  {department.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <XCircle className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
-          <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-6">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-              <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {department.name}
-              </h3>
-              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                <Badge variant="secondary">{department.code}</Badge>
-                <Badge className={cn("text-xs", getStatusColor(department.is_active))}>
-                  {department.is_active ? 'Active' : 'Inactive'}
-                </Badge>
-                <span>{department.users_count || 0} users</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Department Name</p>
+        <div className="p-4 sm:p-6 bg-white dark:bg-gray-900">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Department Name</p>
               <p className="font-semibold text-gray-900 dark:text-white">{department.name}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Department Code</p>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Department Code</p>
               <Badge variant="secondary">{department.code}</Badge>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Status</p>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
               <Badge className={cn("text-xs", getStatusColor(department.is_active))}>
                 {department.is_active ? 'Active' : 'Inactive'}
               </Badge>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Total Users</p>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
               <Badge variant="outline">{department.users_count || 0} users</Badge>
             </div>
             {department.description && (
-              <div className="col-span-2 space-y-2">
-                <p className="text-sm text-gray-500">Description</p>
+              <div className="col-span-2 space-y-1">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Description</p>
                 <p className="text-gray-900 dark:text-white">{department.description}</p>
               </div>
             )}
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Created</p>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Created</p>
               <p className="text-gray-900 dark:text-white">{formatDate(department.created_at)}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Last Updated</p>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated</p>
               <p className="text-gray-900 dark:text-white">{formatDate(department.updated_at)}</p>
             </div>
           </div>
@@ -367,7 +419,7 @@ const ViewDepartmentModal = ({
                 </h4>
                 <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white">
+                    <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-sm">
                       {department.hod.first_name?.[0]}{department.hod.last_name?.[0]}
                     </AvatarFallback>
                   </Avatar>
@@ -375,10 +427,35 @@ const ViewDepartmentModal = ({
                     <p className="font-medium text-gray-900 dark:text-white">
                       {department.hod.full_name}
                     </p>
-                    <p className="text-sm text-gray-500">{department.hod.email}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{department.hod.email}</p>
                     {department.hod.phone && (
-                      <p className="text-sm text-gray-500">{department.hod.phone}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{department.hod.phone}</p>
                     )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {!department.hod && department.hod_id && (
+            <>
+              <Separator className="my-4" />
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2 text-amber-600">
+                  <AlertCircle className="h-4 w-4" />
+                  Head of Department (User Deleted)
+                </h4>
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                    <UserX className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      User ID: {department.hod_id}
+                    </p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      The previously assigned HOD has been deleted.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -387,14 +464,25 @@ const ViewDepartmentModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // Delete Department Modal
@@ -415,10 +503,22 @@ const DeleteDepartmentModal = ({
 }) => {
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
-        <div className="p-6">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-6 bg-white dark:bg-gray-900 rounded-xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
               <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -430,7 +530,7 @@ const DeleteDepartmentModal = ({
           </p>
           {usersCount > 0 && (
             <p className="text-sm text-amber-600 dark:text-amber-400 mb-4">
-              ⚠️ This department has {usersCount} user(s). Users must be reassigned before deletion.
+              This department has {usersCount} user(s). Users must be reassigned before deletion.
             </p>
           )}
           <p className="text-sm text-red-500 dark:text-red-400 mb-6">
@@ -439,7 +539,7 @@ const DeleteDepartmentModal = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
@@ -462,12 +562,23 @@ const DeleteDepartmentModal = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
-// Assign HOD Modal
+// Assign HOD Modal - FIXED: Better z-index management
 const AssignHODModal = ({
   isOpen,
   onClose,
@@ -493,22 +604,34 @@ const AssignHODModal = ({
 }) => {
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl relative z-[10000]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-[10001]">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Crown className="h-5 w-5 text-yellow-500" />
               Assign Head of Department
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
               <XCircle className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4">
+        <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Select a user to assign as Head of Department for "{departmentName}".
           </p>
@@ -525,12 +648,16 @@ const AssignHODModal = ({
                 setSelectedHOD(user || null)
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700 dark:text-white w-full">
                 <SelectValue placeholder="Select a user to assign as HOD" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                className="dark:bg-gray-800 dark:border-gray-700 z-[10002]"
+                position="popper"
+                sideOffset={4}
+              >
                 {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id.toString()}>
+                  <SelectItem key={user.id} value={user.id.toString()} className="dark:text-white">
                     <div className="flex items-center gap-2">
                       <User className="h-3 w-3" />
                       {user.full_name}
@@ -555,14 +682,14 @@ const AssignHODModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
               disabled={isSubmitting || !hodUserId}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
@@ -578,9 +705,20 @@ const AssignHODModal = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
@@ -610,7 +748,6 @@ export default function AdminDepartmentsPage() {
 
   // State
   const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -630,6 +767,10 @@ export default function AdminDepartmentsPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [hodUserId, setHodUserId] = useState<string>('')
   const [selectedHOD, setSelectedHOD] = useState<User | null>(null)
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Process data
   let departments: Department[] = []
@@ -651,25 +792,44 @@ export default function AdminDepartmentsPage() {
 
   // Filter departments
   const filteredDepartments = useMemo(() => {
-    if (!searchTerm) return departments
-    return departments.filter(dept =>
-      dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dept.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (dept.description?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    )
+    let result = departments
+    if (searchTerm) {
+      result = result.filter(dept =>
+        dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        dept.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (dept.description?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      )
+    }
+    return result
   }, [departments, searchTerm])
+
+  // Paginate departments
+  const paginatedDepartments = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    const end = start + itemsPerPage
+    return filteredDepartments.slice(start, end)
+  }, [filteredDepartments, currentPage, itemsPerPage])
+
+  const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage)
 
   // Stats
   const totalDepartments = departments.length
   const activeDepartments = departments.filter(d => d.is_active).length
   const inactiveDepartments = departments.filter(d => !d.is_active).length
   const totalUsersInDepts = departments.reduce((acc, d) => acc + (d.users_count || 0), 0)
+  const departmentsWithHOD = departments.filter(d => d.hod_id).length
+  const departmentsWithValidHOD = departments.filter(d => d.hod).length
 
   // Permissions
   const canCreateDepartments = hasPermission('create_departments') || isAdmin()
   const canEditDepartments = hasPermission('edit_departments') || isAdmin()
   const canDeleteDepartments = hasPermission('delete_departments') || isAdmin()
   const canViewDepartments = hasPermission('view_departments') || isAdmin()
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   // Handlers
   const handleCreateDepartment = async (data: any) => {
@@ -774,7 +934,6 @@ export default function AdminDepartmentsPage() {
     }
   }
 
-  // FIXED: The backend expects 'hod_id' field name, not 'user_id'
   const handleAssignHOD = async () => {
     if (!selectedDepartment || !hodUserId) {
       toastError('Please select a user to assign as HOD')
@@ -783,10 +942,9 @@ export default function AdminDepartmentsPage() {
 
     setIsSubmitting(true)
     try {
-      // The backend expects 'hod_id' not 'user_id'
       await assignHOD.mutateAsync({
         id: selectedDepartment.id,
-        hod_id: parseInt(hodUserId)  // Changed from 'user_id' to 'hod_id'
+        hod_id: parseInt(hodUserId)
       })
       success('HOD assigned successfully')
       setShowAssignHODDialog(false)
@@ -795,7 +953,6 @@ export default function AdminDepartmentsPage() {
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      // Handle validation errors from backend
       if (error?.response?.data?.errors) {
         const errorMessages = Object.values(error.response.data.errors).flat()
         toastError(errorMessages.join(', '))
@@ -824,21 +981,28 @@ export default function AdminDepartmentsPage() {
   // Check permissions
   if (!canViewDepartments) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
-              <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Access Denied
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              You don't have permission to view departments.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageTemplate
+        title="Department Management"
+        description="Manage departments and assign Heads of Department"
+        icon={<Building2 className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to view departments.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
     )
   }
 
@@ -848,7 +1012,8 @@ export default function AdminDepartmentsPage() {
       <PageTemplate
         title="Department Management"
         description="Manage departments and assign Heads of Department"
-        icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        icon={<Building2 className="h-5 w-5" />}
+        background="gradient"
       >
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
@@ -872,474 +1037,426 @@ export default function AdminDepartmentsPage() {
     <PageTemplate
       title="Department Management"
       description="Manage departments and assign Heads of Department"
-      icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Building2 className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Departments' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-primary/5">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {totalDepartments} Departments
+          </Badge>
+          {canCreateDepartments && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setDepartmentForm({ name: '', code: '', description: '' })
+                setFormErrors({})
+                setShowCreateDialog(true)
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Department
+            </Button>
+          )}
+        </div>
+      }
     >
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Departments</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalDepartments}</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalDepartments}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active</p>
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{activeDepartments}</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-                <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
+            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Inactive</p>
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{inactiveDepartments}</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-                <X className="h-5 w-5 text-red-600 dark:text-red-400" />
-              </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Active</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{activeDepartments}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{totalUsersInDepts}</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-                <Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
+            <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+              <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Inactive</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{inactiveDepartments}</p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+              <X className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Users</p>
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{totalUsersInDepts}</p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
+              <Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">With HOD</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{departmentsWithValidHOD}</p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
+              <Crown className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Controls */}
-      <Card className="mb-6">
-        <CardContent className="pt-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Search departments by name, code, or description..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setViewMode('list')}
-                className={viewMode === 'list' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-            {canCreateDepartments && (
-              <Button
-                onClick={() => {
-                  setDepartmentForm({ name: '', code: '', description: '' })
-                  setFormErrors({})
-                  setShowCreateDialog(true)
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Department
-              </Button>
-            )}
+      <div className="bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search departments by name, code, or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Departments Display */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchTerm('')
+                setCurrentPage(1)
+              }}
+              className="gap-2"
+            >
+              <FilterX className="h-4 w-4" />
+              Clear
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                refetchDepts()
+                refetchStats()
+              }}
+              className="gap-2"
+              disabled={isLoading}
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
         </div>
-      ) : filteredDepartments.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              {searchTerm ? 'No departments found' : 'No departments created yet'}
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              {searchTerm
-                ? `No departments match "${searchTerm}"`
-                : 'Get started by creating your first department'}
-            </p>
-            {canCreateDepartments && !searchTerm && (
-              <Button
-                onClick={() => {
-                  setDepartmentForm({ name: '', code: '', description: '' })
-                  setFormErrors({})
-                  setShowCreateDialog(true)
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Department
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDepartments.map((department) => (
-            <Card key={department.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                      <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{department.name}</CardTitle>
-                      <Badge variant="secondary" className="mt-1">
-                        {department.code}
-                      </Badge>
-                    </div>
-                  </div>
-                  <Badge className={cn("text-xs", getStatusColor(department.is_active))}>
-                    {department.is_active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pb-2">
-                {department.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
-                    {department.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <span>{department.users_count || 0} users</span>
-                  </div>
-                  {department.hod && (
-                    <div className="flex items-center gap-1">
-                      <Crown className="h-4 w-4 text-yellow-500" />
-                      <span className="text-xs truncate max-w-[100px]">
-                        {department.hod.full_name}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className="pt-2 flex justify-between gap-2">
-                <div className="flex gap-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedDepartment(department)
-                            setShowViewDialog(true)
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>View Details</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+      </div>
 
-                  {canEditDepartments && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedDepartment(department)
-                              setDepartmentForm({
-                                name: department.name,
-                                code: department.code,
-                                description: department.description || '',
-                              })
-                              setFormErrors({})
-                              setShowEditDialog(true)
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Edit Department</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-
-                  {canDeleteDepartments && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => {
-                              setSelectedDepartment(department)
-                              setShowDeleteDialog(true)
-                            }}
-                            disabled={department.users_count > 0}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {department.users_count > 0
-                            ? 'Cannot delete: Department has users'
-                            : 'Delete Department'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => handleToggleStatus(department.id, department.is_active)}
-                    >
-                      {department.is_active ? (
-                        <>
-                          <X className="h-4 w-4 mr-2 text-red-500" />
-                          Deactivate
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4 mr-2 text-emerald-500" />
-                          Activate
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    {department.hod ? (
-                      <DropdownMenuItem
-                        onClick={() => handleRemoveHOD(department.id)}
-                        className="text-red-600"
-                      >
-                        <UserMinus className="h-4 w-4 mr-2" />
-                        Remove HOD
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedDepartment(department)
-                          setHodUserId('')
-                          setSelectedHOD(null)
-                          setShowAssignHODDialog(true)
-                        }}
-                      >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Assign HOD
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        // List View
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Head of Department</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDepartments.map((department) => (
-                  <TableRow key={department.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">{department.name}</span>
-                      </div>
-                      {department.description && (
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                          {department.description}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{department.code}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={cn("text-xs", getStatusColor(department.is_active))}>
-                        {department.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-gray-400" />
-                        <span>{department.users_count || 0}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {department.hod ? (
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-xs bg-yellow-100 text-yellow-700">
-                              {department.hod.first_name?.[0]}
-                              {department.hod.last_name?.[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm">{department.hod.full_name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Not assigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedDepartment(department)
-                            setShowViewDialog(true)
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {canEditDepartments && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedDepartment(department)
-                              setDepartmentForm({
-                                name: department.name,
-                                code: department.code,
-                                description: department.description || '',
-                              })
-                              setFormErrors({})
-                              setShowEditDialog(true)
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleToggleStatus(department.id, department.is_active)}
-                            >
-                              {department.is_active ? (
-                                <>
-                                  <X className="h-4 w-4 mr-2 text-red-500" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <Check className="h-4 w-4 mr-2 text-emerald-500" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            {department.hod ? (
-                              <DropdownMenuItem
-                                onClick={() => handleRemoveHOD(department.id)}
-                                className="text-red-600"
-                              >
-                                <UserMinus className="h-4 w-4 mr-2" />
-                                Remove HOD
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedDepartment(department)
-                                  setHodUserId('')
-                                  setSelectedHOD(null)
-                                  setShowAssignHODDialog(true)
-                                }}
-                              >
-                                <UserPlus className="h-4 w-4 mr-2" />
-                                Assign HOD
-                              </DropdownMenuItem>
+      {/* Departments Table */}
+      <div className="bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-4" />
+            <p className="text-gray-500">Loading departments...</p>
+          </div>
+        ) : filteredDepartments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Building2 className="h-12 w-12 text-gray-300 mb-4" />
+            <p className="text-gray-500">No departments found</p>
+            {searchTerm && <p className="text-sm text-gray-400 mt-1">Try adjusting your search</p>}
+            {!searchTerm && <p className="text-sm text-gray-400 mt-1">Create a department to get started</p>}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 dark:bg-gray-800/30">
+                    <TableHead className="min-w-[200px]">Department</TableHead>
+                    <TableHead className="min-w-[80px]">Code</TableHead>
+                    <TableHead className="min-w-[100px]">Status</TableHead>
+                    <TableHead className="min-w-[80px]">Users</TableHead>
+                    <TableHead className="min-w-[180px]">Head of Department</TableHead>
+                    <TableHead className="min-w-[150px]">Created</TableHead>
+                    <TableHead className="text-right min-w-[180px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedDepartments.map((department) => (
+                    <TableRow key={department.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                            <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">{department.name}</p>
+                            {department.description && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+                                {department.description}
+                              </p>
                             )}
-                            {canDeleteDepartments && (
-                              <>
-                                <DropdownMenuSeparator />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-mono">
+                          {department.code}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn("text-xs border flex items-center gap-1 w-fit", getStatusColor(department.is_active))}>
+                          {getStatusIcon(department.is_active)}
+                          {department.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {department.users_count || 0}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {department.hod ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8 ring-2 ring-yellow-200 dark:ring-yellow-800">
+                              <AvatarFallback className="text-xs bg-gradient-to-r from-yellow-400 to-amber-500 text-white">
+                                {department.hod.first_name?.[0]}
+                                {department.hod.last_name?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                {department.hod.full_name}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {department.hod.email}
+                              </p>
+                            </div>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Crown className="h-3.5 w-3.5 text-yellow-500" />
+                                </TooltipTrigger>
+                                <TooltipContent>Head of Department</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        ) : department.hod_id ? (
+                          <span className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            User deleted (ID: {department.hod_id})
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400 flex items-center gap-1">
+                            <UserX className="h-3.5 w-3.5" />
+                            Not assigned
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {formatTimeAgo(department.created_at)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{formatDate(department.created_at)}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                  onClick={() => {
+                                    setSelectedDepartment(department)
+                                    setShowViewDialog(true)
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 text-gray-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View Details</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {canEditDepartments && (
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedDepartment(department)
-                                    setShowDeleteDialog(true)
+                                    setDepartmentForm({
+                                      name: department.name,
+                                      code: department.code,
+                                      description: department.description || '',
+                                    })
+                                    setFormErrors({})
+                                    setShowEditDialog(true)
                                   }}
-                                  className="text-red-600"
-                                  disabled={department.users_count > 0}
                                 >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
                                 </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => handleToggleStatus(department.id, department.is_active)}
+                              >
+                                {department.is_active ? (
+                                  <>
+                                    <X className="h-4 w-4 mr-2 text-red-500" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="h-4 w-4 mr-2 text-emerald-500" />
+                                    Activate
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {department.hod ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleRemoveHOD(department.id)}
+                                  className="text-red-600"
+                                >
+                                  <UserMinus className="h-4 w-4 mr-2" />
+                                  Remove HOD
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedDepartment(department)
+                                    setHodUserId('')
+                                    setSelectedHOD(null)
+                                    setShowAssignHODDialog(true)
+                                  }}
+                                >
+                                  <UserPlus className="h-4 w-4 mr-2" />
+                                  Assign HOD
+                                </DropdownMenuItem>
+                              )}
+                              {canDeleteDepartments && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedDepartment(department)
+                                      setShowDeleteDialog(true)
+                                    }}
+                                    className="text-red-600"
+                                    disabled={department.users_count > 0}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex items-center justify-between py-3 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="text-sm text-gray-500">
+                Showing <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {Math.min((currentPage - 1) * itemsPerPage + 1, filteredDepartments.length)}
+                </span> to{' '}
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {Math.min(currentPage * itemsPerPage, filteredDepartments.length)}
+                </span> of{' '}
+                <span className="font-medium text-gray-700 dark:text-gray-300">{filteredDepartments.length}</span> departments
+              </div>
+              <div className="flex items-center gap-4">
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => {
+                    setItemsPerPage(parseInt(value))
+                    setCurrentPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-[80px] dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    <SelectItem value="5" className="dark:text-white">5</SelectItem>
+                    <SelectItem value="10" className="dark:text-white">10</SelectItem>
+                    <SelectItem value="25" className="dark:text-white">25</SelectItem>
+                    <SelectItem value="50" className="dark:text-white">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 px-2">
+                    Page {currentPage} of {totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
-      {/* Modals */}
+      {/* ============================================
+          MODALS - Rendered using Portal
+          ============================================ */}
+
       <DepartmentFormModal
         isOpen={showCreateDialog}
         isEdit={false}

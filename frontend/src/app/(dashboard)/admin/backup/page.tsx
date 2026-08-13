@@ -1,4 +1,4 @@
-// app/admin/backups/page.tsx
+// app/(dashboard)/admin/backups/page.tsx
 
 'use client'
 
@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   XCircle as XCircleIcon,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,6 +80,8 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { format } from 'date-fns'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -170,7 +173,7 @@ const formatFileSize = (bytes: number) => {
 }
 
 // ============================================
-// CREATE BACKUP MODAL
+// CREATE BACKUP MODAL (Portal Ready)
 // ============================================
 
 const CreateBackupModal = ({
@@ -194,16 +197,28 @@ const CreateBackupModal = ({
     onCreate({ name: name || `Backup_${new Date().toISOString().split('T')[0]}`, type })
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Database className="h-5 w-5 text-blue-600" />
               Create Backup
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
               <XCircleIcon className="h-6 w-6" />
             </button>
           </div>
@@ -218,6 +233,7 @@ const CreateBackupModal = ({
               placeholder="Enter backup name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="dark:bg-gray-900 dark:border-gray-700"
             />
             <p className="text-xs text-gray-500 mt-1">Leave empty for auto-generated name</p>
           </div>
@@ -227,7 +243,7 @@ const CreateBackupModal = ({
               Backup Type
             </label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger>
+              <SelectTrigger className="dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -242,14 +258,14 @@ const CreateBackupModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isCreating}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
             >
               {isCreating ? (
                 <>
@@ -265,13 +281,24 @@ const CreateBackupModal = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
-// DELETE BACKUP MODAL
+// DELETE BACKUP MODAL (Portal Ready)
 // ============================================
 
 const DeleteBackupModal = ({
@@ -289,9 +316,21 @@ const DeleteBackupModal = ({
 }) => {
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
@@ -308,7 +347,7 @@ const DeleteBackupModal = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
@@ -331,13 +370,24 @@ const DeleteBackupModal = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
-// VIEW BACKUP MODAL
+// VIEW BACKUP MODAL (Portal Ready)
 // ============================================
 
 const ViewBackupModal = ({
@@ -357,16 +407,28 @@ const ViewBackupModal = ({
   const typeLabel = getTypeLabel(backup.type)
   const isRunning = backup.status === 'running'
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Database className="h-5 w-5 text-blue-600" />
               Backup Details
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
               <XCircleIcon className="h-6 w-6" />
             </button>
           </div>
@@ -457,15 +519,127 @@ const ViewBackupModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
+
+// ============================================
+// RESTORE BACKUP MODAL (Portal Ready)
+// ============================================
+
+const RestoreBackupModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  backup,
+  isRestoring,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  backup: any | null
+  isRestoring: boolean
+}) => {
+  if (!isOpen || !backup) return null
+
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
+              <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Restore Backup</h2>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-2">
+            Are you sure you want to restore from this backup?
+          </p>
+          <p className="text-sm text-red-500 dark:text-red-400 mb-4">
+            This will overwrite current data. This action cannot be undone.
+          </p>
+          <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+            <Database className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {backup.name}
+              </p>
+              <p className="text-xs text-gray-500">
+                Created: {formatDate(backup.created_at)}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isRestoring}
+              className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isRestoring ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Restoring...
+                </>
+              ) : (
+                <>
+                  <RotateCw className="h-4 w-4" />
+                  Restore Backup
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
+}
+
 // ============================================
 // STATS CARDS
 // ============================================
@@ -601,6 +775,34 @@ export default function BackupsPage() {
   const backups = backupsData?.backups || []
   const meta = backupsData?.meta
 
+  // Check permissions
+  if (!hasPermission('manage_backups') && !isAdmin()) {
+    return (
+      <PageTemplate
+        title="Backup Management"
+        description="Manage system backups and restore points"
+        icon={<Database className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to manage backups.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
+    )
+  }
+
   // Handlers
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -680,13 +882,50 @@ export default function BackupsPage() {
     }
   }
 
-
-
   return (
     <PageTemplate
       title="Backup Management"
       description="Manage system backups and restore points"
-      icon={<Database className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Database className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Backups' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {meta?.total || 0} Backups
+          </Badge>
+          <Button
+            variant="outline"
+            onClick={handleCleanBackups}
+            className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
+            size="sm"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clean Old
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => refetch()}
+            className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+          >
+            <Plus className="h-4 w-4" />
+            New Backup
+          </Button>
+        </div>
+      }
     >
       {/* Stats */}
       <StatsCards stats={stats} isLoading={statsLoading} />
@@ -702,7 +941,7 @@ export default function BackupsPage() {
                   placeholder="Search backups..."
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                  className="pl-9"
+                  className="pl-9 dark:bg-gray-900 dark:border-gray-700"
                 />
               </div>
             </div>
@@ -710,7 +949,7 @@ export default function BackupsPage() {
               value={filters.status}
               onValueChange={(value) => setFilters({ ...filters, status: value, page: 1 })}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[160px] dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -725,7 +964,7 @@ export default function BackupsPage() {
               value={filters.type}
               onValueChange={(value) => setFilters({ ...filters, type: value, page: 1 })}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[160px] dark:bg-gray-900 dark:border-gray-700">
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
@@ -735,17 +974,13 @@ export default function BackupsPage() {
                 <SelectItem value="auto">Auto</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={handleResetFilters} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={handleResetFilters}
+              className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
+            >
               <FilterX className="h-4 w-4" />
               Clear
-            </Button>
-            <Button variant="outline" onClick={() => refetch()} className="gap-2" disabled={isLoading}>
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-              Refresh
-            </Button>
-            <Button onClick={() => setShowCreateModal(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Backup
             </Button>
           </div>
         </CardContent>
@@ -753,7 +988,7 @@ export default function BackupsPage() {
 
       {/* Actions Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="text-sm">
             {meta?.total || 0} backups
           </Badge>
@@ -773,10 +1008,6 @@ export default function BackupsPage() {
             </Badge>
           )}
         </div>
-        <Button variant="outline" onClick={handleCleanBackups} className="gap-2" size="sm">
-          <Trash2 className="h-4 w-4" />
-          Clean Old Backups
-        </Button>
       </div>
 
       {/* Backups Table */}
@@ -991,7 +1222,7 @@ export default function BackupsPage() {
                 size="sm"
                 onClick={() => handlePageChange(meta.current_page - 1)}
                 disabled={meta.current_page <= 1}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -1004,7 +1235,7 @@ export default function BackupsPage() {
                 size="sm"
                 onClick={() => handlePageChange(meta.current_page + 1)}
                 disabled={meta.current_page >= meta.last_page}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -1013,7 +1244,10 @@ export default function BackupsPage() {
         )}
       </Card>
 
-      {/* Modals */}
+      {/* ============================================
+          MODALS - Rendered using Portal
+          ============================================ */}
+
       <CreateBackupModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -1041,56 +1275,16 @@ export default function BackupsPage() {
         backup={selectedBackup}
       />
 
-      {/* Restore Backup Modal */}
-      <Dialog open={showRestoreModal} onOpenChange={setShowRestoreModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <AlertTriangle className="h-5 w-5" />
-              Restore Backup
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to restore from this backup?
-              <br />
-              <span className="text-sm text-red-500">This will overwrite current data. This action cannot be undone.</span>
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedBackup && (
-            <div className="py-4">
-              <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                <Database className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {selectedBackup.name}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Created: {formatDate(selectedBackup.created_at)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRestoreModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRestoreBackup}
-              className="gap-2 bg-amber-600 hover:bg-amber-700"
-              disabled={restoreBackup.isPending}
-            >
-              {restoreBackup.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCw className="h-4 w-4" />
-              )}
-              Restore Backup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RestoreBackupModal
+        isOpen={showRestoreModal}
+        onClose={() => {
+          setShowRestoreModal(false)
+          setSelectedBackup(null)
+        }}
+        onConfirm={handleRestoreBackup}
+        backup={selectedBackup}
+        isRestoring={restoreBackup.isPending}
+      />
     </PageTemplate>
   )
 }

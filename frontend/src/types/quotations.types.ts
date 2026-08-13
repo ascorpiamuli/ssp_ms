@@ -1,4 +1,4 @@
-// frontend/src/types/quotation.types.ts
+// frontend/src/types/quotations.types.ts
 
 import { ApiResponse, PaginatedResponse } from './common.types';
 import { Requisition } from './requisition.types';
@@ -23,7 +23,23 @@ export type QuotationStatusInfo = {
 };
 
 // ============================================
-// QUOTATION REQUEST
+// USER TYPE (matches API response)
+// ============================================
+
+export interface QuotationUser {
+  id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
+  department_id: number | null;
+  is_active: boolean;
+}
+
+// ============================================
+// QUOTATION REQUEST (matches API response)
 // ============================================
 
 export interface QuotationRequest {
@@ -33,6 +49,8 @@ export interface QuotationRequest {
   title: string;
   description: string | null;
   issue_date: string;
+  sent_suppliers_count:number,
+
   closing_date: string;
   closing_time: string | null;
   delivery_terms: string | null;
@@ -48,7 +66,7 @@ export interface QuotationRequest {
   is_automated: boolean;
   is_tender: boolean;
   tender_number: string | null;
-  generated_by: number;
+  generated_by: QuotationUser | number;
   approved_by: number | null;
   approved_at: string | null;
   sent_at: string | null;
@@ -65,6 +83,12 @@ export interface QuotationRequest {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Relations
+  requisition?: Requisition;
+  supplier_quotations?: SupplierQuotation[];
+  // Formatted fields
+  formatted_issue_date?: string;
+  formatted_closing_date?: string;
 }
 
 // ============================================
@@ -112,6 +136,13 @@ export interface SupplierQuotation {
   id: number;
   quotation_request_id: number;
   supplier_id: number;
+  supplier?: {
+    id: number;
+    full_name: string;
+    email: string;
+    phone: string | null;
+    company_name?: string;
+  };
   quotation_number: string;
   supplier_reference_no: string | null;
   submission_date: string;
@@ -154,6 +185,7 @@ export interface SupplierQuotation {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  items?: SupplierQuotationItem[];
 }
 
 // ============================================
@@ -219,6 +251,7 @@ export interface QuotationFilters {
   date_to?: string;
   page?: number;
   per_page?: number;
+  search?: string; // Added search property
 }
 
 // ============================================

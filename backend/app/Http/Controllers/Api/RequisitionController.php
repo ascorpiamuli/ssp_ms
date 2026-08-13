@@ -456,15 +456,34 @@ class RequisitionController extends Controller
     try {
       $filters = $request->validated();
 
-      // Add user_id filter for personal stats if not admin
-      if (!Auth::user()->hasRole('admin')) {
+      // Get current authenticated user
+      $user = Auth::user();
+
+      // Define roles that can see ALL requisition stats (not just their own)
+      $adminRoles = [
+        'ADMIN',           // Administrator - full system access
+        'ACCOUNTANT',      // Accountant/Finance - needs to see all financial data
+        'PROCUREMENT',     // Procurement Officer - manages all procurement
+        'HEAD OF INSTITUTION', // Principal - oversees all institutional activities
+        'FINAL_APPROVER',  // Director/Finance Administrator - approves financial commitments
+        'AUDITOR'          // Auditor - needs full visibility for compliance checks
+      ];
+
+      // Check if user has any admin role (case-insensitive)
+      $hasAdminAccess = $user->roles()
+        ->whereIn('name', $adminRoles)
+        ->exists();
+
+      // If user doesn't have admin access, filter by their user_id (personal stats only)
+      if (!$hasAdminAccess) {
         $filters['user_id'] = Auth::id();
       }
 
       Log::info('📊 RequisitionController::stats - Fetching stats', [
         'filters' => $filters,
         'user_id' => Auth::id(),
-        'is_admin' => Auth::user()->hasRole('admin'),
+        'user_roles' => $user->roles->pluck('name')->toArray(),
+        'has_admin_access' => $hasAdminAccess,
       ]);
 
       $stats = $this->requisitionService->getStats($filters);
@@ -476,7 +495,11 @@ class RequisitionController extends Controller
       return response()->json([
         'success' => true,
         'data' => $stats,
-        'message' => 'Statistics retrieved successfully'
+        'message' => 'Statistics retrieved successfully',
+        'meta' => [
+          'user_roles' => $user->roles->pluck('name')->toArray(),
+          'has_admin_access' => $hasAdminAccess,
+        ]
       ]);
     } catch (\Exception $e) {
       Log::error('❌ RequisitionController::stats - Error', [
@@ -489,7 +512,6 @@ class RequisitionController extends Controller
       ], 500);
     }
   }
-
   /**
    * Get current user's requisition statistics.
    */

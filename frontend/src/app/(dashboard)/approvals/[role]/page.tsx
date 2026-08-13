@@ -52,6 +52,7 @@ import {
   UserCheck,
   UserX,
   Repeat,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,10 +105,30 @@ import { useRequisitionHistory } from '@/hooks/useRequisitionQueries';
 import type { RequisitionFilters } from '@/types/requisition.types';
 
 // ============================================
-// CONSTANTS
+// CONSTANTS - Updated with proper role labels
 // ============================================
 
-// ✅ Display config for UI (display names, icons, colors)
+// Role label mapping based on roles table
+const ROLE_LABELS: Record<string, string> = {
+  'ADMIN': 'Administrator',
+  'HOD': 'Head of Department',
+  'ACCOUNTANT': 'Accountant/Finance',
+  'HEAD OF INSTITUTION': 'Principal/Head of Institution',
+  'FINAL_APPROVER': 'Director/Finance Administrator',
+  'PROCUREMENT': 'Procurement Officer',
+  'SUPPLIER': 'Supplier/Vendor',
+  'AUDITOR': 'Auditorial Staff Officer',
+  'SUPER_ADMIN': 'Super Administrator',
+};
+
+// Get role label helper
+const getRoleLabel = (roleName: string): string => {
+  if (!roleName) return 'Unknown Role';
+  const upperRole = roleName.toUpperCase();
+  return ROLE_LABELS[upperRole] || roleName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// Display config for UI with proper labels
 const APPROVAL_LEVELS: Record<string, { key: string; label: string; icon: any; color: string; fullName: string; description: string }> = {
   'hod': {
     key: 'hod',
@@ -122,36 +143,36 @@ const APPROVAL_LEVELS: Record<string, { key: string; label: string; icon: any; c
     label: 'Accountant',
     icon: CreditCard,
     color: 'indigo',
-    fullName: 'Accountant',
-    description: 'Approvals processed by Accountant'
+    fullName: 'Accountant/Finance',
+    description: 'Approvals processed by Accountant/Finance'
   },
   'head-of-institution': {
     key: 'head-of-institution',
-    label: 'Head of Institution',
+    label: 'Principal',
     icon: Crown,
     color: 'purple',
-    fullName: 'Head of Institution',
-    description: 'Approvals processed by the Head of Institution'
+    fullName: 'Principal/Head of Institution',
+    description: 'Approvals processed by the Principal/Head of Institution'
   },
   'principal': {
     key: 'principal',
     label: 'Principal',
     icon: Crown,
     color: 'purple',
-    fullName: 'Principal',
-    description: 'Approvals processed by Principal'
+    fullName: 'Principal/Head of Institution',
+    description: 'Approvals processed by Principal/Head of Institution'
   },
   'final': {
     key: 'final',
-    label: 'Final Approver',
+    label: 'Director',
     icon: Award,
     color: 'green',
-    fullName: 'Final Approver',
-    description: 'Approvals processed by Final Approver'
+    fullName: 'Director/Finance Administrator',
+    description: 'Approvals processed by Director/Finance Administrator'
   }
 };
 
-// ✅ Mapping from URL parameter to display key
+// Mapping from URL parameter to display key
 const URL_TO_DISPLAY_KEY: Record<string, string> = {
   'hod': 'hod',
   'accountant': 'accountant',
@@ -166,7 +187,7 @@ const URL_TO_DISPLAY_KEY: Record<string, string> = {
   'final approver': 'final',
 };
 
-// ✅ Mapping from display key to API level (what the backend expects for the role parameter)
+// Mapping from display key to API level (what the backend expects for the role parameter)
 const DISPLAY_TO_API_LEVEL: Record<string, string> = {
   'hod': 'hod',
   'accountant': 'accountant',
@@ -175,7 +196,7 @@ const DISPLAY_TO_API_LEVEL: Record<string, string> = {
   'final': 'final',
 };
 
-// ✅ Mapping from display key to the role name for permission validation
+// Mapping from display key to the role name for permission validation
 const DISPLAY_TO_ROLE_NAME: Record<string, string> = {
   'hod': 'HOD',
   'accountant': 'ACCOUNTANT',
@@ -184,7 +205,7 @@ const DISPLAY_TO_ROLE_NAME: Record<string, string> = {
   'final': 'FINAL_APPROVER',
 };
 
-// ✅ Mapping from display key to the level value in the database
+// Mapping from display key to the level value in the database
 const DISPLAY_TO_DB_LEVEL: Record<string, string> = {
   'hod': 'hod',
   'accountant': 'accountant',
@@ -227,10 +248,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; b
 };
 
 const PRIORITY_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
-  low: { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', label: 'Low', icon: Leaf },
-  medium: { color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', label: 'Medium', icon: MinusCircle },
-  high: { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800', label: 'High', icon: Flame },
-  emergency: { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', label: 'Emergency', icon: Zap },
+  low: { color: 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', label: 'Low', icon: Leaf },
+  medium: { color: 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', label: 'Medium', icon: MinusCircle },
+  high: { color: 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800', label: 'High', icon: Flame },
+  emergency: { color: 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', label: 'Emergency', icon: Zap },
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -292,7 +313,7 @@ const ReturnCountBadge = ({ count, className }: ReturnCountBadgeProps) => {
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge variant="outline" className={cn(
-            "flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium",
+            "flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full",
             getColor(),
             className
           )}>
@@ -300,7 +321,7 @@ const ReturnCountBadge = ({ count, className }: ReturnCountBadgeProps) => {
             {count}x Returned
           </Badge>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent className="rounded-xl">
           <p>This requisition has been returned {count} time{count > 1 ? 's' : ''} for revision</p>
         </TooltipContent>
       </Tooltip>
@@ -357,6 +378,9 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
     return labels[action] || action.charAt(0).toUpperCase() + action.slice(1);
   };
 
+  // Get user's role label
+  const userRoleLabel = history.user?.role_label || getRoleLabel(history.user?.role || '');
+
   return (
     <div className={cn(
       "relative pl-6 pb-6 border-l-2",
@@ -375,7 +399,7 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
             <span className="text-sm font-medium dark:text-white">
               {getActionLabel(history.action)}
             </span>
-            <Badge variant="outline" className="text-[10px] h-5">
+            <Badge variant="outline" className="text-[10px] h-5 rounded-full">
               {history.action}
             </Badge>
           </div>
@@ -384,14 +408,17 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
           </span>
         </div>
 
-        {/* User who performed the action */}
+        {/* User who performed the action with role label */}
         {history.user && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <User className="h-3 w-3" />
             <span>{getFullName(history.user)}</span>
+            {history.user.role && (
+              <span className="text-xs text-muted-foreground">({userRoleLabel})</span>
+            )}
             {history.user.email && (
               <span className="text-xs text-muted-foreground/70">
-                ({history.user.email})
+                • {history.user.email}
               </span>
             )}
           </div>
@@ -399,7 +426,7 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
 
         {/* Comments / Notes */}
         {history.comment && (
-          <div className="mt-1 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border dark:border-gray-700">
+          <div className="mt-1 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border dark:border-gray-700">
             <p className="text-xs text-gray-700 dark:text-gray-300 flex items-start gap-2">
               <MessageSquare className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
               <span>{history.comment}</span>
@@ -409,7 +436,7 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
 
         {/* Changes made (for returned/resubmitted) */}
         {history.changes && Object.keys(history.changes).length > 0 && (
-          <div className="mt-1 p-2.5 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="mt-1 p-2.5 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-800">
             <p className="text-xs font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
               <FileDiff className="h-3 w-3" />
               Changes Made
@@ -434,13 +461,13 @@ const HistoryItem = ({ history, index }: HistoryItemProps) => {
         {/* Old vs New values for approvals */}
         {history.old_values && history.new_values && (
           <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-800">
+            <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800">
               <p className="text-red-700 dark:text-red-400 font-medium">Before</p>
               <pre className="mt-0.5 text-red-600 dark:text-red-300 whitespace-pre-wrap text-[10px]">
                 {JSON.stringify(history.old_values, null, 2)}
               </pre>
             </div>
-            <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded border border-green-200 dark:border-green-800">
+            <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200 dark:border-green-800">
               <p className="text-green-700 dark:text-green-400 font-medium">After</p>
               <pre className="mt-0.5 text-green-600 dark:text-green-300 whitespace-pre-wrap text-[10px]">
                 {JSON.stringify(history.new_values, null, 2)}
@@ -478,11 +505,9 @@ const RequisitionHistorySection = ({ requisitionId, returnCount }: RequisitionHi
 
   const history = historyData?.data || [];
 
-  // Check if the requisition was returned
   const wasReturned = history.some((h: any) => h.action === 'returned');
   const wasResubmitted = history.some((h: any) => h.action === 'resubmitted');
 
-  // Get the return event
   const returnEvent = history.find((h: any) => h.action === 'returned');
   const resubmitEvent = history.find((h: any) => h.action === 'resubmitted');
 
@@ -497,7 +522,7 @@ const RequisitionHistorySection = ({ requisitionId, returnCount }: RequisitionHi
 
   if (error) {
     return (
-      <Alert variant="destructive" className="py-3">
+      <Alert variant="destructive" className="py-3 rounded-xl">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle className="text-sm">Failed to load history</AlertTitle>
         <AlertDescription className="text-xs">
@@ -520,7 +545,7 @@ const RequisitionHistorySection = ({ requisitionId, returnCount }: RequisitionHi
     <div className="space-y-4">
       {/* Returned Warning Banner */}
       {wasReturned && (
-        <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+        <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 rounded-xl">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertTitle className="text-amber-800 dark:text-amber-300 text-sm font-semibold flex items-center gap-2">
             Requisition Was Returned for Revision
@@ -548,7 +573,7 @@ const RequisitionHistorySection = ({ requisitionId, returnCount }: RequisitionHi
           <h4 className="text-sm font-medium flex items-center gap-2 dark:text-gray-200">
             <GitBranch className="h-4 w-4 text-muted-foreground" />
             Approval History Timeline
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-xs rounded-full">
               {history.length} events
             </Badge>
           </h4>
@@ -557,7 +582,7 @@ const RequisitionHistorySection = ({ requisitionId, returnCount }: RequisitionHi
               variant="ghost"
               size="sm"
               onClick={() => setShowAllHistory(!showAllHistory)}
-              className="h-7 text-xs"
+              className="h-7 text-xs rounded-xl"
             >
               {showAllHistory ? 'Show Less' : 'View All'}
             </Button>
@@ -589,7 +614,7 @@ const StatusBadge = ({ status, showIcon = true }: { status: string; showIcon?: b
   const Icon = config.icon;
 
   return (
-    <Badge className={cn("flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border", config.bgColor, config.color)}>
+    <Badge className={cn("flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-full", config.bgColor, config.color)}>
       {showIcon && <Icon className="h-3 w-3" />}
       {config.label}
     </Badge>
@@ -601,7 +626,7 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
   const Icon = config.icon;
 
   return (
-    <Badge variant="outline" className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium", config.color)}>
+    <Badge variant="outline" className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full", config.color)}>
       <Icon className="h-2.5 w-2.5" />
       {config.label}
     </Badge>
@@ -649,7 +674,7 @@ const StatsCards = ({ stats, isLoading }: StatsCardsProps) => {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="animate-pulse">
+          <Card key={i} className="animate-pulse border-0 shadow-sm">
             <CardContent className="p-4">
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2" />
               <div className="h-7 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
@@ -663,11 +688,11 @@ const StatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {statItems.map((item) => (
-        <Card key={item.label} className="hover:shadow-md transition-shadow duration-200 dark:border-gray-800">
+        <Card key={item.label} className="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl hover:shadow-md transition-shadow duration-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
-              <div className={cn("p-2 rounded-lg", item.color)}>
+              <div className={cn("p-2 rounded-xl", item.color)}>
                 <item.icon className="h-4 w-4" />
               </div>
             </div>
@@ -703,13 +728,13 @@ const Filters = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <Card className="mb-6 dark:border-gray-800">
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">Filters</span>
-            <Badge variant="secondary" className="ml-1 text-xs">
+            <Badge variant="secondary" className="ml-1 text-xs rounded-full">
               {Object.keys(filters).filter(key => filters[key as keyof RequisitionFilters]).length}
             </Badge>
           </div>
@@ -718,12 +743,12 @@ const Filters = ({
               variant="ghost"
               size="sm"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="h-8 gap-1 text-xs"
+              className="h-8 gap-1 text-xs rounded-xl"
             >
               {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {isExpanded ? 'Hide' : 'Show'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onReset} className="h-8 gap-1 text-xs">
+            <Button variant="ghost" size="sm" onClick={onReset} className="h-8 gap-1 text-xs rounded-xl">
               <RefreshCw className="h-3.5 w-3.5" />
               Reset
             </Button>
@@ -737,7 +762,7 @@ const Filters = ({
               placeholder="Search approvals..."
               value={filters.search || ''}
               onChange={(e) => onFilterChange('search', e.target.value)}
-              className="pl-9 h-9 text-sm"
+              className="pl-9 h-9 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
 
@@ -745,10 +770,10 @@ const Filters = ({
             value={filters.priority as string || 'all'}
             onValueChange={(value) => onFilterChange('priority', value === 'all' ? undefined : value)}
           >
-            <SelectTrigger className="h-9 text-sm">
+            <SelectTrigger className="h-9 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700">
               <SelectValue placeholder="All Priorities" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
               <SelectItem value="all">All Priorities</SelectItem>
               <SelectItem value="low">Low</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
@@ -761,10 +786,10 @@ const Filters = ({
             value={filters.department_id?.toString() || 'all'}
             onValueChange={(value) => onFilterChange('department_id', value === 'all' ? undefined : parseInt(value))}
           >
-            <SelectTrigger className="h-9 text-sm">
+            <SelectTrigger className="h-9 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700">
               <SelectValue placeholder="All Departments" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
               <SelectItem value="all">All Departments</SelectItem>
               {departments.map((dept) => (
                 <SelectItem key={dept.id} value={dept.id.toString()}>
@@ -776,17 +801,17 @@ const Filters = ({
         </div>
 
         {isExpanded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t dark:border-gray-800">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t dark:border-gray-700">
             <div>
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select
                 value={statusFilter}
                 onValueChange={(value) => onStatusFilterChange && onStatusFilterChange(value)}
               >
-                <SelectTrigger className="h-9 text-sm mt-1">
+                <SelectTrigger className="h-9 text-sm mt-1 rounded-xl dark:bg-gray-900 dark:border-gray-700">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
@@ -802,7 +827,7 @@ const Filters = ({
                 type="date"
                 value={filters.date_from || ''}
                 onChange={(e) => onFilterChange('date_from', e.target.value || undefined)}
-                className="h-9 text-sm mt-1"
+                className="h-9 text-sm mt-1 rounded-xl dark:bg-gray-900 dark:border-gray-700"
               />
             </div>
             <div>
@@ -811,7 +836,7 @@ const Filters = ({
                 type="date"
                 value={filters.date_to || ''}
                 onChange={(e) => onFilterChange('date_to', e.target.value || undefined)}
-                className="h-9 text-sm mt-1"
+                className="h-9 text-sm mt-1 rounded-xl dark:bg-gray-900 dark:border-gray-700"
               />
             </div>
           </div>
@@ -844,13 +869,17 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
   const returnCount = requisition?.return_count || 0;
   const wasReturned = returnCount > 0;
 
+  // Get approver's role label
+  const approverRoleLabel = approval.approver?.role_label || getRoleLabel(approval.approver?.role || '');
+  const delegateRoleLabel = approval.delegate?.role_label || getRoleLabel(approval.delegate?.role || '');
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 dark:bg-gray-900 dark:border-gray-800">
-        <DialogHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-6 py-4">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 dark:bg-gray-900 dark:border-gray-800 rounded-xl">
+        <DialogHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-6 py-4 rounded-t-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/30">
                 <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
@@ -877,7 +906,7 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
           {/* Returned Warning */}
           {wasReturned && (
             <Alert className={cn(
-              "border",
+              "border rounded-xl",
               returnCount === 1 && "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
               returnCount === 2 && "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",
               returnCount >= 3 && "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
@@ -919,7 +948,7 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</p>
               <div className="flex items-center gap-2">
                 <Badge className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 text-sm font-medium border",
+                  "flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-full",
                   config.bgColor,
                   config.color
                 )}>
@@ -946,6 +975,10 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
               </Avatar>
               <div>
                 <p className="font-semibold text-base dark:text-white">{getFullName(approval.approver)}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" />
+                  {approverRoleLabel}
+                </p>
                 {approval.approver.email && (
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                     <Mail className="h-3.5 w-3.5" />
@@ -955,6 +988,33 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
               </div>
             </div>
           </div>
+
+          {/* Delegate Info */}
+          {approval.delegate && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Delegated To</p>
+              <div className="flex items-center gap-4 p-4 bg-purple-50 dark:bg-purple-950/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                <Avatar className="h-12 w-12 border-2 border-purple-100 dark:border-purple-900">
+                  <AvatarFallback className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-semibold text-base">
+                    {getInitials(getFullName(approval.delegate))}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold text-base dark:text-white">{getFullName(approval.delegate)}</p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" />
+                    {delegateRoleLabel}
+                  </p>
+                  {approval.delegate.email && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5" />
+                      {approval.delegate.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Comment */}
           {approval?.comment && (
@@ -983,7 +1043,7 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
           )}
 
           {/* Requisition Details */}
-          <Separator className="dark:bg-gray-800" />
+          <Separator className="dark:bg-gray-700" />
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Requisition Details</p>
             <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border dark:border-gray-700">
@@ -1021,7 +1081,7 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
           </div>
 
           {/* History Section */}
-          <Separator className="dark:bg-gray-800" />
+          <Separator className="dark:bg-gray-700" />
           <div id="history-section">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1033,7 +1093,7 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowHistory(!showHistory)}
-                className="h-7 gap-1 text-xs"
+                className="h-7 gap-1 text-xs rounded-xl"
               >
                 {showHistory ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 {showHistory ? 'Hide' : 'Show'} History
@@ -1049,25 +1109,24 @@ const ApprovalDetailsDialog = ({ open, onOpenChange, approval }: ApprovalDetails
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t dark:border-gray-800 px-6 py-4 flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t dark:border-gray-800 px-6 py-4 flex justify-end gap-3 rounded-b-xl">
           {wasReturned && requisition?.id && (
             <Button
               variant="outline"
               onClick={() => {
                 setShowHistory(true);
-                // Scroll to history section
                 const historyElement = document.getElementById('history-section');
                 if (historyElement) {
                   historyElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
               }}
-              className="gap-2"
+              className="gap-2 rounded-xl"
             >
               <RotateCcw className="h-4 w-4" />
               View Changes ({returnCount} return{returnCount > 1 ? 's' : ''})
             </Button>
           )}
-          <Button onClick={() => onOpenChange(false)} className="px-6">
+          <Button onClick={() => onOpenChange(false)} className="px-6 rounded-xl">
             Close
           </Button>
         </div>
@@ -1110,7 +1169,7 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
 
   return (
     <>
-      <div className="border rounded-xl overflow-hidden shadow-sm dark:border-gray-800">
+      <div className="border rounded-xl overflow-hidden shadow-sm dark:border-gray-700">
         <ScrollArea className="w-full">
           <Table>
             <TableHeader>
@@ -1133,7 +1192,9 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                 const returnCount = requisition?.return_count || 0;
                 const isReturned = returnCount > 0;
 
-                // Determine row styling based on return count
+                // Get approver's role label
+                const approverRoleLabel = approval.approver?.role_label || getRoleLabel(approval.approver?.role || '');
+
                 const getReturnRowStyle = () => {
                   if (!isReturned) return '';
                   if (returnCount === 1) return 'border-l-4 border-l-amber-400 bg-amber-50/10 dark:bg-amber-950/10';
@@ -1212,7 +1273,14 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                               {getInitials(getFullName(approval.approver))}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="text-sm truncate max-w-[80px] dark:text-gray-300">{getFullName(approval.approver)}</span>
+                          <div className="flex flex-col">
+                            <span className="text-sm truncate max-w-[80px] dark:text-gray-300">
+                              {getFullName(approval.approver)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                              {approverRoleLabel}
+                            </span>
+                          </div>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -1226,7 +1294,7 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-xl"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onView(requisition?.id);
@@ -1235,7 +1303,7 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                                 <Eye className="h-4 w-4 text-muted-foreground dark:text-gray-400" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View Requisition</TooltipContent>
+                            <TooltipContent className="rounded-xl">View Requisition</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
@@ -1244,7 +1312,7 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-xl"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleViewDetails(approval);
@@ -1253,7 +1321,7 @@ const ApprovalTable = ({ approvals, displayKey, onView }: ApprovalTableProps) =>
                                 <Info className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View Approval Details</TooltipContent>
+                            <TooltipContent className="rounded-xl">View Approval Details</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
@@ -1301,10 +1369,10 @@ export default function RoleApprovalsPage() {
     return [];
   }, [departmentsData]);
 
-  // ✅ STEP 1: Get the raw role from URL
+  // STEP 1: Get the raw role from URL
   const rawRole = params.role as string;
 
-  // ✅ STEP 2: Map URL parameter to display key
+  // STEP 2: Map URL parameter to display key
   const getDisplayKey = (role: string): string => {
     const decodedRole = decodeURIComponent(role);
     const lowerRole = decodedRole.toLowerCase().trim();
@@ -1338,28 +1406,28 @@ export default function RoleApprovalsPage() {
   const displayKey = getDisplayKey(rawRole);
   const levelInfo = APPROVAL_LEVELS[displayKey];
 
-  // ✅ STEP 3: Map display key to API level
+  // STEP 3: Map display key to API level
   const getApiLevel = (displayKey: string): string => {
     return DISPLAY_TO_API_LEVEL[displayKey] || displayKey;
   };
 
   const apiLevel = getApiLevel(displayKey);
 
-  // ✅ STEP 4: Get the role name for permission check
+  // STEP 4: Get the role name for permission check
   const getRoleNameForBackend = (displayKey: string): string => {
     return DISPLAY_TO_ROLE_NAME[displayKey] || displayKey.toUpperCase();
   };
 
   const roleNameForBackend = getRoleNameForBackend(displayKey);
 
-  // ✅ STEP 5: Get the DB level
+  // STEP 5: Get the DB level
   const getDbLevel = (displayKey: string): string => {
     return DISPLAY_TO_DB_LEVEL[displayKey] || displayKey;
   };
 
   const dbLevel = getDbLevel(displayKey);
 
-  // ✅ STEP 6: Check if user has permission
+  // STEP 6: Check if user has permission
   const hasPermission = useMemo(() => {
     if (!user) return false;
 
@@ -1372,19 +1440,10 @@ export default function RoleApprovalsPage() {
       r === 'super_admin'
     );
 
-    console.log('🔍 Role Approval Permission Check:', {
-      displayKey,
-      apiLevel,
-      dbLevel,
-      roleNameForBackend,
-      userRoles,
-      hasRole,
-    });
-
     return hasRole;
   }, [user, roleNameForBackend, displayKey, apiLevel, dbLevel]);
 
-  // ✅ STEP 7: Fetch approvals using the API level
+  // STEP 7: Fetch approvals using the API level
   const roleApprovalsQuery = useRoleApprovals(dbLevel, {
     status: statusFilter,
     page: currentPage,
@@ -1463,15 +1522,16 @@ export default function RoleApprovalsPage() {
   const totalItems = meta?.total || 0;
   const totalPages = meta?.last_page || 0;
 
-  // ✅ Access Denied
+  // Access Denied
   if (!hasPermission) {
     return (
       <PageTemplate
         title="Access Denied"
         description="You do not have permission to view this page"
         icon={<Shield className="h-5 w-5 text-red-600" />}
+        background="gradient"
       >
-        <Alert variant="destructive" className="max-w-md mx-auto">
+        <Alert variant="destructive" className="max-w-md mx-auto rounded-xl border-red-200 dark:border-red-800">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Access Denied</AlertTitle>
           <AlertDescription>
@@ -1480,7 +1540,7 @@ export default function RoleApprovalsPage() {
           </AlertDescription>
         </Alert>
         <div className="flex justify-center mt-4">
-          <Button onClick={() => router.push('/dashboard')} size="sm">
+          <Button onClick={() => router.push('/dashboard')} size="sm" className="rounded-xl">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Return to Dashboard
           </Button>
@@ -1495,8 +1555,9 @@ export default function RoleApprovalsPage() {
         title="Invalid Role"
         description="The specified approval role does not exist"
         icon={<Shield className="h-5 w-5 text-red-600" />}
+        background="gradient"
       >
-        <Alert variant="destructive" className="max-w-md mx-auto">
+        <Alert variant="destructive" className="max-w-md mx-auto rounded-xl border-red-200 dark:border-red-800">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Invalid Role</AlertTitle>
           <AlertDescription>
@@ -1504,7 +1565,7 @@ export default function RoleApprovalsPage() {
           </AlertDescription>
         </Alert>
         <div className="flex justify-center mt-4">
-          <Button onClick={() => router.push('/dashboard')} size="sm">
+          <Button onClick={() => router.push('/dashboard')} size="sm" className="rounded-xl">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Return to Dashboard
           </Button>
@@ -1518,19 +1579,25 @@ export default function RoleApprovalsPage() {
       title={`${levelInfo.label} Approval Log`}
       description={`Complete audit trail of all ${levelInfo.fullName} approvals - Non-repudiable approval records`}
       icon={<levelInfo.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Approvals' },
+        { label: levelInfo.fullName },
+      ]}
       actions={
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => roleApprovalsQuery.refetch()}
-            className="h-9 gap-2"
+            className="h-9 gap-2 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
             disabled={isLoading}
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             Refresh
           </Button>
-          <Badge variant="default" className="h-9 px-4 gap-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
+          <Badge variant="default" className="h-9 px-4 gap-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 rounded-full">
             <Clock className="h-4 w-4" />
             {stats.pending} Pending
           </Badge>
@@ -1584,7 +1651,7 @@ export default function RoleApprovalsPage() {
                     size="sm"
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="h-9"
+                    className="h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
                   >
                     Previous
                   </Button>
@@ -1593,7 +1660,7 @@ export default function RoleApprovalsPage() {
                     size="sm"
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="h-9"
+                    className="h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
                   >
                     Next
                   </Button>

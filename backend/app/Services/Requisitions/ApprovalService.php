@@ -356,7 +356,7 @@ class ApprovalService
     ];
   }
 
-  /**
+/**
    * Process an approval
    *
    * @param int $requisitionId
@@ -381,17 +381,42 @@ class ApprovalService
       // Get requisition directly without going through RequisitionService
       $requisition = Requisition::with(['user', 'department'])->findOrFail($requisitionId);
 
-      // Get approval record
-      $approval = Approval::where('requisition_id', $requisitionId)
-        ->where('level', $level)
-        ->first();
+      // Get all approvals for this requisition ordered by level/order
+      $allApprovals = Approval::where('requisition_id', $requisitionId)
+        ->orderBy('order')
+        ->get();
+
+      if ($allApprovals->isEmpty()) {
+        throw new ApprovalException("No approval workflow found for requisition: {$requisitionId}");
+      }
+
+      // Get the approval record for the requested level
+      $approval = $allApprovals->firstWhere('level', $level);
 
       if (!$approval) {
         throw new ApprovalException("Approval not found for level: {$level}");
       }
 
-      // ✅ FIX: Allow processing if status is 'pending' OR 'delegated'
-      // A delegated approval can be processed by the delegate
+      // ✅ FIX: Check sequential order
+      // Find the current index of this approval in the sequence
+      $currentIndex = $allApprovals->search(function($item) use ($level) {
+        return $item->level === $level;
+      });
+
+      // Check if all previous approvals are completed (approved)
+      if ($currentIndex > 0) {
+        $previousApproval = $allApprovals->get($currentIndex - 1);
+
+        // Previous approval must be approved (not pending, declined, returned, etc.)
+        if ($previousApproval->status !== 'approved') {
+          throw new ApprovalException(
+            "Cannot process level '{$level}' because previous level '{$previousApproval->level}' is not yet approved. " .
+            "Current status: {$previousApproval->status}"
+          );
+        }
+      }
+
+      // ✅ Check if this approval is already processed
       if (!$approval->isPending() && !$approval->isDelegated()) {
         throw new ApprovalException('This approval has already been processed');
       }

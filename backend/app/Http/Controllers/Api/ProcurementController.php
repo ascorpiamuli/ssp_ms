@@ -8,9 +8,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Procurement\ProcurementRequest;
 use App\Http\Resources\Procurement\ProcurementSummaryResource;
+use App\Models\QuotationRequest;
+use App\Models\Requisition;
 use App\Services\Procurement\Services\ProcurementService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class ProcurementController extends Controller
 {
@@ -18,6 +21,9 @@ class ProcurementController extends Controller
     protected ProcurementService $procurementService
   ) {}
 
+  /**
+   * Start procurement for a requisition
+   */
   public function start(ProcurementRequest $request): JsonResponse
   {
     $requisition = $this->procurementService->startProcurement($request->requisition_id);
@@ -34,6 +40,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Get procurement status for a requisition
+   */
   public function status(int $requisitionId): JsonResponse
   {
     $status = $this->procurementService->getProcurementStatus($requisitionId);
@@ -45,6 +54,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Get procurement summary for a requisition
+   */
   public function summary(int $requisitionId): JsonResponse
   {
     $summary = $this->procurementService->getProcurementSummary($requisitionId);
@@ -56,6 +68,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Get procurement timeline for a requisition
+   */
   public function timeline(int $requisitionId): JsonResponse
   {
     $timeline = $this->procurementService->getProcurementTimeline($requisitionId);
@@ -67,6 +82,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Get procurement metrics for a requisition
+   */
   public function metrics(int $requisitionId): JsonResponse
   {
     $metrics = $this->procurementService->getProcurementMetrics($requisitionId);
@@ -78,6 +96,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Get procurement steps for a requisition
+   */
   public function steps(int $requisitionId): JsonResponse
   {
     $steps = $this->procurementService->getProcurementSteps($requisitionId);
@@ -89,6 +110,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Complete procurement for a requisition
+   */
   public function complete(ProcurementRequest $request): JsonResponse
   {
     $requisition = $this->procurementService->completeProcurement($request->requisition_id);
@@ -103,6 +127,9 @@ class ProcurementController extends Controller
     ]);
   }
 
+  /**
+   * Cancel procurement for a requisition
+   */
   public function cancel(Request $request): JsonResponse
   {
     $request->validate([
@@ -123,5 +150,294 @@ class ProcurementController extends Controller
       ],
       'message' => 'Procurement cancelled successfully.',
     ]);
+  }
+
+  /**
+   * Get requisitions ready for procurement.
+   * These are fully approved (final_approved) and don't have QTN yet.
+   */
+  public function readyRequisitions(Request $request): JsonResponse
+  {
+    Log::info('🔍 [readyRequisitions] ========== START ==========');
+
+    // Get all requisition IDs that already have QTNs
+    $requisitionIdsWithQtn = QuotationRequest::pluck('requisition_id')->toArray();
+    Log::info('🔍 [readyRequisitions] Requisition IDs with QTNs:', [
+      'count' => count($requisitionIdsWithQtn),
+      'ids' => $requisitionIdsWithQtn
+    ]);
+
+    $query = Requisition::with(['user', 'department', 'items'])
+      ->where('status', 'final_approved')
+      ->where('status', '!=', 'cancelled')
+      ->whereNotIn('id', $requisitionIdsWithQtn);
+
+    Log::info('🔍 [readyRequisitions] SQL Query:', [
+      'sql' => $query->toSql(),
+      'bindings' => $query->getBindings()
+    ]);
+
+    $requisitions = $query->orderBy('created_at', 'desc')
+      ->paginate($request->input('per_page', 15));
+
+    Log::info('🔍 [readyRequisitions] Final result:', [
+      'count' => $requisitions->count(),
+      'total' => $requisitions->total()
+    ]);
+
+    Log::info('🔍 [readyRequisitions] ========== END ==========');
+
+    return response()->json([
+      'success' => true,
+      'data' => $requisitions,
+      'message' => 'Ready requisitions retrieved successfully.',
+    ]);
+  }
+
+  /**
+   * Get requisitions that already have QTNs.
+   */
+  public function requisitionsWithQtns(Request $request): JsonResponse
+  {
+    Log::info('🔍 [requisitionsWithQtns] ========== START ==========');
+
+    $requisitionIdsWithQtn = QuotationRequest::pluck('requisition_id')->toArray();
+    Log::info('🔍 [requisitionsWithQtns] Requisition IDs with QTNs:', [
+      'count' => count($requisitionIdsWithQtn),
+      'ids' => $requisitionIdsWithQtn
+    ]);
+
+    $requisitions = Requisition::with(['user', 'department', 'items'])
+      ->whereIn('id', $requisitionIdsWithQtn)
+      ->where('status', '!=', 'cancelled')
+      ->orderBy('created_at', 'desc')
+      ->paginate($request->input('per_page', 15));
+
+    Log::info('🔍 [requisitionsWithQtns] Result:', [
+      'count' => $requisitions->count(),
+      'total' => $requisitions->total()
+    ]);
+
+    Log::info('🔍 [requisitionsWithQtns] ========== END ==========');
+
+    // Also get the QTN data for each requisition
+    $qtns = QuotationRequest::whereIn('requisition_id', $requisitionIdsWithQtn)
+      ->get()
+      ->keyBy('requisition_id');
+
+    return response()->json([
+      'success' => true,
+      'data' => [
+        'requisitions' => $requisitions,
+        'qtns' => $qtns,
+      ],
+      'message' => 'Requisitions with QTNs retrieved successfully.',
+    ]);
+  }
+
+  /**
+   * Get requisitions currently in procurement process.
+   * Has QTN but not yet completed (PO not issued or goods not received etc.)
+   */
+  public function inProgress(Request $request): JsonResponse
+  {
+    Log::info('🔍 [inProgress] ========== START ==========');
+
+    $requisitionIdsWithQtn = QuotationRequest::pluck('requisition_id')->toArray();
+    Log::info('🔍 [inProgress] Requisition IDs with QTNs:', [
+      'count' => count($requisitionIdsWithQtn),
+      'ids' => $requisitionIdsWithQtn
+    ]);
+
+    $requisitions = Requisition::with(['user', 'department', 'items'])
+      ->whereIn('id', $requisitionIdsWithQtn)
+      ->where('status', '!=', 'cancelled')
+      ->where('status', '!=', 'procurement_completed')
+      ->orderBy('created_at', 'desc')
+      ->paginate($request->input('per_page', 15));
+
+    Log::info('🔍 [inProgress] Result:', [
+      'count' => $requisitions->count(),
+      'total' => $requisitions->total()
+    ]);
+
+    Log::info('🔍 [inProgress] ========== END ==========');
+
+    return response()->json([
+      'success' => true,
+      'data' => $requisitions,
+      'message' => 'In-progress procurement requisitions retrieved successfully.',
+    ]);
+  }
+  /**
+   * Get procurement statistics for the authenticated user.
+   * This endpoint provides aggregated statistics about procurement and approval status.
+   */
+  public function statistics(Request $request): JsonResponse
+  {
+    try {
+      // Get the authenticated user
+      $user = $request->user();
+
+      // Get user roles
+      $userRoles = $user->roles->pluck('name')->map(function ($role) {
+        return strtoupper($role);
+      })->toArray();
+
+      // Check if user has admin, procurement, or accountant role
+      $hasFullAccess = in_array('ADMIN', $userRoles) ||
+        in_array('PROCUREMENT', $userRoles) ||
+        in_array('ACCOUNTANT', $userRoles);
+
+      // Get requisitions based on user role
+      $query = Requisition::where('status', '!=', 'cancelled');
+
+      if (!$hasFullAccess) {
+        // Regular users only see their own requisitions
+        $query->where('user_id', $user->id);
+      }
+
+      $allRequisitions = $query->get();
+
+      // Get requisition IDs that have QTNs
+      $userRequisitionIds = $allRequisitions->pluck('id')->toArray();
+      $requisitionIdsWithQtn = QuotationRequest::whereIn('requisition_id', $userRequisitionIds)
+        ->pluck('requisition_id')
+        ->toArray();
+
+      $stats = [
+        // Total requisitions
+        'total' => $allRequisitions->count(),
+
+        // Approval stats
+        'approved' => 0,           // final_approved
+        'pending' => 0,            // submitted, hod_approved, accountant_approved, principal_approved
+        'declined' => 0,           // hod_declined, accountant_declined, principal_declined, final_declined
+        'draft' => 0,              // draft
+        'returned' => 0,           // returned
+        'revised' => 0,            // revised
+        'cancelled' => 0,          // cancelled
+
+        // Procurement stats
+        'ready_for_procurement' => 0,
+        'in_progress' => 0,
+        'with_qtns' => 0,
+        'completed' => 0,
+
+        // Detailed breakdown by status
+        'by_status' => [],
+      ];
+
+      // Get count by status
+      $statusCounts = $query->clone()
+        ->selectRaw('status, count(*) as count')
+        ->groupBy('status')
+        ->pluck('count', 'status')
+        ->toArray();
+
+      $stats['by_status'] = $statusCounts;
+
+      // Map status to categories
+      foreach ($allRequisitions as $requisition) {
+        $status = $requisition->status;
+        $hasQtn = in_array($requisition->id, $requisitionIdsWithQtn);
+
+        // Approval stats
+        switch ($status) {
+          case 'final_approved':
+            $stats['approved']++;
+            break;
+          case 'submitted':
+          case 'hod_approved':
+          case 'accountant_approved':
+          case 'principal_approved':
+            $stats['pending']++;
+            break;
+          case 'hod_declined':
+          case 'accountant_declined':
+          case 'principal_declined':
+          case 'final_declined':
+            $stats['declined']++;
+            break;
+          case 'draft':
+            $stats['draft']++;
+            break;
+          case 'returned':
+            $stats['returned']++;
+            break;
+          case 'revised':
+            $stats['revised']++;
+            break;
+          case 'cancelled':
+            $stats['cancelled']++;
+            break;
+        }
+
+        // Procurement stats (only for final_approved)
+        if ($status === 'final_approved') {
+          $metadata = $requisition->metadata ?? [];
+          $isCompleted = false;
+
+          // Check if procurement is marked as completed
+          if ($requisition->status === 'procurement_completed') {
+            $isCompleted = true;
+          }
+
+          // Check metadata for completion flags
+          if (isset($metadata['payment_completed']) && $metadata['payment_completed'] === true) {
+            $isCompleted = true;
+          }
+          if (isset($metadata['cheque_issued']) && $metadata['cheque_issued'] === true) {
+            $isCompleted = true;
+          }
+
+          // Check if PO/LPO and GRN exist
+          if (
+            isset($metadata['lpo_generated']) && $metadata['lpo_generated'] === true &&
+            isset($metadata['grn_generated']) && $metadata['grn_generated'] === true
+          ) {
+            $isCompleted = true;
+          }
+
+          if ($isCompleted) {
+            $stats['completed']++;
+          } elseif ($hasQtn) {
+            $stats['in_progress']++;
+            $stats['with_qtns']++;
+          } else {
+            $stats['ready_for_procurement']++;
+          }
+        }
+      }
+
+      return response()->json([
+        'success' => true,
+        'data' => $stats,
+        'message' => 'Procurement statistics retrieved successfully.',
+      ]);
+    } catch (\Exception $e) {
+      \Log::error('Procurement statistics error: ' . $e->getMessage());
+      \Log::error('Trace: ' . $e->getTraceAsString());
+
+      return response()->json([
+        'success' => false,
+        'data' => [
+          'total' => 0,
+          'approved' => 0,
+          'pending' => 0,
+          'declined' => 0,
+          'draft' => 0,
+          'returned' => 0,
+          'revised' => 0,
+          'cancelled' => 0,
+          'ready_for_procurement' => 0,
+          'in_progress' => 0,
+          'with_qtns' => 0,
+          'completed' => 0,
+          'by_status' => [],
+        ],
+        'message' => 'Failed to retrieve procurement statistics.',
+      ], 500);
+    }
   }
 }

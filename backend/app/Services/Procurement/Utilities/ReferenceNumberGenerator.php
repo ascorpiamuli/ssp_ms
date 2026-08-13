@@ -18,6 +18,8 @@ use App\Models\Tender;
 use App\Models\ProcurementSetting;
 use App\Services\Procurement\Contracts\Utilities\ReferenceNumberGeneratorInterface;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
 {
@@ -31,12 +33,12 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
 
   public function generateQtnNumber(): string
   {
-    return $this->generateNumber('QTN', QuotationRequest::class);
+    return $this->generateNumber('RFQ', QuotationRequest::class);
   }
 
   public function generateSupplierQuotationNumber(): string
   {
-    return $this->generateNumber('SQ', SupplierQuotation::class);
+    return $this->generateNumber('QTN', SupplierQuotation::class);
   }
 
   public function generatePoNumber(string $type): string
@@ -103,7 +105,7 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
       $parts[] = $this->getDepartmentCode();
     }
 
-    $parts[] = str_pad((string) $sequence, $format['sequence_length'] ?? 5, '0', STR_PAD_LEFT);
+    $parts[] = str_pad((string) (int) $sequence, $format['sequence_length'] ?? 5, '0', STR_PAD_LEFT);
 
     return implode($format['separator'] ?? '-', $parts);
   }
@@ -112,7 +114,6 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
   {
     $this->formats[$type] = $format;
 
-    // Save to database
     ProcurementSetting::updateOrCreate(
       ['setting_key' => 'ref_format_' . strtolower($type)],
       [
@@ -124,7 +125,6 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
       ]
     );
 
-    // Clear cache
     Cache::forget('procurement_ref_formats');
   }
 
@@ -139,7 +139,6 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
       'include_department_code' => false,
     ];
 
-    // Check if format is loaded from database
     if (isset($this->formats[$type]) && is_array($this->formats[$type])) {
       return array_merge($default, $this->formats[$type]);
     }
@@ -147,29 +146,75 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
     return $default;
   }
 
+  /**
+   * 🔧 FIX: Get the next sequence number WITHOUT caching to avoid duplicates
+   * when records are deleted.
+   */
   public function getNextSequence(string $modelClass, array $filters = []): int
   {
-    $cacheKey = 'ref_seq_' . md5($modelClass . serialize($filters));
+    // 🔧 FIX: Don't use cache - always query the database directly
+    // This prevents duplicate issues when records are deleted
+    $query = $modelClass::whereYear('created_at', date('Y'));
 
-    return Cache::remember($cacheKey, $this->cacheTtl, function () use ($modelClass, $filters) {
-      $query = $modelClass::whereYear('created_at', date('Y'));
+    foreach ($filters as $key => $value) {
+      $query->where($key, $value);
+    }
 
-      foreach ($filters as $key => $value) {
-        $query->where($key, $value);
+    // Get the reference field name
+    $referenceField = $this->getReferenceField($modelClass);
+
+    // Get the maximum sequence number from existing records
+    $maxSequence = 0;
+
+    // Get all existing numbers
+    $existingNumbers = $query->pluck($referenceField)->toArray();
+
+    foreach ($existingNumbers as $number) {
+      if ($number) {
+        // Extract the sequence number from the reference
+        // Format: PREFIX-YEAR-SEQUENCE (e.g., QTN-2026-00001)
+        $parts = explode('-', (string) $number);
+        if (count($parts) >= 3) {
+          $seq = (int) end($parts);
+          if ($seq > $maxSequence) {
+            $maxSequence = $seq;
+          }
+        }
       }
+    }
 
-      return $query->count() + 1;
-    });
+    // Return the next sequence number
+    return $maxSequence + 1;
+  }
+
+  /**
+   * Get the reference field name for the model.
+   */
+  protected function getReferenceField(string $modelClass): string
+  {
+    $fields = [
+      QuotationRequest::class => 'qtn_number',
+      SupplierQuotation::class => 'quotation_number',
+      PurchaseOrder::class => 'po_number',
+      GoodsReceivedNote::class => 'grn_number',
+      ServiceAcknowledgmentNote::class => 'san_number',
+      Invoice::class => 'invoice_number',
+      PaymentVoucher::class => 'voucher_number',
+      Cheque::class => 'cheque_number',
+      Contract::class => 'contract_number',
+      Tender::class => 'tender_number',
+    ];
+
+    return $fields[$modelClass] ?? 'id';
   }
 
   public function resetSequence(string $modelClass, int $start = 1): void
   {
-    // This is an admin function - should have proper authorization
+    // Clear any cached sequences
     $cacheKey = 'ref_seq_' . md5($modelClass . '[]');
     Cache::forget($cacheKey);
 
-    // Log the reset
-    \Log::info('Reference sequence reset', [
+    Log::info('Reference sequence reset', [
       'model' => $modelClass,
       'start' => $start,
       'user_id' => auth()->id(),
@@ -178,7 +223,6 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
 
   protected function loadFormats(): void
   {
-    // Load from cache or database
     $formats = Cache::remember('procurement_ref_formats', $this->cacheTtl, function () {
       return ProcurementSetting::where('setting_group', 'reference_formats')
         ->where('is_active', true)
@@ -196,8 +240,6 @@ class ReferenceNumberGenerator implements ReferenceNumberGeneratorInterface
 
   protected function getDepartmentCode(): string
   {
-    // Get department code from the current context
-    // This could be from the requisition, user, or session
     $departmentCode = session('procurement_department_code');
 
     if (!$departmentCode && auth()->user()) {

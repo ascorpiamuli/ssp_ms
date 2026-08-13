@@ -42,6 +42,42 @@ class RoleService extends BaseService
   }
 
   /**
+   * Get all roles with their labels and descriptions formatted for display.
+   */
+  public function getAllRolesWithLabels()
+  {
+    Log::info('🔍 RoleService::getAllRolesWithLabels - Fetching all roles with labels');
+
+    try {
+      $roles = Role::with('permissions')->get()->map(function ($role) {
+        return [
+          'id' => $role->id,
+          'name' => $role->name,
+          'label' => $role->label ?? $this->formatRoleName($role->name),
+          'description' => $role->description,
+          'guard_name' => $role->guard_name,
+          'permissions' => $role->permissions->pluck('name')->toArray(),
+          'permissions_count' => $role->permissions->count(),
+          'created_at' => $role->created_at,
+          'updated_at' => $role->updated_at,
+        ];
+      });
+
+      Log::info('✅ RoleService::getAllRolesWithLabels - Roles with labels fetched successfully', [
+        'count' => $roles->count()
+      ]);
+
+      return $roles;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getAllRolesWithLabels - Error fetching roles', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
    * Get a single role with its permissions.
    */
   public function getRoleById(int $id)
@@ -67,6 +103,51 @@ class RoleService extends BaseService
   }
 
   /**
+   * Get role with formatted label and description.
+   */
+  public function getRoleWithLabels(int $id)
+  {
+    Log::info('🔍 RoleService::getRoleWithLabels - Fetching role with labels', ['role_id' => $id]);
+
+    try {
+      $role = Role::with('permissions')->findOrFail($id);
+
+      $formattedRole = [
+        'id' => $role->id,
+        'name' => $role->name,
+        'label' => $role->label ?? $this->formatRoleName($role->name),
+        'description' => $role->description,
+        'guard_name' => $role->guard_name,
+        'permissions' => $role->permissions->pluck('name')->toArray(),
+        'permissions_count' => $role->permissions->count(),
+        'created_at' => $role->created_at,
+        'updated_at' => $role->updated_at,
+      ];
+
+      Log::info('✅ RoleService::getRoleWithLabels - Role with labels fetched successfully', [
+        'role_id' => $id,
+        'role_label' => $formattedRole['label']
+      ]);
+
+      return $formattedRole;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getRoleWithLabels - Error fetching role', [
+        'role_id' => $id,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
+   * Format role name to a human-readable label.
+   */
+  protected function formatRoleName(string $name): string
+  {
+    return ucfirst(str_replace('_', ' ', $name));
+  }
+
+  /**
    * Get role statistics.
    */
   public function getRoleStats()
@@ -80,10 +161,18 @@ class RoleService extends BaseService
         'roles_with_users' => 0,
         'roles_without_users' => 0,
         'permissions_per_role' => [],
+        'roles_with_labels' => 0,
+        'roles_without_labels' => 0,
       ];
 
       $roles = Role::withCount('permissions')->get();
       $roleIds = $roles->pluck('id')->toArray();
+
+      // Count roles with/without labels
+      $stats['roles_with_labels'] = $roles->filter(function ($role) {
+        return !empty($role->label);
+      })->count();
+      $stats['roles_without_labels'] = $roles->count() - $stats['roles_with_labels'];
 
       if (!empty($roleIds)) {
         $userCounts = DB::table('model_has_roles')
@@ -103,6 +192,7 @@ class RoleService extends BaseService
 
         foreach ($roles as $role) {
           $stats['permissions_per_role'][$role->name] = [
+            'label' => $role->label ?? $this->formatRoleName($role->name),
             'permission_count' => $role->permissions_count,
             'user_count' => $userCounts[$role->id] ?? 0,
           ];
@@ -135,21 +225,24 @@ class RoleService extends BaseService
 
       $role = Role::create([
         'name' => $data['name'],
+        'label' => $data['label'] ?? null,
+        'description' => $data['description'] ?? null,
         'guard_name' => $data['guard_name'] ?? 'api',
       ]);
 
       if (isset($data['permissions']) && !empty($data['permissions'])) {
         $role->syncPermissions($data['permissions']);
 
-        // Log permission assignments
         $this->auditLogService->log([
           'action' => 'role_created_with_permissions',
           'module' => 'roles',
-          'description' => 'Role "' . $role->name . '" created with ' . count($data['permissions']) . ' permissions',
+          'description' => 'Role "' . ($role->label ?? $role->name) . '" created with ' . count($data['permissions']) . ' permissions',
           'entity_type' => get_class($role),
           'entity_id' => $role->id,
           'new_values' => [
             'name' => $role->name,
+            'label' => $role->label,
+            'description' => $role->description,
             'permissions' => $data['permissions']
           ],
           'metadata' => [
@@ -160,10 +253,14 @@ class RoleService extends BaseService
         $this->auditLogService->log([
           'action' => 'role_created',
           'module' => 'roles',
-          'description' => 'Role "' . $role->name . '" created',
+          'description' => 'Role "' . ($role->label ?? $role->name) . '" created',
           'entity_type' => get_class($role),
           'entity_id' => $role->id,
-          'new_values' => ['name' => $role->name],
+          'new_values' => [
+            'name' => $role->name,
+            'label' => $role->label,
+            'description' => $role->description,
+          ],
         ]);
       }
 
@@ -171,7 +268,8 @@ class RoleService extends BaseService
 
       Log::info('✅ RoleService::createRole - Role created successfully', [
         'role_id' => $role->id,
-        'role_name' => $role->name
+        'role_name' => $role->name,
+        'role_label' => $role->label
       ]);
 
       return $role->load('permissions');
@@ -200,10 +298,15 @@ class RoleService extends BaseService
 
       $role = Role::findOrFail($id);
       $oldName = $role->name;
+      $oldLabel = $role->label;
+      $oldDescription = $role->description;
       $oldPermissions = $role->permissions->pluck('name')->toArray();
 
+      // Update role attributes
       $role->update([
         'name' => $data['name'] ?? $role->name,
+        'label' => $data['label'] ?? $role->label,
+        'description' => $data['description'] ?? $role->description,
         'guard_name' => $data['guard_name'] ?? $role->guard_name,
       ]);
 
@@ -220,6 +323,33 @@ class RoleService extends BaseService
         ]);
       }
 
+      // Log role label change
+      if ($oldLabel !== $role->label) {
+        $this->auditLogService->log([
+          'action' => 'role_label_updated',
+          'module' => 'roles',
+          'description' => 'Role label updated from "' . ($oldLabel ?? 'N/A') . '" to "' . ($role->label ?? 'N/A') . '" for role "' . $role->name . '"',
+          'entity_type' => get_class($role),
+          'entity_id' => $role->id,
+          'old_values' => ['label' => $oldLabel],
+          'new_values' => ['label' => $role->label],
+        ]);
+      }
+
+      // Log role description change
+      if ($oldDescription !== $role->description) {
+        $this->auditLogService->log([
+          'action' => 'role_description_updated',
+          'module' => 'roles',
+          'description' => 'Role description updated for role "' . $role->name . '"',
+          'entity_type' => get_class($role),
+          'entity_id' => $role->id,
+          'old_values' => ['description' => $oldDescription],
+          'new_values' => ['description' => $role->description],
+        ]);
+      }
+
+      // Update permissions if provided
       if (isset($data['permissions'])) {
         $role->syncPermissions($data['permissions']);
         $newPermissions = $role->permissions->pluck('name')->toArray();
@@ -230,7 +360,8 @@ class RoleService extends BaseService
 
       Log::info('✅ RoleService::updateRole - Role updated successfully', [
         'role_id' => $id,
-        'role_name' => $role->name
+        'role_name' => $role->name,
+        'role_label' => $role->label
       ]);
 
       return $role->load('permissions');
@@ -256,15 +387,27 @@ class RoleService extends BaseService
 
       $role = Role::findOrFail($id);
 
+      // Check if role has users
+      $userCount = DB::table('model_has_roles')
+        ->where('role_id', $id)
+        ->where('model_type', 'App\\Models\\User')
+        ->count();
+
+      if ($userCount > 0) {
+        throw new \Exception('Cannot delete role with assigned users. Please remove users from this role first.');
+      }
+
       // Log before deletion
       $this->auditLogService->log([
         'action' => 'role_deleted',
         'module' => 'roles',
-        'description' => 'Role "' . $role->name . '" deleted',
+        'description' => 'Role "' . ($role->label ?? $role->name) . '" deleted',
         'entity_type' => get_class($role),
         'entity_id' => $role->id,
         'old_values' => [
           'name' => $role->name,
+          'label' => $role->label,
+          'description' => $role->description,
           'permissions' => $role->permissions->pluck('name')->toArray()
         ],
         'metadata' => [
@@ -392,7 +535,6 @@ class RoleService extends BaseService
 
   /**
    * Assign permissions to a role.
-   * THIS IS THE METHOD THE CONTROLLER CALLS
    */
   public function assignPermissions(int $roleId, array $permissions)
   {
@@ -462,13 +604,14 @@ class RoleService extends BaseService
       $this->auditLogService->log([
         'action' => 'permissions_updated',
         'module' => 'roles',
-        'description' => 'Permissions updated for role "' . $role->name . '": ' . implode('; ', $description),
+        'description' => 'Permissions updated for role "' . ($role->label ?? $role->name) . '": ' . implode('; ', $description),
         'entity_type' => get_class($role),
         'entity_id' => $role->id,
         'old_values' => ['permissions' => $oldPermissions],
         'new_values' => ['permissions' => $newPermissions],
         'metadata' => [
           'role_name' => $role->name,
+          'role_label' => $role->label,
           'added' => $added,
           'removed' => $removed,
           'total_added' => count($added),
@@ -504,13 +647,14 @@ class RoleService extends BaseService
       $this->auditLogService->log([
         'action' => 'permission_granted',
         'module' => 'roles',
-        'description' => 'Permission "' . $permissionName . '" granted to role "' . $role->name . '"',
+        'description' => 'Permission "' . $permissionName . '" granted to role "' . ($role->label ?? $role->name) . '"',
         'entity_type' => get_class($role),
         'entity_id' => $role->id,
         'old_values' => ['permissions' => $oldPermissions],
         'new_values' => ['permissions' => $newPermissions],
         'metadata' => [
           'role_name' => $role->name,
+          'role_label' => $role->label,
           'permission' => $permissionName,
           'action' => 'granted'
         ]
@@ -554,13 +698,14 @@ class RoleService extends BaseService
       $this->auditLogService->log([
         'action' => 'permission_revoked',
         'module' => 'roles',
-        'description' => 'Permission "' . $permissionName . '" revoked from role "' . $role->name . '"',
+        'description' => 'Permission "' . $permissionName . '" revoked from role "' . ($role->label ?? $role->name) . '"',
         'entity_type' => get_class($role),
         'entity_id' => $role->id,
         'old_values' => ['permissions' => $oldPermissions],
         'new_values' => ['permissions' => $newPermissions],
         'metadata' => [
           'role_name' => $role->name,
+          'role_label' => $role->label,
           'permission' => $permissionName,
           'action' => 'revoked'
         ]
@@ -611,6 +756,45 @@ class RoleService extends BaseService
   }
 
   /**
+   * Get users with their role details.
+   */
+  public function getUsersWithRoles()
+  {
+    Log::info('🔍 RoleService::getUsersWithRoles - Fetching users with roles');
+
+    try {
+      $users = \App\Models\User::with('roles')->get()->map(function ($user) {
+        $primaryRole = $user->roles()->first();
+        return [
+          'id' => $user->id,
+          'name' => $user->full_name,
+          'email' => $user->email,
+          'role' => $primaryRole ? [
+            'id' => $primaryRole->id,
+            'name' => $primaryRole->name,
+            'label' => $primaryRole->label ?? $this->formatRoleName($primaryRole->name),
+            'description' => $primaryRole->description,
+          ] : null,
+          'roles_count' => $user->roles->count(),
+          'is_active' => $user->is_active,
+          'is_approved' => $user->is_approved,
+        ];
+      });
+
+      Log::info('✅ RoleService::getUsersWithRoles - Users with roles fetched successfully', [
+        'count' => $users->count()
+      ]);
+
+      return $users;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getUsersWithRoles - Error fetching users', [
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
    * Assign role to a user.
    */
   public function assignRoleToUser(int $userId, string $roleName)
@@ -630,11 +814,13 @@ class RoleService extends BaseService
 
       $newRoles = $user->getRoleNames()->toArray();
 
-      // Log role assignment
+      // Get role details for logging
+      $role = Role::where('name', $roleName)->first();
+
       $this->auditLogService->log([
         'action' => 'role_assigned_to_user',
         'module' => 'users',
-        'description' => 'Role "' . $roleName . '" assigned to user "' . $user->full_name . '" (' . $user->email . ')',
+        'description' => 'Role "' . ($role->label ?? $roleName) . '" assigned to user "' . $user->full_name . '" (' . $user->email . ')',
         'entity_type' => get_class($user),
         'entity_id' => $user->id,
         'old_values' => ['roles' => $oldRoles],
@@ -642,7 +828,8 @@ class RoleService extends BaseService
         'metadata' => [
           'user_name' => $user->full_name,
           'user_email' => $user->email,
-          'role' => $roleName,
+          'role_name' => $roleName,
+          'role_label' => $role->label ?? null,
           'action' => 'assigned'
         ]
       ]);
@@ -667,6 +854,64 @@ class RoleService extends BaseService
   }
 
   /**
+   * Remove role from a user.
+   */
+  public function removeRoleFromUser(int $userId, string $roleName)
+  {
+    Log::info('🔍 RoleService::removeRoleFromUser - Removing role from user', [
+      'user_id' => $userId,
+      'role' => $roleName
+    ]);
+
+    try {
+      DB::beginTransaction();
+
+      $user = \App\Models\User::findOrFail($userId);
+      $oldRoles = $user->getRoleNames()->toArray();
+
+      $user->removeRole($roleName);
+
+      $newRoles = $user->getRoleNames()->toArray();
+
+      $role = Role::where('name', $roleName)->first();
+
+      $this->auditLogService->log([
+        'action' => 'role_removed_from_user',
+        'module' => 'users',
+        'description' => 'Role "' . ($role->label ?? $roleName) . '" removed from user "' . $user->full_name . '" (' . $user->email . ')',
+        'entity_type' => get_class($user),
+        'entity_id' => $user->id,
+        'old_values' => ['roles' => $oldRoles],
+        'new_values' => ['roles' => $newRoles],
+        'metadata' => [
+          'user_name' => $user->full_name,
+          'user_email' => $user->email,
+          'role_name' => $roleName,
+          'role_label' => $role->label ?? null,
+          'action' => 'removed'
+        ]
+      ]);
+
+      DB::commit();
+
+      Log::info('✅ RoleService::removeRoleFromUser - Role removed from user successfully', [
+        'user_id' => $userId,
+        'role' => $roleName
+      ]);
+
+      return true;
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('❌ RoleService::removeRoleFromUser - Error removing role from user', [
+        'user_id' => $userId,
+        'role' => $roleName,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
    * Get user's roles and permissions.
    */
   public function getUserRolesAndPermissions(int $userId)
@@ -678,8 +923,18 @@ class RoleService extends BaseService
     try {
       $user = \App\Models\User::findOrFail($userId);
 
+      $roles = $user->roles()->get()->map(function ($role) {
+        return [
+          'id' => $role->id,
+          'name' => $role->name,
+          'label' => $role->label ?? $this->formatRoleName($role->name),
+          'description' => $role->description,
+        ];
+      });
+
       $data = [
-        'roles' => $user->getRoleNames(),
+        'roles' => $roles,
+        'role_names' => $user->getRoleNames(),
         'permissions' => $user->getAllPermissions()->pluck('name'),
       ];
 
@@ -693,6 +948,65 @@ class RoleService extends BaseService
     } catch (\Exception $e) {
       Log::error('❌ RoleService::getUserRolesAndPermissions - Error fetching user roles', [
         'user_id' => $userId,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
+   * Search roles by name or label.
+   */
+  public function searchRoles(string $searchTerm)
+  {
+    Log::info('🔍 RoleService::searchRoles - Searching roles', ['search' => $searchTerm]);
+
+    try {
+      $roles = Role::with('permissions')
+        ->where('name', 'LIKE', "%{$searchTerm}%")
+        ->orWhere('label', 'LIKE', "%{$searchTerm}%")
+        ->orWhere('description', 'LIKE', "%{$searchTerm}%")
+        ->get();
+
+      Log::info('✅ RoleService::searchRoles - Search completed', [
+        'search' => $searchTerm,
+        'results' => $roles->count()
+      ]);
+
+      return $roles;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::searchRoles - Error searching roles', [
+        'search' => $searchTerm,
+        'error' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+  }
+
+  /**
+   * Get role options for dropdowns (id, name, label).
+   */
+  public function getRoleOptions()
+  {
+    Log::info('🔍 RoleService::getRoleOptions - Fetching role options');
+
+    try {
+      $options = Role::all()->map(function ($role) {
+        return [
+          'id' => $role->id,
+          'name' => $role->name,
+          'label' => $role->label ?? $this->formatRoleName($role->name),
+          'description' => $role->description,
+        ];
+      });
+
+      Log::info('✅ RoleService::getRoleOptions - Role options fetched successfully', [
+        'count' => $options->count()
+      ]);
+
+      return $options;
+    } catch (\Exception $e) {
+      Log::error('❌ RoleService::getRoleOptions - Error fetching role options', [
         'error' => $e->getMessage()
       ]);
       throw $e;

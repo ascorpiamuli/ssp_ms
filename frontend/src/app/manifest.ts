@@ -13,13 +13,13 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     icons: [
       {
-        src: '/images/logo.png',
+        src: '/images/pasbest-logo.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any'
       },
       {
-        src: '/images/logo.png',
+        src: '/images/pasbest-logo.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable'

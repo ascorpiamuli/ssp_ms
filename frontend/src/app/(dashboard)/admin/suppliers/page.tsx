@@ -1,4 +1,4 @@
-// app/admin/suppliers/page.tsx
+// app/(dashboard)/admin/suppliers/page.tsx
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -32,6 +32,7 @@ import {
   User as UserIcon,
   ExternalLink,
   Building,
+  Sparkles,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -96,6 +97,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import Image from 'next/image'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // TYPES
@@ -320,7 +323,7 @@ const StatsCards = ({ suppliers }: { suppliers: ExtendedSupplier[] }) => {
 }
 
 // ============================================
-// VIEW SUPPLIER MODAL
+// VIEW SUPPLIER MODAL (Portal Ready)
 // ============================================
 
 const ViewSupplierModal = ({
@@ -397,9 +400,21 @@ const ViewSupplierModal = ({
       },
     ]
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-start">
@@ -558,9 +573,21 @@ const ViewSupplierModal = ({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  // Use portal to render at root level
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
@@ -590,7 +617,6 @@ export default function AdminSuppliersPage() {
     if (!suppliersList) return []
     if (Array.isArray(suppliersList)) return suppliersList
     if (typeof suppliersList === 'object' && suppliersList !== null) {
-      // Use type assertion to safely access data property
       const list = suppliersList as { data?: unknown }
       if (list.data && Array.isArray(list.data)) {
         return list.data
@@ -709,21 +735,28 @@ export default function AdminSuppliersPage() {
 
   if (!canManageSuppliers) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
-              <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Access Denied
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              You don't have permission to manage suppliers.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageTemplate
+        title="Supplier Management"
+        description="Manage suppliers, view profiles, and control supplier access"
+        icon={<Building2 className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to manage suppliers.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
     )
   }
 
@@ -731,7 +764,30 @@ export default function AdminSuppliersPage() {
     <PageTemplate
       title="Supplier Management"
       description="Manage suppliers, view profiles, and control supplier access"
-      icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Building2 className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Suppliers' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {safeSuppliersList.length} Total
+          </Badge>
+          <Button
+            variant="outline"
+            onClick={() => refetchSuppliers()}
+            className="gap-2"
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-6">
         {/* Stats Cards */}
@@ -1050,167 +1106,186 @@ export default function AdminSuppliersPage() {
             </div>
           </div>
         </Card>
-
-        {/* Modals */}
-        <ViewSupplierModal
-          isOpen={showViewDialog}
-          onClose={() => {
-            setShowViewDialog(false)
-            setSelectedSupplier(null)
-          }}
-          supplier={selectedSupplier}
-        />
-
-        {/* Delete Modal */}
-        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <AlertTriangle className="h-5 w-5" />
-                Delete Supplier
-              </DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this supplier? This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            {selectedSupplier && (
-              <div className="py-4">
-                <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                    {selectedSupplier.company_name?.[0] || 'S'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedSupplier.company_name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {selectedSupplier.company_email}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2" disabled={isMutating}>
-                {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Blacklist Modal */}
-        <Dialog open={showBlacklistDialog} onOpenChange={setShowBlacklistDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <Ban className="h-5 w-5" />
-                Blacklist Supplier
-              </DialogTitle>
-              <DialogDescription>
-                Please provide a reason for blacklisting this supplier.
-              </DialogDescription>
-            </DialogHeader>
-            {selectedSupplier && (
-              <div className="py-4 space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                    {selectedSupplier.company_name?.[0] || 'S'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedSupplier.company_name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {selectedSupplier.company_email}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="blacklist-reason" className="text-sm font-medium">
-                    Reason <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    id="blacklist-reason"
-                    placeholder="Enter the reason..."
-                    value={blacklistReason}
-                    onChange={(e) => setBlacklistReason(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
-              </div>
-            )}
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowBlacklistDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleBlacklistSupplier}
-                className="gap-2"
-                disabled={isMutating || !blacklistReason.trim()}
-              >
-                {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                Blacklist
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Unblacklist Modal */}
-        <Dialog open={showUnblacklistDialog} onOpenChange={setShowUnblacklistDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-emerald-600">
-                <Check className="h-5 w-5" />
-                Remove from Blacklist
-              </DialogTitle>
-              <DialogDescription>
-                Are you sure you want to remove this supplier from the blacklist?
-              </DialogDescription>
-            </DialogHeader>
-            {selectedSupplier && (
-              <div className="py-4">
-                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                    {selectedSupplier.company_name?.[0] || 'S'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedSupplier.company_name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {selectedSupplier.company_email}
-                    </p>
-                    {selectedSupplier.blacklist_reason && (
-                      <p className="text-xs text-red-600 mt-1">
-                        Reason: {selectedSupplier.blacklist_reason}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="default"
-                onClick={handleUnblacklistSupplier}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700"
-                disabled={isMutating}
-              >
-                {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Remove
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      {/* ============================================
+          MODALS - Rendered using Portal
+          ============================================ */}
+
+      {/* View Supplier Modal - Using Portal */}
+      <ViewSupplierModal
+        isOpen={showViewDialog}
+        onClose={() => {
+          setShowViewDialog(false)
+          setSelectedSupplier(null)
+        }}
+        supplier={selectedSupplier}
+      />
+
+      {/* Delete Modal - Using Portal */}
+      {showDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Supplier
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this supplier? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              {selectedSupplier && (
+                <div className="py-4">
+                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                      {selectedSupplier.company_name?.[0] || 'S'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedSupplier.company_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {selectedSupplier.company_email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2" disabled={isMutating}>
+                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Blacklist Modal - Using Portal */}
+      {showBlacklistDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showBlacklistDialog} onOpenChange={setShowBlacklistDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <Ban className="h-5 w-5" />
+                  Blacklist Supplier
+                </DialogTitle>
+                <DialogDescription>
+                  Please provide a reason for blacklisting this supplier.
+                </DialogDescription>
+              </DialogHeader>
+              {selectedSupplier && (
+                <div className="py-4 space-y-4">
+                  <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                      {selectedSupplier.company_name?.[0] || 'S'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedSupplier.company_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {selectedSupplier.company_email}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="blacklist-reason" className="text-sm font-medium">
+                      Reason <span className="text-red-500">*</span>
+                    </Label>
+                    <Textarea
+                      id="blacklist-reason"
+                      placeholder="Enter the reason..."
+                      value={blacklistReason}
+                      onChange={(e) => setBlacklistReason(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </div>
+              )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setShowBlacklistDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleBlacklistSupplier}
+                  className="gap-2"
+                  disabled={isMutating || !blacklistReason.trim()}
+                >
+                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                  Blacklist
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Unblacklist Modal - Using Portal */}
+      {showUnblacklistDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showUnblacklistDialog} onOpenChange={setShowUnblacklistDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-emerald-600">
+                  <Check className="h-5 w-5" />
+                  Remove from Blacklist
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to remove this supplier from the blacklist?
+                </DialogDescription>
+              </DialogHeader>
+              {selectedSupplier && (
+                <div className="py-4">
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                      {selectedSupplier.company_name?.[0] || 'S'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedSupplier.company_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {selectedSupplier.company_email}
+                      </p>
+                      {selectedSupplier.blacklist_reason && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Reason: {selectedSupplier.blacklist_reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={handleUnblacklistSupplier}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                  disabled={isMutating}
+                >
+                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Remove
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
     </PageTemplate>
   )
 }

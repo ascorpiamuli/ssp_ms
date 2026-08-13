@@ -15,6 +15,10 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+
+    'api' => [
+      'throttle' => '300,1',
+    ],
   /*
     |--------------------------------------------------------------------------
     | Application Environment
@@ -83,7 +87,7 @@ return [
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
-  'frontend_url' => env('FRONTEND_URL', env('APP_FRONTEND_URL', 'https://app.sspms.internal')),
+    'frontend_url' => env('FRONTEND_URL', env('APP_FRONTEND_URL', 'https://app.sspms.internal')),
 
     /*
     |--------------------------------------------------------------------------

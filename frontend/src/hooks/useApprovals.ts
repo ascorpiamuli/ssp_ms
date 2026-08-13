@@ -164,7 +164,7 @@ export const useDefaultApprovalWorkflow = (
 
 export const useProcessApproval = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({
@@ -192,7 +192,11 @@ export const useProcessApproval = () => {
       success(`Requisition ${actionMap[variables.data.action as keyof typeof actionMap] || 'processed'} successfully`);
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to process approval');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to process approval';
+      toastError(errorMessage);
+      // Log the full error for debugging
+      console.error('Process approval error:', error);
     },
   });
 };
@@ -219,7 +223,7 @@ export const useDelegatedApprovals = (
 
 export const useDelegateApproval = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({ approvalId, data }: { approvalId: number; data: DelegateApprovalData }) =>
@@ -231,14 +235,17 @@ export const useDelegateApproval = () => {
       success('Approval delegated successfully');
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to delegate approval');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delegate approval';
+      toastError(errorMessage);
+      console.error('Delegate approval error:', error);
     },
   });
 };
 
 export const useAdminEscalateApproval = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({ approvalId, data }: { approvalId: number; data: { reason: string } }) =>
@@ -250,14 +257,17 @@ export const useAdminEscalateApproval = () => {
       success('Approval escalated successfully');
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to escalate approval');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to escalate approval';
+      toastError(errorMessage);
+      console.error('Escalate approval error:', error);
     },
   });
 };
 
 export const useAdminReassignApproval = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({ approvalId, data }: { approvalId: number; data: { user_id: number } }) =>
@@ -269,7 +279,10 @@ export const useAdminReassignApproval = () => {
       success('Approval reassigned successfully');
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to reassign approval');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to reassign approval';
+      toastError(errorMessage);
+      console.error('Reassign approval error:', error);
     },
   });
 };
@@ -280,7 +293,7 @@ export const useAdminReassignApproval = () => {
 
 export const useCreateApprovalWorkflow = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: (data: CreateWorkflowData) => approvalWorkflowService.create(data),
@@ -289,14 +302,17 @@ export const useCreateApprovalWorkflow = () => {
       success(`Workflow "${data.name}" created successfully`);
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to create workflow');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to create workflow';
+      toastError(errorMessage);
+      console.error('Create workflow error:', error);
     },
   });
 };
 
 export const useUpdateApprovalWorkflow = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: UpdateWorkflowData }) =>
@@ -307,14 +323,17 @@ export const useUpdateApprovalWorkflow = () => {
       success(`Workflow "${data.name}" updated successfully`);
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to update workflow');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to update workflow';
+      toastError(errorMessage);
+      console.error('Update workflow error:', error);
     },
   });
 };
 
 export const useDeleteApprovalWorkflow = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: (id: number) => approvalWorkflowService.delete(id),
@@ -323,14 +342,17 @@ export const useDeleteApprovalWorkflow = () => {
       success('Workflow deleted successfully');
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to delete workflow');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete workflow';
+      toastError(errorMessage);
+      console.error('Delete workflow error:', error);
     },
   });
 };
 
 export const useCloneApprovalWorkflow = () => {
   const queryClient = useQueryClient();
-  const { success, error } = useToast();
+  const { success, error: toastError } = useToast();
 
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: { department_id: number; name: string } }) =>
@@ -340,7 +362,10 @@ export const useCloneApprovalWorkflow = () => {
       success(`Workflow "${data.name}" cloned successfully`);
     },
     onError: (error: any) => {
-      error(error?.response?.data?.message || 'Failed to clone workflow');
+      // ✅ FIX: Don't call error as a function - use toastError instead
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to clone workflow';
+      toastError(errorMessage);
+      console.error('Clone workflow error:', error);
     },
   });
 };

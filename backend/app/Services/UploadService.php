@@ -44,7 +44,6 @@ class UploadService
       'status' => 'completed',
     ]);
 
-    // If it's an image, get dimensions using native PHP
     if ($this->isImage($file)) {
       $this->processImageMetadata($upload, $file);
     }
@@ -52,11 +51,11 @@ class UploadService
     return $upload;
   }
 
-/**
- * Store file on disk using native PHP functions.
- */
-protected function storeFile(UploadedFile $file, string $collection): string
-{
+  /**
+   * Store file on disk with proper permission handling.
+   */
+  protected function storeFile(UploadedFile $file, string $collection): string
+  {
     $folder = $this->getFolderPath($collection);
     $filename = $this->generateFileName($file);
     $relativePath = $folder . '/' . $filename;
@@ -66,63 +65,146 @@ protected function storeFile(UploadedFile $file, string $collection): string
     $directory = dirname($absolutePath);
 
     \Log::info('UploadService: Storing file', [
-        'relative_path' => $relativePath,
-        'absolute_path' => $absolutePath,
-        'directory' => $directory
+      'relative_path' => $relativePath,
+      'absolute_path' => $absolutePath,
+      'directory' => $directory
     ]);
 
-    // Check if directory exists, create if not
-    if (!is_dir($directory)) {
-        // Try multiple permission combinations
-        $created = false;
-        $perms = [0777, 0775, 0755];
-        foreach ($perms as $perm) {
-            if (mkdir($directory, $perm, true)) {
-                $created = true;
-                \Log::info('UploadService: Directory created with permissions', [
-                    'directory' => $directory,
-                    'permissions' => decoct($perm)
-                ]);
-                break;
-            }
-        }
-        if (!$created) {
-            throw new Exception('Failed to create directory: ' . $directory);
-        }
+    // Try to create directory with proper permissions
+    $this->ensureDirectoryExists($directory);
+
+    // Move the uploaded file
+    try {
+      // Use Laravel's Storage facade which handles permissions better
+      $storedPath = Storage::disk('public')->putFile($folder, $file, 'public');
+
+      if (!$storedPath) {
+        throw new Exception('Failed to store file using Storage facade');
+      }
+
+      \Log::info('UploadService: File stored successfully via Storage facade', [
+        'stored_path' => $storedPath,
+        'original_path' => $relativePath
+      ]);
+
+      return $storedPath;
+    } catch (\Exception $e) {
+      \Log::warning('UploadService: Storage facade failed, trying native method: ' . $e->getMessage());
+
+      // Fallback to native PHP method
+      return $this->storeFileNative($file, $folder, $filename, $absolutePath, $directory);
     }
+  }
+
+  /**
+   * Store file using native PHP (fallback method).
+   */
+  protected function storeFileNative(UploadedFile $file, string $folder, string $filename, string $absolutePath, string $directory): string
+  {
+    // Ensure directory exists with proper permissions
+    $this->ensureDirectoryExists($directory);
 
     // Check if directory is writable
     if (!is_writable($directory)) {
-        // Try to make it writable
-        chmod($directory, 0777);
-        if (!is_writable($directory)) {
-            throw new Exception('Directory is not writable: ' . $directory . ' (perms: ' . substr(sprintf('%o', fileperms($directory)), -4) . ')');
-        }
+      // Try to make it writable
+      $this->makeDirectoryWritable($directory);
+      if (!is_writable($directory)) {
+        throw new Exception('Directory is not writable: ' . $directory);
+      }
     }
 
-    // Try using copy() first (more reliable on some systems)
+    // Move the file
     $tempPath = $file->getRealPath();
     if (!copy($tempPath, $absolutePath)) {
-        // Fallback to file_put_contents
-        $content = file_get_contents($tempPath);
-        if ($content === false || file_put_contents($absolutePath, $content) === false) {
-            throw new Exception('Failed to write file: ' . $absolutePath);
-        }
+      $content = file_get_contents($tempPath);
+      if ($content === false || file_put_contents($absolutePath, $content) === false) {
+        throw new Exception('Failed to write file: ' . $absolutePath);
+      }
     }
 
     // Verify file exists
     if (!file_exists($absolutePath)) {
-        throw new Exception('File not found after write: ' . $absolutePath);
+      throw new Exception('File not found after write: ' . $absolutePath);
     }
 
-    \Log::info('UploadService: File stored successfully', [
-        'relative_path' => $relativePath,
-        'absolute_path' => $absolutePath,
-        'size' => filesize($absolutePath)
+    // Set proper permissions on the file
+    chmod($absolutePath, 0664);
+
+    \Log::info('UploadService: File stored successfully via native method', [
+      'absolute_path' => $absolutePath,
+      'size' => filesize($absolutePath)
     ]);
 
-    return $relativePath;
-}
+    return $folder . '/' . $filename;
+  }
+
+  /**
+   * Ensure directory exists with proper permissions.
+   */
+  protected function ensureDirectoryExists(string $directory): void
+  {
+    if (is_dir($directory)) {
+      return;
+    }
+
+    // Try multiple permission combinations
+    $perms = [0777, 0775, 0755, 0750];
+    $created = false;
+    $lastError = null;
+
+    foreach ($perms as $perm) {
+      try {
+        if (mkdir($directory, $perm, true)) {
+          $created = true;
+          \Log::info('UploadService: Directory created with permissions', [
+            'directory' => $directory,
+            'permissions' => decoct($perm)
+          ]);
+          break;
+        }
+      } catch (\Exception $e) {
+        $lastError = $e->getMessage();
+        continue;
+      }
+    }
+
+    if (!$created) {
+      // Try using Laravel's Storage facade as fallback
+      try {
+        Storage::disk('public')->makeDirectory(dirname($directory));
+        if (is_dir($directory)) {
+          return;
+        }
+      } catch (\Exception $e) {
+        // Ignore and continue
+      }
+
+      throw new Exception('Failed to create directory: ' . $directory . ' - ' . ($lastError ?? 'Unknown error'));
+    }
+
+    // Set proper permissions on the created directory
+    chmod($directory, 0775);
+  }
+
+  /**
+   * Make directory writable.
+   */
+  protected function makeDirectoryWritable(string $directory): void
+  {
+    try {
+      chmod($directory, 0777);
+      \Log::info('UploadService: Changed directory permissions', [
+        'directory' => $directory,
+        'new_perms' => '0777'
+      ]);
+    } catch (\Exception $e) {
+      \Log::warning('UploadService: Failed to change directory permissions', [
+        'directory' => $directory,
+        'error' => $e->getMessage()
+      ]);
+    }
+  }
+
   /**
    * Generate a unique filename.
    */
@@ -150,6 +232,7 @@ protected function storeFile(UploadedFile $file, string $collection): string
       'cover' => 'covers',
       'signature' => 'signatures',
       'attachment' => 'attachments',
+      'company_logo' => 'company-logos',
     ];
 
     $subFolder = $folders[$collection] ?? $collection;
@@ -206,7 +289,6 @@ protected function storeFile(UploadedFile $file, string $collection): string
   protected function processImageMetadata(Upload $upload, UploadedFile $file): void
   {
     try {
-      // Use native PHP getimagesize
       $imageInfo = getimagesize($file->getRealPath());
 
       if ($imageInfo) {
@@ -220,7 +302,6 @@ protected function storeFile(UploadedFile $file, string $collection): string
         ]);
       }
     } catch (Exception $e) {
-      // Image processing failed, but upload still exists
       $upload->update([
         'meta_data' => array_merge($upload->meta_data ?? [], [
           'image_processing_error' => $e->getMessage(),
@@ -234,12 +315,10 @@ protected function storeFile(UploadedFile $file, string $collection): string
    */
   public function delete(Upload $upload): bool
   {
-    // Delete file from storage
     if (Storage::disk('public')->exists($upload->file_path)) {
       Storage::disk('public')->delete($upload->file_path);
     }
 
-    // Delete record
     return $upload->delete();
   }
 

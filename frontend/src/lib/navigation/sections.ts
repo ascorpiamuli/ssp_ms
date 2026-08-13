@@ -181,6 +181,101 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
+  // 9. ADMINISTRATION
+  {
+    id: 'administration',
+    title: 'Administration',
+    icon: getIcon('Settings'),
+    defaultOpen: false,
+    items: [
+      {
+        id: 'users',
+        name: 'User Management',
+        href: '/admin/users',
+        icon: getIcon('Users'),
+        description: 'Manage users',
+        roles: ['admin']
+      },
+      {
+        id: 'supplier-management',
+        name: 'Supplier Management',
+        href: '/admin/suppliers',
+        icon: getIcon('Users'),
+        description: 'Manage Suppliers',
+        roles: ['admin']
+      },
+      {
+        id: 'signature-verification',
+        name: 'Signature Verification',
+        href: '/admin/signatures/pending',
+        icon: getIcon('FileSignature'),
+        description: 'Verify and manage user signatures',
+        roles: ['admin'],
+        badge: 'Pending',
+        badgeColor: 'warning'
+      },
+      // ==========================================
+      // ➕ NEW: SIGNATURE VERIFICATION LOGS TAB
+      // ==========================================
+      {
+        id: 'signature-verification-logs',
+        name: 'Signature Verification Logs',
+        href: '/admin/signatures/logs',
+        icon: getIcon('History'),
+        description: 'View audit trail for all signature actions',
+        roles: ['admin']
+      },
+      // ==========================================
+      {
+        id: 'permissions',
+        name: 'Permission Matrix',
+        href: '/admin/permissions',
+        icon: getIcon('Shield'),
+        description: 'Manage user permissions',
+        roles: ['admin']
+      },
+      {
+        id: 'departments',
+        name: 'Departments',
+        href: '/admin/departments',
+        icon: getIcon('Building2'),
+        description: 'Manage departments',
+        roles: ['admin']
+      },
+      {
+        id: 'system_settings',
+        name: 'System Settings',
+        href: '/admin/settings',
+        icon: getIcon('Settings'),
+        description: 'Configure system settings and reference formats',
+        roles: ['admin']
+      },
+      {
+        id: 'audit_logs',
+        name: 'Audit Logs',
+        href: '/admin/audit',
+        icon: getIcon('Shield'),
+        description: 'System audit logs',
+        roles: ['admin', 'auditor']
+      },
+      {
+        id: 'system_status',
+        name: 'System Status',
+        href: '/admin/status',
+        icon: getIcon('Activity'),
+        description: 'System health monitoring',
+        roles: ['admin']
+      },
+      {
+        id: 'backup_restore',
+        name: 'Backup & Restore',
+        href: '/admin/backup',
+        icon: getIcon('Database'),
+        description: 'System backup and restore',
+        roles: ['admin']
+      }
+    ]
+  },
   // 2. REQUISITIONS
   {
     id: 'requisitions',
@@ -273,34 +368,58 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 4. PROCUREMENT - COMPLETE WORKFLOW
+  // 4. PROCUREMENT - COMPLETE WORKFLOW WITH SUPPLIER TABS
   {
     id: 'procurement',
     title: 'Procurement',
     icon: getIcon('ShoppingCart'),
     defaultOpen: false,
     items: [
-      // 1. DASHBOARD - Overview stats
+      // ============================================
+      // INTERNAL PROCUREMENT TABS (Staff/Admin)
+      // ============================================
+
+      // 1. DASHBOARD
       {
         id: 'procurement_dashboard',
         name: 'Dashboard',
-        href: '/procurement',
+        href: '/procurement/dashboard',
         icon: getIcon('LayoutDashboard'),
         description: 'Procurement overview and statistics',
-        roles: ['admin', 'procurement', 'accountant', 'head of institution', 'auditor', 'staff', 'hod']
+        roles: ['admin', 'procurement', 'accountant', 'head_of_institution', 'auditor', 'hod']
       },
 
-      // 2. QUOTATION MANAGEMENT
+      // 2. CREATE RFQ
       {
-        id: 'quotations',
-        name: 'Quotations',
-        href: '/procurement/quotations',
+        id: 'create-request-for-quotations',
+        name: 'Create RFQ',
+        href: '/procurement/request-for-quotations/create',
+        icon: getIcon('FilePlus'),
+        description: 'Create new Request for Quotations',
+        roles: ['admin', 'procurement']
+      },
+
+      // 3. RFQ MANAGEMENT
+      {
+        id: 'request-for-quotations-management',
+        name: 'RFQ Management',
+        href: '/procurement/request-for-quotations/manage',
         icon: getIcon('FileText'),
-        description: 'Manage QTN requests and supplier responses',
+        description: 'Manage RFQs and supplier responses',
         roles: ['admin', 'procurement', 'accountant']
       },
 
-      // 3. TENDERS (if applicable)
+      // 4. RFQ RESPONSES
+      {
+        id: 'rfq-responses',
+        name: 'RFQ Responses',
+        href: '/procurement/request-for-quotations/responses',
+        icon: getIcon('MessageSquare'),
+        description: 'View and evaluate supplier quotations',
+        roles: ['admin', 'procurement', 'accountant', 'hod']
+      },
+
+      // 5. TENDERS
       {
         id: 'tenders',
         name: 'Tenders',
@@ -310,39 +429,7 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'procurement', 'accountant']
       },
 
-
-
-      // 6. SERVICE ACKNOWLEDGMENT (SAN)
-      {
-        id: 'service_acknowledgment',
-        name: 'Service Acknowledgment',
-        href: '/procurement/san',
-        icon: getIcon('Handshake'),
-        description: 'Manage Service Acknowledgment Notes (SAN)',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 7. INVOICES
-      {
-        id: 'invoices',
-        name: 'Invoices',
-        href: '/procurement/invoices',
-        icon: getIcon('Receipt'),
-        description: 'Manage supplier invoices',
-        roles: ['admin', 'procurement', 'accountant', 'supplier']
-      },
-
-      // 8. PAYMENTS
-      {
-        id: 'payments',
-        name: 'Payments',
-        href: '/procurement/payments',
-        icon: getIcon('DollarSign'),
-        description: 'Payment vouchers and cheque management',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 9. CONTRACTS
+      // 6. CONTRACTS
       {
         id: 'contracts',
         name: 'Contracts',
@@ -352,18 +439,103 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'procurement', 'accountant']
       },
 
-      // 10. PROCUREMENT PLANNING
+      // 7. PURCHASE ORDERS
+      {
+        id: 'purchase_orders',
+        name: 'Purchase Orders',
+        href: '/procurement/purchase-orders',
+        icon: getIcon('ShoppingBag'),
+        description: 'Manage LPOs and LSOs',
+        roles: ['admin', 'procurement', 'accountant']
+      },
+
+      // 8. SERVICE ACKNOWLEDGMENT (SAN)
+      {
+        id: 'service_acknowledgment',
+        name: 'Service Acknowledgment',
+        href: '/procurement/san',
+        icon: getIcon('Handshake'),
+        description: 'Manage Service Acknowledgment Notes (SAN)',
+        roles: ['admin', 'procurement', 'accountant']
+      },
+
+      // 9. INVOICES
+      {
+        id: 'invoices',
+        name: 'Invoices',
+        href: '/procurement/invoices',
+        icon: getIcon('Receipt'),
+        description: 'Manage supplier invoices',
+        roles: ['admin', 'procurement', 'accountant']
+      },
+
+      // 10. PAYMENTS
+      {
+        id: 'payments',
+        name: 'Payments',
+        href: '/procurement/payments',
+        icon: getIcon('DollarSign'),
+        description: 'Payment vouchers and cheque management',
+        roles: ['admin', 'procurement', 'accountant']
+      },
+
+      // 11. PROCUREMENT PLANNING
       {
         id: 'procurement_planning',
         name: 'Procurement Planning',
         href: '/procurement/planning',
         icon: getIcon('Calendar'),
         description: 'Procurement plans and schedules',
-        roles: ['admin', 'procurement', 'accountant', 'head of institution']
-      }
+        roles: ['admin', 'procurement', 'accountant', 'head_of_institution']
+      },
+
+      // 12. SUPPLIER MANAGEMENT
+      {
+        id: 'supplier_management',
+        name: 'Supplier Management',
+        href: '/procurement/suppliers',
+        icon: getIcon('Users'),
+        description: 'Manage suppliers and vendor registration',
+        roles: ['admin', 'procurement', 'accountant']
+      },
+
+      // ============================================
+      // SUPPLIER PORTAL TABS (RECOMMENDED)
+      // ============================================
+
+      // 13. SUPPLIER DASHBOARD - Overview
+      {
+        id: 'supplier_dashboard',
+        name: 'Dashboard',
+        href: '/procurement/supplier/dashboard',
+        icon: getIcon('LayoutDashboard'),
+        description: 'Your RFQ and requisition overview',
+        roles: ['supplier']
+      },
+
+      // 14. RFQ INVITATIONS - View and respond to RFQs
+      {
+        id: 'supplier_rfq_invitations',
+        name: 'RFQ Invitations',
+        href: '/procurement/supplier/rfq-invitations',
+        icon: getIcon('Mail'),
+        description: 'View and respond to RFQ invitations',
+        roles: ['supplier']
+      },
+
+      // 15. MY QUOTATIONS - Track submitted quotations
+      {
+        id: 'supplier_my_quotations',
+        name: 'My Quotations',
+        href: '/procurement/supplier/quotations',
+        icon: getIcon('FileText'),
+        description: 'Track your submitted quotations',
+        roles: ['supplier']
+      },
+
+
     ]
   },
-
   // 5. ORDERS
   {
     id: 'orders',
@@ -511,79 +683,6 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 9. ADMINISTRATION
-  {
-    id: 'administration',
-    title: 'Administration',
-    icon: getIcon('Settings'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'users',
-        name: 'User Management',
-        href: '/admin/users',
-        icon: getIcon('Users'),
-        description: 'Manage users',
-        roles: ['admin']
-      },
-      {
-        id: 'supplier-management',
-        name: 'Supplier Management',
-        href: '/admin/suppliers',
-        icon: getIcon('Users'),
-        description: 'Manage Suppliers',
-        roles: ['admin']
-      },
-      {
-        id: 'permissions',
-        name: 'Permission Matrix',
-        href: '/admin/permissions',
-        icon: getIcon('Shield'),
-        description: 'Manage user permissions',
-        roles: ['admin']
-      },
-      {
-        id: 'departments',
-        name: 'Departments',
-        href: '/admin/departments',
-        icon: getIcon('Building2'),
-        description: 'Manage departments',
-        roles: ['admin']
-      },
-      {
-        id: 'system_settings',
-        name: 'System Settings',
-        href: '/admin/settings',
-        icon: getIcon('Settings'),
-        description: 'Configure system settings and reference formats',
-        roles: ['admin']
-      },
-      {
-        id: 'audit_logs',
-        name: 'Audit Logs',
-        href: '/admin/audit',
-        icon: getIcon('Shield'),
-        description: 'System audit logs',
-        roles: ['admin', 'auditor']
-      },
-      {
-        id: 'system_status',
-        name: 'System Status',
-        href: '/admin/status',
-        icon: getIcon('Activity'),
-        description: 'System health monitoring',
-        roles: ['admin']
-      },
-      {
-        id: 'backup_restore',
-        name: 'Backup & Restore',
-        href: '/admin/backup',
-        icon: getIcon('Database'),
-        description: 'System backup and restore',
-        roles: ['admin']
-      }
-    ]
-  },
 
   // 10. COMMUNICATION
   {

@@ -35,6 +35,9 @@ export interface SelectOption {
 export interface User {
   id: number;
   first_name: string;
+  role: string;
+  role_label: string;
+  role_description: string | null;
   last_name: string;
   full_name: string;
   email: string;

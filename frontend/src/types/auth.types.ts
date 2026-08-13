@@ -86,6 +86,37 @@ export interface TwoFactorRecoveryRequest {
 }
 
 // ============================================
+// ROLE TYPES
+// ============================================
+
+export interface Role {
+  id: number;
+  name: string;
+  label: string | null;
+  description: string | null;
+  guard_name: string;
+  permissions?: string[];
+  permission_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// RoleDetails is now the same as Role (removed duplicate)
+export type RoleDetails = Role;
+
+export interface Permission {
+  id: number;
+  name: string;
+  guard_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PermissionGroup {
+  [module: string]: Permission[];
+}
+
+// ============================================
 // RESPONSE TYPES
 // ============================================
 
@@ -97,12 +128,15 @@ export interface User {
   initials?: string;
   email: string;
   phone: string;
-  role: string | null;
+  role: string;
+  role_label: string;  // NEW: Role label from roles table
+  role_description: string |null;  // NEW: Role description from roles table
   department_id?: number;
   department?: {
     id: number;
     name: string;
     code: string;
+    description?: string;
   };
   is_active: boolean;
   is_approved: boolean;
@@ -115,6 +149,7 @@ export interface User {
   updated_at: string;
   profile_photo?: string | null;
   avatar_url?: string | null;
+  avatar?: string | null;
   id_number?: string | null;
   date_of_birth?: string | null;
   profile?: {
@@ -130,6 +165,7 @@ export interface User {
     bio?: string;
   };
   roles: string[];
+  role_details?: RoleDetails[];  // Full role details with labels and descriptions
   permissions: string[];
 }
 
@@ -249,4 +285,182 @@ export interface TwoFactorStatusResponse {
   success: boolean;
   message: string;
   data: TwoFactorStatusData;
+}
+
+// ============================================
+// ROLE MANAGEMENT TYPES
+// ============================================
+
+export interface CreateRoleRequest {
+  name: string;
+  label?: string;
+  description?: string;
+  permissions?: string[];
+}
+
+export interface UpdateRoleRequest {
+  name?: string;
+  label?: string;
+  description?: string;
+  permissions?: string[];
+}
+
+export interface AssignPermissionsRequest {
+  permissions: string[];
+}
+
+export interface AssignRoleToUserRequest {
+  user_id: number;
+  role_name: string;
+}
+
+export interface UpdateUserRolesRequest {
+  user_id: number;
+  roles: string[];
+}
+
+export interface RoleStats {
+  total_roles: number;
+  total_permissions: number;
+  roles_with_users: number;
+  roles_without_users: number;
+  roles_with_labels: number;
+  roles_without_labels: number;
+  permissions_per_role: Record<string, {
+    label: string | null;
+    permission_count: number;
+    user_count: number;
+  }>;
+}
+
+export interface RoleOption {
+  id: number;
+  name: string;
+  label: string | null;
+  description: string | null;
+}
+
+export interface UserRoleInfo {
+  has_role: boolean;
+  role?: {
+    id: number;
+    name: string;
+    label: string | null;
+    description: string | null;
+    permissions: string[];
+  };
+  all_roles?: string[];
+  permissions?: string[];
+}
+
+// ============================================
+// HELPER TYPE GUARDS
+// ============================================
+
+export function isAuthenticated(response: any): response is AuthResponse {
+  return response?.success === true && response?.data?.user !== undefined;
+}
+
+export function hasToken(response: any): response is AuthResponse {
+  return response?.success === true && response?.data?.token !== undefined;
+}
+
+export function isUserData(response: any): response is UserResponse {
+  return response?.success === true && response?.data?.user !== undefined;
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+export function getUserRoleLabel(user: User | null): string | null {
+  if (!user) return null;
+  return user.role_label || null;
+}
+
+export function getUserRoleDescription(user: User | null): string | null {
+  if (!user) return null;
+  return user.role_description || null;
+}
+
+export function getUserRoleDisplayName(user: User | null): string {
+  if (!user) return 'No Role Assigned';
+  if (user.role_label) return user.role_label;
+  if (user.role) return user.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return 'No Role Assigned';
+}
+
+export function getUserPrimaryRole(user: User | null): string | null {
+  if (!user) return null;
+  return user.role || null;
+}
+
+export function getRoleLabel(role: Role | null): string {
+  if (!role) return 'No Role';
+  return role.label || role.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+export function getRoleDisplayName(role: Role | null): string {
+  if (!role) return 'No Role Assigned';
+  if (role.label) return role.label;
+  return role.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// ============================================
+// ROLE HELPER FUNCTIONS (for frontend use)
+// ============================================
+
+export function hasRoleName(user: User | null, roleName: string): boolean {
+  if (!user) return false;
+  return user.role === roleName || (user.roles && user.roles.includes(roleName));
+}
+
+export function hasRoleLabel(user: User | null, roleLabel: string): boolean {
+  if (!user) return false;
+  if (!user.role_label) return false;
+  return user.role_label.toLowerCase() === roleLabel.toLowerCase();
+}
+
+export function hasRoleByNameOrLabel(user: User | null, roleNameOrLabel: string): boolean {
+  if (!user) return false;
+  return hasRoleName(user, roleNameOrLabel) || hasRoleLabel(user, roleNameOrLabel);
+}
+
+export function isUserAdmin(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'ADMIN') ||
+    hasRoleByNameOrLabel(user, 'Administrator') ||
+    user.role === 'ADMIN' ||
+    user.role_label === 'Administrator';
+}
+
+export function isUserSupplier(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'SUPPLIER') ||
+    hasRoleByNameOrLabel(user, 'Supplier');
+}
+
+export function isUserHOD(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'HOD') ||
+    hasRoleByNameOrLabel(user, 'Head of Department');
+}
+
+export function isUserAccountant(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'ACCOUNTANT') ||
+    hasRoleByNameOrLabel(user, 'Accountant');
+}
+
+export function isUserPrincipal(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'PRINCIPAL') ||
+    hasRoleByNameOrLabel(user, 'Principal');
+}
+
+export function isUserProcurement(user: User | null): boolean {
+  if (!user) return false;
+  return hasRoleByNameOrLabel(user, 'PROCUREMENT') ||
+    hasRoleByNameOrLabel(user, 'Procurement Officer') ||
+    hasRoleByNameOrLabel(user, 'Procurement');
 }

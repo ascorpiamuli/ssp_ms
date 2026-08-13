@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { tokenManager } from '@/services/api'
-import { User, UpdateProfileRequest } from '@/types/auth.types'
+import { User, UpdateProfileRequest, Role } from '@/types/auth.types'
 
 interface AuthContextType {
   // User state
@@ -41,7 +41,7 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean
   hasRole: (roles: string | string[]) => boolean
 
-  // Role helpers
+  // Role helpers (existing)
   isAdmin: () => boolean
   isSupplier: () => boolean
   isHOD: () => boolean
@@ -51,6 +51,14 @@ interface AuthContextType {
   isStaff: () => boolean
   isAuditor: () => boolean
   isProcurement: () => boolean
+
+  // NEW: Role label and description helpers
+  getRoleLabel: () => string | null
+  getRoleDescription: () => string | null
+  getRoleName: () => string | null
+  getRoleDisplayName: () => string
+  getUserRolesWithDetails: () => Role[]
+  hasRoleByNameOrLabel: (roleNameOrLabel: string) => boolean
 
   // Loading states
   isUpdatingProfile: boolean
@@ -114,6 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isStaff,
     isAuditor,
     isProcurement,
+
+    // NEW: Role label and description helpers
+    getRoleLabel,
+    getRoleDescription,
+    getRoleName,
+    getRoleDisplayName,
+    getUserRolesWithDetails,
+    hasRoleByNameOrLabel,
 
     // Loading states
     isUpdatingProfile,
@@ -248,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasPermission,
     hasRole,
 
-    // Role helpers
+    // Role helpers (existing)
     isAdmin,
     isSupplier,
     isHOD,
@@ -258,6 +274,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isStaff,
     isAuditor,
     isProcurement,
+
+    // NEW: Role label and description helpers
+    getRoleLabel,
+    getRoleDescription,
+    getRoleName,
+    getRoleDisplayName,
+    getUserRolesWithDetails,
+    hasRoleByNameOrLabel,
 
     // Loading states
     isUpdatingProfile,

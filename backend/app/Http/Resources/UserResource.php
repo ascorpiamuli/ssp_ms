@@ -23,7 +23,9 @@ class UserResource extends JsonResource
       'date_of_birth' => $this->date_of_birth,
       'profile_photo' => $this->profile_photo,
       'avatar_url' => $this->avatar_url,
-      'role' => $this->role,
+      'role' => $this->getRoleName(),
+      'role_label' => $this->getRoleLabel(),
+      'role_description' => $this->getRoleDescription(),
       'department_id' => $this->department_id,
       'department' => $this->department ? [
         'id' => $this->department->id,
@@ -76,6 +78,63 @@ class UserResource extends JsonResource
   }
 
   /**
+   * Get the role name for the user.
+   */
+  protected function getRoleName(): ?string
+  {
+    try {
+      // Check if roles relationship is loaded
+      if ($this->relationLoaded('roles') && $this->roles) {
+        $role = $this->roles->first();
+        if ($role) {
+          return $role->name;
+        }
+      }
+      return null;
+    } catch (\Exception $e) {
+      return null;
+    }
+  }
+
+  /**
+   * Get the role label from the label column.
+   */
+  protected function getRoleLabel(): ?string
+  {
+    try {
+      // Check if roles relationship is loaded
+      if ($this->relationLoaded('roles') && $this->roles) {
+        $role = $this->roles->first();
+        if ($role) {
+          return $role->label;
+        }
+      }
+      return null;
+    } catch (\Exception $e) {
+      return null;
+    }
+  }
+
+  /**
+   * Get the role description from the description column.
+   */
+  protected function getRoleDescription(): ?string
+  {
+    try {
+      // Check if roles relationship is loaded
+      if ($this->relationLoaded('roles') && $this->roles) {
+        $role = $this->roles->first();
+        if ($role) {
+          return $role->description;
+        }
+      }
+      return null;
+    } catch (\Exception $e) {
+      return null;
+    }
+  }
+
+  /**
    * Get detailed role information.
    */
   protected function getRoleDetails(): array
@@ -95,6 +154,8 @@ class UserResource extends JsonResource
           $roleDetails[] = [
             'id' => $role->id,
             'name' => $role->name,
+            'label' => $role->label,
+            'description' => $role->description,
             'guard_name' => $role->guard_name,
             'permissions' => $permissions,
             'permission_count' => count($permissions),
@@ -109,4 +170,3 @@ class UserResource extends JsonResource
     return $roleDetails;
   }
 }
-  

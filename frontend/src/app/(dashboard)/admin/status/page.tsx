@@ -1,4 +1,4 @@
-// app/admin/system-status/page.tsx
+// app/(dashboard)/admin/system-status/page.tsx
 
 'use client'
 
@@ -22,6 +22,8 @@ import {
   BarChart3,
   Shield,
   XCircle as XCircleIcon,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,8 +48,9 @@ import {
   getComponentLabel,
   getComponentColor,
 } from '@/types/system-status.types'
-import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -105,7 +108,7 @@ const getStatusBadgeVariant = (status: string): string => {
 }
 
 // ============================================
-// STATUS HISTORY MODAL (Custom modal like Users page)
+// STATUS HISTORY MODAL (Portal Ready)
 // ============================================
 
 const StatusHistoryModal = ({
@@ -121,16 +124,28 @@ const StatusHistoryModal = ({
 }) => {
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-600" />
               System Status History
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
               <XCircleIcon className="h-6 w-6" />
             </button>
           </div>
@@ -189,14 +204,25 @@ const StatusHistoryModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
@@ -328,6 +354,33 @@ export default function SystemStatusPage() {
     refetchHistory()
   }
 
+  // Check permissions
+  if (!hasPermission('view_system_status') && !isAdmin()) {
+    return (
+      <PageTemplate
+        title="System Status"
+        description="Monitor the health and performance of your system"
+        icon={<Activity className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to view system status.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
+    )
+  }
 
   // Loading state
   if (statusLoading || summaryLoading) {
@@ -335,7 +388,8 @@ export default function SystemStatusPage() {
       <PageTemplate
         title="System Status"
         description="Monitor the health and performance of your system"
-        icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        icon={<Activity className="h-5 w-5" />}
+        background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex flex-col items-center gap-3">
@@ -353,7 +407,8 @@ export default function SystemStatusPage() {
       <PageTemplate
         title="System Status"
         description="Monitor the health and performance of your system"
-        icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        icon={<Activity className="h-5 w-5" />}
+        background="gradient"
       >
         <Card>
           <CardContent className="pt-6 text-center">
@@ -389,7 +444,41 @@ export default function SystemStatusPage() {
     <PageTemplate
       title="System Status"
       description="Monitor the health and performance of your system"
-      icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Activity className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'System Status' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {statusLabel}
+          </Badge>
+          <Button
+            variant="outline"
+            onClick={handleViewHistory}
+            className="gap-2 h-9 text-sm dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            <BarChart3 className="h-4 w-4" />
+            History
+          </Button>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshStatus.isPending}
+            className="gap-2 h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+          >
+            {refreshStatus.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Refresh
+          </Button>
+        </div>
+      }
     >
       {/* Overall Status */}
       <Card className={cn(
@@ -421,28 +510,6 @@ export default function SystemStatusPage() {
                   </span>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handleViewHistory}
-                className="gap-2 h-9 text-sm"
-              >
-                <BarChart3 className="h-4 w-4" />
-                History
-              </Button>
-              <Button
-                onClick={handleRefresh}
-                disabled={refreshStatus.isPending}
-                className="gap-2 h-9 text-sm"
-              >
-                {refreshStatus.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Refresh
-              </Button>
             </div>
           </div>
 
@@ -523,7 +590,7 @@ export default function SystemStatusPage() {
         )}
       </div>
 
-      {/* Status History Modal */}
+      {/* Status History Modal - Using Portal */}
       <StatusHistoryModal
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}

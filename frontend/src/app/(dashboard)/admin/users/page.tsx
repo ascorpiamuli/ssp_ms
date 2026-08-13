@@ -1,7 +1,7 @@
-// app/admin/users/page.tsx
+// app/(dashboard)/admin/users/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import {
   Users,
   Search,
@@ -26,7 +26,10 @@ import {
   UserCheck2,
   Activity,
   XCircle,
-  Crown
+  Crown,
+  Sparkles,
+  Tag,
+  Info,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -88,6 +91,8 @@ import {
 } from '@/components/ui/pagination'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ============================================
 // TYPES
@@ -117,6 +122,8 @@ interface User {
   profile_photo: string | null
   avatar_url: string | null
   role: string | null
+  role_label: string | null
+  role_description: string | null
   department_id: number | null
   department: {
     id: number
@@ -144,15 +151,17 @@ interface User {
   last_login_at: string | null
   timezone: string
   roles: string[]
-  permissions: string[]
   role_details: {
     id: number
     name: string
+    label: string | null
+    description: string | null
     guard_name: string
     permissions: string[]
     permission_count: number
     created_at: string
   }[]
+  permissions: string[]
   created_at: string
   updated_at: string
 }
@@ -161,7 +170,9 @@ interface User {
 // UTILITY FUNCTIONS
 // ============================================
 
-const getRoleDisplayName = (role: string) => {
+const getRoleDisplayName = (role: string, label?: string | null) => {
+  if (label) return label
+
   const map: Record<string, string> = {
     'ADMIN': 'Administrator',
     'SUPER_ADMIN': 'Super Admin',
@@ -172,12 +183,14 @@ const getRoleDisplayName = (role: string) => {
     'PROCUREMENT': 'Procurement Officer',
     'SUPPLIER': 'Supplier',
     'AUDITOR': 'Auditor',
-    'STAFF': 'Staff'
+    'STAFF': 'Staff',
+    'BISHOP': 'Bishop'
   }
   return map[role] || role
 }
 
-const getRoleColor = (role: string) => {
+const getRoleColor = (roleName: string) => {
+  const name = roleName?.toUpperCase() || ''
   const map: Record<string, string> = {
     'ADMIN': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
     'SUPER_ADMIN': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
@@ -188,9 +201,10 @@ const getRoleColor = (role: string) => {
     'PROCUREMENT': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
     'SUPPLIER': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
     'AUDITOR': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 border-pink-200 dark:border-pink-800',
-    'STAFF': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+    'STAFF': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+    'BISHOP': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800'
   }
-  return map[role] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+  return map[name] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
 }
 
 const getStatusColor = (status: string) => {
@@ -230,7 +244,7 @@ const formatTimeAgo = (date: string | null) => {
 }
 
 // ============================================
-// View User Modal
+// VIEW USER MODAL (Portal Ready)
 // ============================================
 
 const ViewUserModal = ({
@@ -245,15 +259,32 @@ const ViewUserModal = ({
   if (!isOpen || !user) return null
 
   const primaryRole = user.role_details?.[0]?.name || 'STAFF'
+  const primaryRoleLabel = user.role_details?.[0]?.label || user.role_label || null
+  const primaryRoleDescription = user.role_details?.[0]?.description || user.role_description || null
   const isAdmin = user.roles?.includes('ADMIN') || user.roles?.includes('SUPER_ADMIN')
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-start">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">User Details</h2>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
               <XCircle className="h-6 w-6" />
             </button>
           </div>
@@ -272,8 +303,20 @@ const ViewUserModal = ({
                   {user.full_name}
                 </h3>
                 <Badge className={cn("font-medium border", getRoleColor(primaryRole))}>
-                  {getRoleDisplayName(primaryRole)}
+                  {primaryRoleLabel || getRoleDisplayName(primaryRole)}
                 </Badge>
+                {primaryRoleDescription && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">{primaryRoleDescription}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {isAdmin && (
                   <Badge variant="secondary" className="border-purple-300 text-purple-700 bg-purple-50 dark:bg-purple-900/20 dark:text-purple-300">
                     <Crown className="h-3 w-3 mr-1" />
@@ -336,7 +379,10 @@ const ViewUserModal = ({
                 <div className="space-y-2 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-500">Account Information</h4>
                   <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-500">Primary Role</span><span className="font-medium">{getRoleDisplayName(primaryRole)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Primary Role</span><span className="font-medium">{primaryRoleLabel || getRoleDisplayName(primaryRole)}</span></div>
+                    {primaryRoleDescription && (
+                      <div className="flex justify-between"><span className="text-gray-500">Role Description</span><span className="font-medium text-xs text-gray-600 dark:text-gray-400">{primaryRoleDescription}</span></div>
+                    )}
                     <div className="flex justify-between"><span className="text-gray-500">Department</span><span className="font-medium">{user.department?.name || 'Not assigned'}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Status</span><Badge className={cn("text-xs", getStatusColor(user.is_active ? 'active' : 'inactive'))}>{user.is_active ? 'Active' : 'Inactive'}</Badge></div>
                     <div className="flex justify-between"><span className="text-gray-500">Last Login</span><span className="font-medium">{formatDate(user.last_login_at) || 'Never'}</span></div>
@@ -369,11 +415,28 @@ const ViewUserModal = ({
                   user.role_details.map((role) => (
                     <div key={role.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-l-4 border-l-blue-500">
                       <div className="flex items-center justify-between mb-2">
-                        <Badge className={cn("font-medium border", getRoleColor(role.name))}>
-                          {getRoleDisplayName(role.name)}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={cn("font-medium border", getRoleColor(role.name))}>
+                            {role.label || getRoleDisplayName(role.name)}
+                          </Badge>
+                          {role.description && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Info className="h-3 w-3 text-gray-400 hover:text-gray-600" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-xs">{role.description}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                         <span className="text-xs text-gray-500">({role.permission_count} permissions)</span>
                       </div>
+                      {role.description && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{role.description}</p>
+                      )}
                       <div className="flex flex-wrap gap-1">
                         {role.permissions.map((permission: string) => (
                           <Badge key={permission} variant="outline" className="text-xs">
@@ -433,9 +496,20 @@ const ViewUserModal = ({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && modalContent}
+      </AnimatePresence>,
+      document.body
+    )
+  }
+
+  return null
 }
 
 // ============================================
@@ -681,7 +755,6 @@ export default function AdminUsersPage() {
     }
   }
 
-
   const handleToggleStatus = async (userId: number, action: 'activate' | 'deactivate') => {
     const user = users.find((u: User) => u.id === userId)
     if (user?.roles?.includes('ADMIN') || user?.roles?.includes('SUPER_ADMIN')) {
@@ -729,21 +802,28 @@ export default function AdminUsersPage() {
 
   if (!hasPermission('view_users')) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
-              <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Access Denied
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              You don't have permission to view users. Please contact your administrator.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageTemplate
+        title="User Management"
+        description="Manage users, roles, and permissions across the system"
+        icon={<Users className="h-5 w-5" />}
+        background="gradient"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Access Denied
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                You don't have permission to view users. Please contact your administrator.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTemplate>
     )
   }
 
@@ -751,7 +831,64 @@ export default function AdminUsersPage() {
     <PageTemplate
       title="User Management"
       description="Manage users, roles, and permissions across the system"
-      icon={<Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      icon={<Users className="h-5 w-5" />}
+      background="gradient"
+      variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Users' },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+            <Sparkles className="h-3 w-3 mr-1" />
+            {stats?.total || 0} Total
+          </Badge>
+          {selectedUsers.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBulkActionType('activate')
+                  setShowBulkActionDialog(true)
+                }}
+                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-800 dark:hover:bg-emerald-900/20"
+              >
+                <UserCheck className="h-4 w-4 mr-1" />
+                Activate
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBulkActionType('deactivate')
+                  setShowBulkActionDialog(true)
+                }}
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20"
+              >
+                <UserX className="h-4 w-4 mr-1" />
+                Deactivate
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkDeleteDialog(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete ({selectedUsers.length})
+              </Button>
+            </div>
+          )}
+          {canCreateUsers && (
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+              <Users className="h-4 w-4" />
+              Add User
+            </Button>
+          )}
+        </div>
+      }
     >
       <div className="space-y-6">
         {/* Stats Cards */}
@@ -847,7 +984,7 @@ export default function AdminUsersPage() {
                   <SelectItem value="all">All Roles</SelectItem>
                   {availableRoles?.map((role: any) => (
                     <SelectItem key={role.name} value={role.name}>
-                      {getRoleDisplayName(role.name)}
+                      {role.label || getRoleDisplayName(role.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -934,7 +1071,7 @@ export default function AdminUsersPage() {
                       />
                     </TableHead>
                     <TableHead className="min-w-[220px]">User</TableHead>
-                    <TableHead className="min-w-[130px]">Role</TableHead>
+                    <TableHead className="min-w-[150px]">Role</TableHead>
                     <TableHead className="min-w-[130px]">Department</TableHead>
                     <TableHead className="min-w-[110px]">Status</TableHead>
                     <TableHead className="min-w-[150px]">Last Login</TableHead>
@@ -965,6 +1102,8 @@ export default function AdminUsersPage() {
                   ) : (
                     users.map((user: User) => {
                       const primaryRole = user.role_details?.[0]?.name || 'STAFF'
+                      const primaryRoleLabel = user.role_details?.[0]?.label || user.role_label || null
+                      const primaryRoleDescription = user.role_details?.[0]?.description || user.role_description || null
                       const displayPermissions = user.permissions?.slice(0, 4) || []
                       const hasMorePermissions = (user.permissions?.length || 0) > 4
                       const isAdmin = user.roles?.includes('ADMIN') || user.roles?.includes('SUPER_ADMIN')
@@ -1026,23 +1165,40 @@ export default function AdminUsersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={cn("font-medium border", getRoleColor(primaryRole))}>
-                              {getRoleDisplayName(primaryRole)}
-                            </Badge>
-                            {user.roles && user.roles.length > 1 && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge variant="outline" className="text-xs ml-1">
-                                      +{user.roles.length - 1}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Additional roles: {user.roles.slice(1).join(', ')}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              <Badge className={cn("font-medium border", getRoleColor(primaryRole))}>
+                                {primaryRoleLabel || getRoleDisplayName(primaryRole)}
+                              </Badge>
+                              {primaryRoleDescription && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <span className="text-[10px] text-gray-400 hover:text-gray-600 cursor-help flex items-center gap-0.5">
+                                        <Info className="h-2.5 w-2.5" />
+                                        <span>info</span>
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="max-w-xs text-xs">{primaryRoleDescription}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              {user.roles && user.roles.length > 1 && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <Badge variant="outline" className="text-xs">
+                                        +{user.roles.length - 1}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Additional roles: {user.roles.slice(1).join(', ')}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -1237,9 +1393,10 @@ export default function AdminUsersPage() {
       </div>
 
       {/* ============================================
-          MODALS
+          MODALS - Rendered using Portal
           ============================================ */}
 
+      {/* View User Modal - Using Portal */}
       <ViewUserModal
         isOpen={showViewDialog}
         onClose={() => {
@@ -1249,127 +1406,142 @@ export default function AdminUsersPage() {
         user={selectedUser}
       />
 
-      {/* Delete User Modal */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              Delete User
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this user? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Delete User Modal - Using Portal */}
+      {showDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete User
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this user? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
 
-          {selectedUser && (
-            <div className="py-4">
-              <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-red-100 text-red-600">
-                    {selectedUser.first_name?.[0]}{selectedUser.last_name?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {selectedUser.full_name}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {selectedUser.email}
-                  </p>
+              {selectedUser && (
+                <div className="py-4">
+                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-red-100 text-red-600">
+                        {selectedUser.first_name?.[0]}{selectedUser.last_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedUser.full_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {selectedUser.email}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteUser} className="gap-2" disabled={isMutating}>
-              {isMutating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
               )}
-              Delete User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Bulk Delete Modal */}
-      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              Delete Selected Users
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedUsers.length} selected users?
-              <br />
-              <span className="text-sm text-yellow-600">Admin users will be automatically skipped.</span>
-            </DialogDescription>
-          </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteUser} className="gap-2" disabled={isMutating}>
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete User
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleBulkDelete} className="gap-2" disabled={isMutating}>
-              {isMutating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-              Delete Users
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Delete Modal - Using Portal */}
+      {showBulkDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Selected Users
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete {selectedUsers.length} selected users?
+                  <br />
+                  <span className="text-sm text-yellow-600">Admin users will be automatically skipped.</span>
+                </DialogDescription>
+              </DialogHeader>
 
-      {/* Bulk Action Modal */}
-      <Dialog open={showBulkActionDialog} onOpenChange={setShowBulkActionDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {bulkActionType === 'activate' && <UserCheck className="h-5 w-5 text-emerald-600" />}
-              {bulkActionType === 'deactivate' && <UserX className="h-5 w-5 text-red-600" />}
-              {bulkActionType === 'approve' && <UserCheck2 className="h-5 w-5 text-emerald-600" />}
-              {bulkActionType.charAt(0).toUpperCase() + bulkActionType.slice(1)} Users
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to {bulkActionType} {selectedUsers.length} selected users?
-              <br />
-              <span className="text-sm text-yellow-600">Admin users will be automatically skipped.</span>
-            </DialogDescription>
-          </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleBulkDelete} className="gap-2" disabled={isMutating}>
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete Users
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkActionDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkAction}
-              className="gap-2"
-              disabled={isMutating}
-              variant={bulkActionType === 'deactivate' ? 'destructive' : 'default'}
-            >
-              {isMutating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  {bulkActionType === 'activate' && <UserCheck className="h-4 w-4" />}
-                  {bulkActionType === 'deactivate' && <UserX className="h-4 w-4" />}
-                  {bulkActionType === 'approve' && <UserCheck2 className="h-4 w-4" />}
-                </>
-              )}
-              {bulkActionType.charAt(0).toUpperCase() + bulkActionType.slice(1)} Users
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Action Modal - Using Portal */}
+      {showBulkActionDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showBulkActionDialog} onOpenChange={setShowBulkActionDialog}>
+            <DialogContent className="z-[9999]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {bulkActionType === 'activate' && <UserCheck className="h-5 w-5 text-emerald-600" />}
+                  {bulkActionType === 'deactivate' && <UserX className="h-5 w-5 text-red-600" />}
+                  {bulkActionType === 'approve' && <UserCheck2 className="h-5 w-5 text-emerald-600" />}
+                  {bulkActionType.charAt(0).toUpperCase() + bulkActionType.slice(1)} Users
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to {bulkActionType} {selectedUsers.length} selected users?
+                  <br />
+                  <span className="text-sm text-yellow-600">Admin users will be automatically skipped.</span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkActionDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBulkAction}
+                  className="gap-2"
+                  disabled={isMutating}
+                  variant={bulkActionType === 'deactivate' ? 'destructive' : 'default'}
+                >
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      {bulkActionType === 'activate' && <UserCheck className="h-4 w-4" />}
+                      {bulkActionType === 'deactivate' && <UserX className="h-4 w-4" />}
+                      {bulkActionType === 'approve' && <UserCheck2 className="h-4 w-4" />}
+                    </>
+                  )}
+                  {bulkActionType.charAt(0).toUpperCase() + bulkActionType.slice(1)} Users
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
     </PageTemplate>
   )
 }
