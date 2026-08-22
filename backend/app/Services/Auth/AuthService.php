@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Models\Department;
 use App\Services\BaseService;
 use App\Models\User;
 use App\Models\UserActivityLog;
@@ -332,25 +333,107 @@ class AuthService extends BaseService
   }
 
   /**
-   * Get authenticated user with permissions.
+   * Get authenticated user with permissions and department info.
    */
   public function getAuthUserData(User $user): array
   {
     Log::info('AuthService::getAuthUserData called', [
       'user_id' => $user->id,
       'email' => $user->email,
-      'role' => $user->role,
     ]);
 
     try {
+      // ✅ Load relationships
       $user->load(['department', 'roles', 'profile']);
+
+      // ✅ Get all roles (they might be uppercase)
+      $allRoles = $user->getRoleNames();
+
+      // ✅ Check if user has HOD role (case insensitive)
+      $hasHodRole = $user->hasRole('hod') ||
+        $user->hasRole('HOD') ||
+        $allRoles->contains('hod') ||
+        $allRoles->contains('HOD') ||
+        $allRoles->contains(strtolower('HOD'));
+
+      // ✅ Also check by role label
+      $hasHodLabel = false;
+      if ($user->relationLoaded('roles') && $user->roles) {
+        foreach ($user->roles as $role) {
+          if (strtolower($role->name) === 'hod' || strtolower($role->label ?? '') === 'hod') {
+            $hasHodLabel = true;
+            break;
+          }
+        }
+      }
+
+      $isHOD = $hasHodRole || $hasHodLabel;
+
+      Log::info('AuthService::role_debug', [
+        'user_id' => $user->id,
+        'all_roles' => $allRoles->toArray(),
+        'has_hod_role' => $hasHodRole,
+        'has_hod_label' => $hasHodLabel,
+        'is_hod' => $isHOD,
+      ]);
+
+      // ✅ Find the department where this user is the HOD
+      $hodDepartment = null;
+      if ($isHOD) {
+        $hodDepartment = Department::where('hod_id', $user->id)->first();
+
+        Log::info('AuthService::hod_department_check', [
+          'user_id' => $user->id,
+          'is_hod' => $isHOD,
+          'hod_department_found' => $hodDepartment ? true : false,
+          'hod_department_id' => $hodDepartment?->id,
+          'hod_department_name' => $hodDepartment?->name,
+        ]);
+      }
+
+      // ✅ If no HOD department found but user has hod role, try to find any department
+      if ($isHOD && !$hodDepartment) {
+        $anyDepartment = Department::where('hod_id', $user->id)->first();
+        if ($anyDepartment) {
+          $hodDepartment = $anyDepartment;
+          Log::info('AuthService::hod_department_found_by_direct_query', [
+            'user_id' => $user->id,
+            'department_id' => $anyDepartment->id,
+            'department_name' => $anyDepartment->name,
+          ]);
+        }
+      }
+
+      // ✅ Determine effective department
+      $effectiveDepartment = $hodDepartment ?? $user->department;
+
+      // ✅ If still null, try to find department via direct query one more time
+      if (!$effectiveDepartment && $isHOD) {
+        $effectiveDepartment = Department::where('hod_id', $user->id)->first();
+      }
+
+      Log::info('AuthService::effective_department', [
+        'user_id' => $user->id,
+        'assigned_department_id' => $user->department_id,
+        'hod_department_id' => $hodDepartment?->id,
+        'effective_department_id' => $effectiveDepartment?->id,
+        'effective_department_name' => $effectiveDepartment?->name,
+        'is_hod' => $isHOD,
+      ]);
+
+      // ✅ Set the effective department on the user (for the resource to use)
+      $user->setAttribute('effective_department', $effectiveDepartment);
+      $user->setAttribute('hod_department', $hodDepartment);
+      $user->setAttribute('is_hod', $isHOD);
+      $user->setAttribute('has_hod_department', $hodDepartment ? true : false);
 
       $permissions = $user->getAllPermissions()->pluck('name');
       $roles = $user->getRoleNames();
 
       Log::info('AuthService::getAuthUserData completed', [
         'user_id' => $user->id,
-        'email' => $user->email,
+        'effective_department_id' => $effectiveDepartment?->id,
+        'effective_department_name' => $effectiveDepartment?->name,
         'permissions_count' => $permissions->count(),
         'roles_count' => $roles->count(),
       ]);
@@ -363,14 +446,12 @@ class AuthService extends BaseService
     } catch (\Exception $e) {
       Log::error('AuthService::getAuthUserData failed', [
         'user_id' => $user->id,
-        'email' => $user->email,
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
       ]);
       throw $e;
     }
   }
-
   /**
    * Get user permissions.
    */

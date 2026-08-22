@@ -125,4 +125,24 @@ interface PurchaseOrderRepositoryInterface
    * Delete a purchase order item.
    */
   public function deletePurchaseOrderItem(int $id): bool;
+
+  /**
+   * ✅ Check purchase order (HOD)
+   */
+  public function checkPurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder;
+
+  /**
+   * ✅ Endorse purchase order (Accountant)
+   */
+  public function endorsePurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder;
+
+  /**
+   * ✅ Approve purchase order (Director/Finance Admin)
+   */
+  public function approvePurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder;
+
+  /**
+   * ✅ Get workflow status
+   */
+  public function getWorkflowStatus(int $id): array;
 }

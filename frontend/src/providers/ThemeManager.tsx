@@ -375,6 +375,10 @@ const getPageTitle = (pathname: string, companyName: string = 'SSPMS'): string =
       '/hr/performance': 'Performance & Training',
       '/assets': 'Assets & Inventory',
       '/facilities': 'Facilities & Rooms',
+      '/login': 'Login',
+      '/register': 'Register',
+      '/forgot-password': 'Forgot Password',
+      '/reset-password': 'Reset Password',
     }
 
     if (fallbackRoutes[pathname]) {
@@ -410,6 +414,12 @@ const getPageTitle = (pathname: string, companyName: string = 'SSPMS'): string =
 }
 
 // ============================================
+// PUBLIC PATHS - NOT AUTH PROTECTED
+// ============================================
+
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password']
+
+// ============================================
 // THEME MANAGER COMPONENT
 // ============================================
 
@@ -423,13 +433,18 @@ export function ThemeManager({ children }: { children: React.ReactNode }) {
   const previousProfileRef = useRef<any>(null)
   const hasAppliedRef = useRef(false)
 
+  // ✅ Determine if current path is public
+  const isPublicPath = pathname ? PUBLIC_PATHS.some(p => pathname.startsWith(p)) : false
+
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  // Extract profile data
+  // Extract profile data - only if NOT on public path to avoid unnecessary requests
   useEffect(() => {
     if (!isMounted) return
+    // ✅ Skip fetching profile on public paths
+    if (isPublicPath) return
 
     let profileData: any = null
     const dataObj = data as any
@@ -449,7 +464,7 @@ export function ThemeManager({ children }: { children: React.ReactNode }) {
     if (profileData) {
       setProfile(profileData)
     }
-  }, [data, isMounted])
+  }, [data, isMounted, isPublicPath])
 
   // Update page title whenever pathname or profile changes
   useEffect(() => {
@@ -460,9 +475,11 @@ export function ThemeManager({ children }: { children: React.ReactNode }) {
     document.title = title
   }, [pathname, profile, isMounted])
 
-  // Apply theme changes (font, colors, etc.)
+  // Apply theme changes (font, colors, etc.) - SKIP on public paths
   useEffect(() => {
     if (!isMounted) return
+    // ✅ Skip theme application on public paths to avoid unnecessary DOM manipulation
+    if (isPublicPath) return
     if (!profile) return
 
     const prev = previousProfileRef.current
@@ -548,7 +565,7 @@ export function ThemeManager({ children }: { children: React.ReactNode }) {
 
     previousProfileRef.current = profile
     hasAppliedRef.current = true
-  }, [profile, isMounted])
+  }, [profile, isMounted, isPublicPath])
 
   return <>{children}</>
 }

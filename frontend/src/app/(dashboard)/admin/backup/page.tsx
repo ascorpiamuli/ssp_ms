@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Database,
   Plus,
@@ -29,6 +29,19 @@ import {
   ChevronRight,
   XCircle as XCircleIcon,
   Sparkles,
+  Server,
+  Zap,
+  Award,
+  Target,
+  Rocket,
+  Gem,
+  Flame,
+  Leaf,
+  MinusCircle,
+  CircleDashed,
+  Fingerprint,
+  Smartphone,
+  History,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,7 +70,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast-context'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { useBackup } from '@/hooks/useBackup'
@@ -70,18 +83,14 @@ import {
 } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
 import { format } from 'date-fns'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards'
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -136,6 +145,21 @@ const getStatusColor = (status: string) => {
   }
 }
 
+const getStatusBadgeClass = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+    case 'running':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+    case 'failed':
+      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+  }
+}
+
 const getStatusLabel = (status: string) => {
   switch (status) {
     case 'pending':
@@ -164,6 +188,19 @@ const getTypeLabel = (type: string) => {
   }
 }
 
+const getTypeBadgeClass = (type: string) => {
+  switch (type) {
+    case 'manual':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+    case 'scheduled':
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+    case 'auto':
+      return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800'
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+  }
+}
+
 const formatFileSize = (bytes: number) => {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -173,7 +210,7 @@ const formatFileSize = (bytes: number) => {
 }
 
 // ============================================
-// CREATE BACKUP MODAL (Portal Ready)
+// CREATE BACKUP MODAL (Portal Ready - No Tags)
 // ============================================
 
 const CreateBackupModal = ({
@@ -209,13 +246,15 @@ const CreateBackupModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Database className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                <Database className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               Create Backup
             </h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -233,7 +272,7 @@ const CreateBackupModal = ({
               placeholder="Enter backup name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="dark:bg-gray-900 dark:border-gray-700"
+              className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
             <p className="text-xs text-gray-500 mt-1">Leave empty for auto-generated name</p>
           </div>
@@ -243,13 +282,13 @@ const CreateBackupModal = ({
               Backup Type
             </label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="dark:bg-gray-900 dark:border-gray-700">
+              <SelectTrigger className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="auto">Auto</SelectItem>
+              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                <SelectItem value="manual" className="dark:text-white">Manual</SelectItem>
+                <SelectItem value="scheduled" className="dark:text-white">Scheduled</SelectItem>
+                <SelectItem value="auto" className="dark:text-white">Auto</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -258,14 +297,14 @@ const CreateBackupModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isCreating}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
             >
               {isCreating ? (
                 <>
@@ -298,7 +337,7 @@ const CreateBackupModal = ({
 }
 
 // ============================================
-// DELETE BACKUP MODAL (Portal Ready)
+// DELETE BACKUP MODAL (Portal Ready - No Tags)
 // ============================================
 
 const DeleteBackupModal = ({
@@ -328,12 +367,12 @@ const DeleteBackupModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl">
               <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Backup</h2>
@@ -347,14 +386,14 @@ const DeleteBackupModal = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
             >
               {isDeleting ? (
                 <>
@@ -387,7 +426,7 @@ const DeleteBackupModal = ({
 }
 
 // ============================================
-// VIEW BACKUP MODAL (Portal Ready)
+// VIEW BACKUP MODAL (Portal Ready - No Tags)
 // ============================================
 
 const ViewBackupModal = ({
@@ -402,10 +441,11 @@ const ViewBackupModal = ({
   if (!isOpen || !backup) return null
 
   const StatusIcon = getStatusIcon(backup.status)
-  const statusColor = getStatusColor(backup.status)
   const statusLabel = getStatusLabel(backup.status)
   const typeLabel = getTypeLabel(backup.type)
   const isRunning = backup.status === 'running'
+  const statusBadgeClass = getStatusBadgeClass(backup.status)
+  const typeBadgeClass = getTypeBadgeClass(backup.type)
 
   const modalContent = (
     <motion.div
@@ -419,13 +459,15 @@ const ViewBackupModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-2xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Database className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                <Database className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               Backup Details
             </h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -435,76 +477,77 @@ const ViewBackupModal = ({
         </div>
 
         <div className="p-4 sm:p-6">
-          <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-6">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+          <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-xl border border-blue-200/30 dark:border-blue-800/30 mb-6">
+            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
               <Database className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {backup.name}
               </h3>
-              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                <Badge variant={statusColor as any} className="flex items-center gap-1">
+              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 flex-wrap">
+                <Badge className={cn("flex items-center gap-1 rounded-full", statusBadgeClass)}>
                   <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} />
                   {statusLabel}
                 </Badge>
-                <Badge variant="secondary">{typeLabel}</Badge>
-                <span>#{backup.id}</span>
+                <Badge className={cn("rounded-full", typeBadgeClass)}>{typeLabel}</Badge>
+                <span className="text-xs text-gray-400">#{backup.id}</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">File Name</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">File Name</p>
               <p className="font-medium text-gray-900 dark:text-white">{backup.file_name}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Size</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Size</p>
               <p className="font-medium text-gray-900 dark:text-white">{formatFileSize(backup.size)}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Disk</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Disk</p>
               <p className="font-medium text-gray-900 dark:text-white">{backup.disk}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Type</p>
-              <Badge variant="secondary">{typeLabel}</Badge>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Type</p>
+              <Badge className={cn("rounded-full", typeBadgeClass)}>{typeLabel}</Badge>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Created</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Created</p>
               <p className="font-medium text-gray-900 dark:text-white">{formatDate(backup.created_at)}</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">Completed</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
               <p className="font-medium text-gray-900 dark:text-white">{formatDate(backup.completed_at)}</p>
             </div>
-            <div className="md:col-span-2 space-y-2">
-              <p className="text-sm text-gray-500">Path</p>
+            <div className="md:col-span-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Path</p>
               <p className="text-sm text-gray-600 dark:text-gray-400 break-all">{backup.path}</p>
             </div>
             {backup.error_message && (
-              <div className="md:col-span-2 space-y-2">
-                <p className="text-sm text-red-600 dark:text-red-400">Error Message</p>
-                <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                  {backup.error_message}
+              <div className="md:col-span-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Error Message
                 </p>
+                <p className="text-sm text-red-600 dark:text-red-400 mt-1">{backup.error_message}</p>
               </div>
             )}
             {backup.metadata && (
-              <div className="md:col-span-2 space-y-2">
-                <p className="text-sm text-gray-500">Metadata</p>
-                <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded-lg overflow-auto max-h-40">
+              <div className="md:col-span-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Metadata</p>
+                <pre className="text-xs bg-white dark:bg-gray-900 p-3 rounded-lg overflow-auto max-h-40 border border-gray-200 dark:border-gray-700 mt-1">
                   {JSON.stringify(backup.metadata, null, 2)}
                 </pre>
               </div>
             )}
             {backup.creator && (
-              <div className="md:col-span-2 space-y-2">
-                <p className="text-sm text-gray-500">Created By</p>
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
+              <div className="md:col-span-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Created By</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Avatar className="h-8 w-8 ring-2 ring-gray-200 dark:ring-gray-700">
+                    <AvatarFallback className="text-xs bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
                       {backup.creator.full_name?.charAt(0) || '?'}
                     </AvatarFallback>
                   </Avatar>
@@ -519,7 +562,7 @@ const ViewBackupModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg shadow-blue-600/20"
+            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
@@ -541,7 +584,7 @@ const ViewBackupModal = ({
 }
 
 // ============================================
-// RESTORE BACKUP MODAL (Portal Ready)
+// RESTORE BACKUP MODAL (Portal Ready - No Tags)
 // ============================================
 
 const RestoreBackupModal = ({
@@ -571,12 +614,12 @@ const RestoreBackupModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
               <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Restore Backup</h2>
@@ -587,7 +630,7 @@ const RestoreBackupModal = ({
           <p className="text-sm text-red-500 dark:text-red-400 mb-4">
             This will overwrite current data. This action cannot be undone.
           </p>
-          <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+          <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
             <Database className="h-8 w-8 text-amber-600 dark:text-amber-400" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -601,14 +644,14 @@ const RestoreBackupModal = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
               disabled={isRestoring}
-              className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20"
             >
               {isRestoring ? (
                 <>
@@ -641,93 +684,12 @@ const RestoreBackupModal = ({
 }
 
 // ============================================
-// STATS CARDS
-// ============================================
-
-const StatsCards = ({ stats, isLoading }: { stats: any; isLoading: boolean }) => {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="animate-pulse">
-            <CardContent className="pt-4">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    )
-  }
-
-  if (!stats) return null
-
-  const statItems = [
-    {
-      label: 'Total Backups',
-      value: stats.total_backups || 0,
-      icon: Database,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    },
-    {
-      label: 'Completed',
-      value: stats.completed_backups || 0,
-      icon: CheckCircle,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
-    },
-    {
-      label: 'Failed',
-      value: stats.failed_backups || 0,
-      icon: XCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50 dark:bg-red-900/20',
-    },
-    {
-      label: 'Total Size',
-      value: formatFileSize(stats.total_size || 0),
-      icon: HardDrive,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
-    },
-  ]
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      {statItems.map((item) => {
-        const Icon = item.icon
-        return (
-          <Card key={item.label} className="border-l-4 border-l-blue-500">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {item.label}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {item.value}
-                  </p>
-                </div>
-                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", item.bgColor)}>
-                  <Icon className={cn("h-5 w-5", item.color)} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
-  )
-}
-
-// ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function BackupsPage() {
   const { hasPermission, isAdmin } = useAuthContext()
-  const { error: toastError } = useToast()
+  const { success, error: toastError } = useToast()
   const {
     useBackups,
     useStats,
@@ -757,6 +719,7 @@ export default function BackupsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Queries
   const { data: backupsData, isLoading, refetch } = useBackups({
@@ -775,6 +738,49 @@ export default function BackupsPage() {
   const backups = backupsData?.backups || []
   const meta = backupsData?.meta
 
+  // Compute stats for StatsCards
+  const statsItems: StatCardItem[] = useMemo(() => {
+    const total = stats?.total_backups || 0
+    const completed = stats?.completed_backups || 0
+    const failed = stats?.failed_backups || 0
+    const totalSize = stats?.total_size || 0
+
+    return [
+      {
+        label: "Total Backups",
+        value: total,
+        icon: Database,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All backups",
+      },
+      {
+        label: "Completed",
+        value: completed,
+        icon: CheckCircle,
+        tagLabel: "DONE",
+        tagColor: "emerald",
+        subtitle: `${completed} successful`,
+      },
+      {
+        label: "Failed",
+        value: failed,
+        icon: XCircle,
+        tagLabel: "FAILED",
+        tagColor: "rose",
+        subtitle: `${failed} failed backups`,
+      },
+      {
+        label: "Total Size",
+        value: formatFileSize(totalSize),
+        icon: HardDrive,
+        tagLabel: "SIZE",
+        tagColor: "purple",
+        subtitle: "Total storage used",
+      },
+    ]
+  }, [stats])
+
   // Check permissions
   if (!hasPermission('manage_backups') && !isAdmin()) {
     return (
@@ -785,8 +791,9 @@ export default function BackupsPage() {
         background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <Card className="max-w-md">
-            <CardContent className="pt-6 text-center">
+          <Card className="max-w-md relative">
+            <WrappedCornerTag label="DENIED" color="red" position="top-left" size="lg" />
+            <CardContent className="pt-8 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
@@ -804,11 +811,6 @@ export default function BackupsPage() {
   }
 
   // Handlers
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    refetch()
-  }
-
   const handleResetFilters = () => {
     setFilters({
       search: '',
@@ -820,6 +822,7 @@ export default function BackupsPage() {
       page: 1,
     })
     setTimeout(refetch, 100)
+    success('Filters cleared')
   }
 
   const handlePageChange = (newPage: number) => {
@@ -834,10 +837,11 @@ export default function BackupsPage() {
         name: data.name,
         type: data.type as 'manual' | 'scheduled' | 'auto',
       })
+      success('Backup created successfully')
       setShowCreateModal(false)
       refetch()
     } catch (error) {
-      // Error handled by mutation
+      toastError('Failed to create backup')
     }
   }
 
@@ -845,19 +849,21 @@ export default function BackupsPage() {
     if (!selectedBackup) return
     try {
       await deleteBackup.mutateAsync(selectedBackup.id)
+      success(`Backup "${selectedBackup.name}" deleted successfully`)
       setShowDeleteModal(false)
       setSelectedBackup(null)
       refetch()
     } catch (error) {
-      // Error handled by mutation
+      toastError('Failed to delete backup')
     }
   }
 
   const handleDownloadBackup = async (id: number) => {
     try {
       await downloadBackup.mutateAsync(id)
+      success('Backup download started')
     } catch (error) {
-      // Error handled by mutation
+      toastError('Failed to download backup')
     }
   }
 
@@ -865,20 +871,34 @@ export default function BackupsPage() {
     if (!selectedBackup) return
     try {
       await restoreBackup.mutateAsync(selectedBackup.id)
+      success(`Backup "${selectedBackup.name}" restored successfully`)
       setShowRestoreModal(false)
       setSelectedBackup(null)
       refetch()
     } catch (error) {
-      // Error handled by mutation
+      toastError('Failed to restore backup')
     }
   }
 
   const handleCleanBackups = async () => {
     try {
       await cleanBackups.mutateAsync(30)
+      success('Old backups cleaned successfully')
       refetch()
     } catch (error) {
-      // Error handled by mutation
+      toastError('Failed to clean old backups')
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refetch()
+      success('Data refreshed successfully')
+    } catch (error) {
+      toastError('Failed to refresh data')
+    } finally {
+      setIsRefreshing(false)
     }
   }
 
@@ -886,7 +906,7 @@ export default function BackupsPage() {
     <PageTemplate
       title="Backup Management"
       description="Manage system backups and restore points"
-      icon={<Database className="h-5 w-5" />}
+      icon={<Database className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
       breadcrumbs={[
@@ -894,15 +914,15 @@ export default function BackupsPage() {
         { label: 'Backups' },
       ]}
       actions={
-        <div className="flex items-center gap-2">
-          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 rounded-full">
             <Sparkles className="h-3 w-3 mr-1" />
             {meta?.total || 0} Backups
           </Badge>
           <Button
             variant="outline"
             onClick={handleCleanBackups}
-            className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
             size="sm"
           >
             <Trash2 className="h-4 w-4" />
@@ -910,16 +930,16 @@ export default function BackupsPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => refetch()}
-            className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
-            disabled={isLoading}
+            onClick={handleRefresh}
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+            disabled={isLoading || isRefreshing}
           >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshing) && "animate-spin")} />
             Refresh
           </Button>
           <Button
             onClick={() => setShowCreateModal(true)}
-            className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+            className="gap-2 h-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
           >
             <Plus className="h-4 w-4" />
             New Backup
@@ -927,322 +947,399 @@ export default function BackupsPage() {
         </div>
       }
     >
-      {/* Stats */}
-      <StatsCards stats={stats} isLoading={statsLoading} />
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <StatsCards
+          stats={statsItems}
+          isLoading={statsLoading}
+          columns={4}
+          variant="default"
+          formatCompact={true}
+          tagOrientation="wrapped"
+          tagPosition="top-left"
+        />
 
-      {/* Controls */}
-      <Card className="mb-6">
-        <CardContent className="pt-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Search backups..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                  className="pl-9 dark:bg-gray-900 dark:border-gray-700"
-                />
+        {/* Filters */}
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
+  
+          <CardContent className="p-4 pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Search backups..."
+                    value={filters.search}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
+                    className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
               </div>
-            </div>
-            <Select
-              value={filters.status}
-              onValueChange={(value) => setFilters({ ...filters, status: value, page: 1 })}
-            >
-              <SelectTrigger className="w-[160px] dark:bg-gray-900 dark:border-gray-700">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.type}
-              onValueChange={(value) => setFilters({ ...filters, type: value, page: 1 })}
-            >
-              <SelectTrigger className="w-[160px] dark:bg-gray-900 dark:border-gray-700">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="auto">Auto</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              onClick={handleResetFilters}
-              className="gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              <FilterX className="h-4 w-4" />
-              Clear
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Actions Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary" className="text-sm">
-            {meta?.total || 0} backups
-          </Badge>
-          {filters.search && (
-            <Badge variant="outline" className="text-sm">
-              Search: {filters.search}
-            </Badge>
-          )}
-          {filters.status !== 'all' && (
-            <Badge variant="outline" className="text-sm">
-              Status: {getStatusLabel(filters.status)}
-            </Badge>
-          )}
-          {filters.type !== 'all' && (
-            <Badge variant="outline" className="text-sm">
-              Type: {getTypeLabel(filters.type)}
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {/* Backups Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-              <p className="text-gray-500">Loading backups...</p>
-            </div>
-          ) : backups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Database className="h-12 w-12 text-gray-300 mb-4" />
-              <p className="text-gray-500">No backups found</p>
-              <p className="text-sm text-gray-400 mt-1">Create your first backup to get started</p>
-              <Button onClick={() => setShowCreateModal(true)} className="mt-4 gap-2">
-                <Plus className="h-4 w-4" />
-                Create Backup
+              <Select
+                value={filters.status}
+                onValueChange={(value) => setFilters({ ...filters, status: value, page: 1 })}
+              >
+                <SelectTrigger className="w-[160px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="running">Running</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.type}
+                onValueChange={(value) => setFilters({ ...filters, type: value, page: 1 })}
+              >
+                <SelectTrigger className="w-[160px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="auto">Auto</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={handleResetFilters}
+                className="gap-2 h-11 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                <FilterX className="h-4 w-4" />
+                Clear
               </Button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                    <TableHead className="min-w-[200px]">Name</TableHead>
-                    <TableHead className="min-w-[120px]">Type</TableHead>
-                    <TableHead className="min-w-[120px]">Status</TableHead>
-                    <TableHead className="min-w-[100px]">Size</TableHead>
-                    <TableHead className="min-w-[150px]">Created</TableHead>
-                    <TableHead className="text-right min-w-[180px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {backups.map((backup: any) => {
-                    const StatusIcon = getStatusIcon(backup.status)
-                    const statusColor = getStatusColor(backup.status)
-                    const statusLabel = getStatusLabel(backup.status)
-                    const typeLabel = getTypeLabel(backup.type)
-                    const isRunning = backup.status === 'running'
-                    const isCompleted = backup.status === 'completed'
+          </CardContent>
+        </Card>
 
-                    return (
-                      <TableRow key={backup.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                              <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        {/* Active Filters */}
+        {(filters.search || filters.status !== 'all' || filters.type !== 'all') && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Active filters:</span>
+            {filters.search && (
+              <Badge variant="secondary" className="rounded-full text-xs">
+                Search: {filters.search}
+                <button
+                  onClick={() => setFilters({ ...filters, search: '', page: 1 })}
+                  className="ml-1 hover:text-gray-700"
+                >
+                  <XCircleIcon className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.status !== 'all' && (
+              <Badge variant="secondary" className="rounded-full text-xs">
+                Status: {getStatusLabel(filters.status)}
+                <button
+                  onClick={() => setFilters({ ...filters, status: 'all', page: 1 })}
+                  className="ml-1 hover:text-gray-700"
+                >
+                  <XCircleIcon className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.type !== 'all' && (
+              <Badge variant="secondary" className="rounded-full text-xs">
+                Type: {getTypeLabel(filters.type)}
+                <button
+                  onClick={() => setFilters({ ...filters, type: 'all', page: 1 })}
+                  className="ml-1 hover:text-gray-700"
+                >
+                  <XCircleIcon className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Backups Table */}
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 overflow-hidden relative">
+          <WrappedCornerTag label="BACKUPS" color="blue" position="top-left" size="lg" />
+          <div className="pt-8">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-500">Loading backups...</p>
+              </div>
+            ) : backups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Database className="h-12 w-12 text-gray-300 mb-4" />
+                <p className="text-gray-500">No backups found</p>
+                <p className="text-sm text-gray-400 mt-1">Create your first backup to get started</p>
+                <Button onClick={() => setShowCreateModal(true)} className="mt-4 gap-2 rounded-xl">
+                  <Plus className="h-4 w-4" />
+                  Create Backup
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+                      <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Name</TableHead>
+                      <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Type</TableHead>
+                      <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
+                      <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Size</TableHead>
+                      <TableHead className="min-w-[150px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Created</TableHead>
+                      <TableHead className="text-right min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {backups.map((backup: any) => {
+                      const StatusIcon = getStatusIcon(backup.status)
+                      const statusLabel = getStatusLabel(backup.status)
+                      const typeLabel = getTypeLabel(backup.type)
+                      const isRunning = backup.status === 'running'
+                      const isCompleted = backup.status === 'completed'
+                      const statusBadgeClass = getStatusBadgeClass(backup.status)
+                      const typeBadgeClass = getTypeBadgeClass(backup.type)
+
+                      return (
+                        <TableRow key={backup.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "p-2 rounded-xl",
+                                isCompleted ? "bg-emerald-50 dark:bg-emerald-900/20" :
+                                  backup.status === 'failed' ? "bg-red-50 dark:bg-red-900/20" :
+                                    "bg-blue-50 dark:bg-blue-900/20"
+                              )}>
+                                <Database className={cn(
+                                  "h-4 w-4",
+                                  isCompleted ? "text-emerald-600 dark:text-emerald-400" :
+                                    backup.status === 'failed' ? "text-red-600 dark:text-red-400" :
+                                      "text-blue-600 dark:text-blue-400"
+                                )} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                                  {backup.name}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{backup.file_name}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
-                                {backup.name}
-                              </p>
-                              <p className="text-xs text-gray-500">{backup.file_name}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">
-                            {typeLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusColor as any} className="flex items-center gap-1.5">
-                            <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} />
-                            {statusLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {getFormattedSize(backup.size)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                              {formatRelativeTime(backup.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn("text-xs rounded-full", typeBadgeClass)}>
+                              {typeLabel}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn("flex items-center gap-1.5 rounded-full", statusBadgeClass)}>
+                              <StatusIcon className={cn("h-3 w-3", isRunning && "animate-spin")} />
+                              {statusLabel}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {getFormattedSize(backup.size)}
                             </span>
-                            <span className="text-xs text-gray-400">
-                              {formatDate(backup.created_at)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          </TableCell>
+                          <TableCell>
                             <TooltipProvider>
                               <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                <TooltipTrigger>
+                                  <div className="flex flex-col">
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {formatRelativeTime(backup.created_at)}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                      {formatDate(backup.created_at)}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-xl">
+                                  <p className="text-xs">{formatDate(backup.created_at)}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                      onClick={() => {
+                                        setSelectedBackup(backup)
+                                        setShowViewModal(true)
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4 text-gray-500" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="rounded-xl">View Details</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              {isCompleted && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                        onClick={() => handleDownloadBackup(backup.id)}
+                                        disabled={downloadBackup.isPending}
+                                      >
+                                        {downloadBackup.isPending && downloadBackup.variables === backup.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Download className="h-4 w-4 text-gray-500" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="rounded-xl">Download Backup</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+
+                              {isCompleted && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                                        onClick={() => {
+                                          setSelectedBackup(backup)
+                                          setShowRestoreModal(true)
+                                        }}
+                                      >
+                                        <RotateCw className="h-4 w-4 text-gray-500" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="rounded-xl">Restore Backup</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                                  <DropdownMenuLabel className="text-sm font-semibold px-3 py-2 text-gray-700 dark:text-gray-200">Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
+                                  <DropdownMenuItem
                                     onClick={() => {
                                       setSelectedBackup(backup)
                                       setShowViewModal(true)
                                     }}
+                                    className="rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
                                   >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View Details</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-
-                            {isCompleted && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  {isCompleted && (
+                                    <DropdownMenuItem
                                       onClick={() => handleDownloadBackup(backup.id)}
-                                      disabled={downloadBackup.isPending}
+                                      className="rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
                                     >
-                                      {downloadBackup.isPending && downloadBackup.variables === backup.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Download className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Download Backup</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-
-                            {isCompleted && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Download
+                                    </DropdownMenuItem>
+                                  )}
+                                  {isCompleted && (
+                                    <DropdownMenuItem
                                       onClick={() => {
                                         setSelectedBackup(backup)
                                         setShowRestoreModal(true)
                                       }}
+                                      className="rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
                                     >
-                                      <RotateCw className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Restore Backup</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
+                                      <RotateCw className="h-4 w-4 mr-2" />
+                                      Restore
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedBackup(backup)
+                                      setShowDeleteModal(true)
+                                    }}
+                                    className="text-red-600 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => {
-                                  setSelectedBackup(backup)
-                                  setShowViewModal(true)
-                                }}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                {isCompleted && (
-                                  <DropdownMenuItem onClick={() => handleDownloadBackup(backup.id)}>
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Download
-                                  </DropdownMenuItem>
-                                )}
-                                {isCompleted && (
-                                  <DropdownMenuItem onClick={() => {
-                                    setSelectedBackup(backup)
-                                    setShowRestoreModal(true)
-                                  }}>
-                                    <RotateCw className="h-4 w-4 mr-2" />
-                                    Restore
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedBackup(backup)
-                                    setShowDeleteModal(true)
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+          {/* Pagination */}
+          {meta && meta.last_page > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 gap-2">
+              <div className="text-sm text-gray-500">
+                Showing <span className="font-medium text-gray-700 dark:text-gray-300">{backups.length}</span> of{' '}
+                <span className="font-medium text-gray-700 dark:text-gray-300">{meta.total}</span> backups
+              </div>
+              <div className="flex items-center gap-4">
+                <Select
+                  value={filters.per_page.toString()}
+                  onValueChange={(value) => {
+                    setFilters({ ...filters, per_page: parseInt(value), page: 1 })
+                  }}
+                >
+                  <SelectTrigger className="w-[80px] h-9 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                    <SelectItem value="10" className="dark:text-white">10</SelectItem>
+                    <SelectItem value="20" className="dark:text-white">20</SelectItem>
+                    <SelectItem value="50" className="dark:text-white">50</SelectItem>
+                    <SelectItem value="100" className="dark:text-white">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
+                    onClick={() => handlePageChange(meta.current_page - 1)}
+                    disabled={meta.current_page <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm px-2 text-gray-600 dark:text-gray-400">
+                    Page <span className="font-medium">{meta.current_page}</span> of{' '}
+                    <span className="font-medium">{meta.last_page}</span>
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
+                    onClick={() => handlePageChange(meta.current_page + 1)}
+                    disabled={meta.current_page >= meta.last_page}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
-        </CardContent>
-        {meta && meta.last_page > 1 && (
-          <CardFooter className="flex items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-500">
-              Showing <span className="font-medium">{backups.length}</span> of{' '}
-              <span className="font-medium">{meta.total}</span> backups
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(meta.current_page - 1)}
-                disabled={meta.current_page <= 1}
-                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Page <span className="font-medium">{meta.current_page}</span> of{' '}
-                <span className="font-medium">{meta.last_page}</span>
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(meta.current_page + 1)}
-                disabled={meta.current_page >= meta.last_page}
-                className="h-8 w-8 p-0 dark:border-gray-700 dark:hover:bg-gray-800"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardFooter>
-        )}
-      </Card>
+        </Card>
+      </div>
 
       {/* ============================================
           MODALS - Rendered using Portal

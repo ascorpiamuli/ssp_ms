@@ -193,9 +193,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
 
   /**
    * Ensure requisition_id is set in the data array
-   *
-   * @param array $data
-   * @return array
    */
   protected function ensureRequisitionId(array $data): array
   {
@@ -267,11 +264,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       }
     }
 
-    // If we still don't have a requisition_id, log a warning and use a fallback
-    Log::warning('⚠️ [NotificationDispatcher::ensureRequisitionId] Could not find requisition_id, using fallback', [
-      'data' => $data
-    ]);
-
     // Try to get the latest requisition_id from the current user's context
     if (auth()->check() && auth()->user()) {
       // Try to find any requisition created by the current user
@@ -290,7 +282,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     }
 
     // Last resort: throw an exception if requisition_id is still null and it's a critical notification
-    // For non-critical notifications, we can use a placeholder
     $criticalEvents = ['qtn_sent', 'qtn_reminder', 'supplier_selected', 'po_generated', 'po_sent'];
     if (in_array($data['type'] ?? '', $criticalEvents) || in_array($data['event'] ?? '', $criticalEvents)) {
       Log::error('❌ [NotificationDispatcher::ensureRequisitionId] Critical notification missing requisition_id', [
@@ -447,122 +438,134 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     $this->eventMap = [
       'procurement_started' => [
         'class' => ProcurementStartedNotification::class,
-        'roles' => ['procurement', 'admin'],
+        'roles' => ['PROCUREMENT', 'ADMIN'],
         'priority' => 'normal',
       ],
       'qtn_generated' => [
         'class' => QuotationRequestNotification::class,
-        'roles' => ['procurement'],
+        'roles' => ['PROCUREMENT'],
         'priority' => 'normal',
       ],
       'qtn_sent' => [
         'class' => QuotationRequestNotification::class,
-        'roles' => ['supplier'],
+        'roles' => ['SUPPLIER'],
         'priority' => 'normal',
       ],
       'qtn_reminder' => [
         'class' => ReminderNotification::class,
-        'roles' => ['supplier'],
+        'roles' => ['SUPPLIER'],
         'priority' => 'normal',
       ],
       'quotation_received' => [
         'class' => QuotationResponseNotification::class,
-        'roles' => ['procurement', 'accountant'],
+        'roles' => ['PROCUREMENT', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
       'supplier_selected' => [
         'class' => SupplierSelectedNotification::class,
-        'roles' => ['supplier', 'hod'],
+        'roles' => ['SUPPLIER', 'HOD'],
         'priority' => 'high',
       ],
       'po_generated' => [
         'class' => PurchaseOrderNotification::class,
-        'roles' => ['supplier', 'procurement', 'accountant'],
+        'roles' => ['SUPPLIER', 'PROCUREMENT', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
       'po_sent' => [
         'class' => PurchaseOrderNotification::class,
-        'roles' => ['supplier'],
+        'roles' => ['SUPPLIER'],
         'priority' => 'normal',
       ],
       'po_approved' => [
         'class' => ApprovalStatusNotification::class,
-        'roles' => ['procurement', 'accountant'],
+        'roles' => ['PROCUREMENT', 'ACCOUNTANT'],
         'priority' => 'normal',
+      ],
+      // ✅ FIXED: PO ready for endorsement - Accountants
+      'po_ready_for_endorsement' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['ACCOUNTANT'],
+        'priority' => 'high',
+      ],
+      // ✅ FIXED: PO ready for approval - FINAL_APPROVER only
+      'po_ready_for_approval' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['FINAL_APPROVER'],  // Director/Finance Administrator
+        'priority' => 'high',
       ],
       'grn_generated' => [
         'class' => GoodsReceivedNotification::class,
-        'roles' => ['accountant', 'procurement'],
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
         'priority' => 'normal',
       ],
       'grn_approval_required' => [
         'class' => ApprovalRequiredNotification::class,
-        'roles' => ['hod', 'principal'],
+        'roles' => ['HOD', 'HEAD OF INSTITUTION'],
         'priority' => 'high',
       ],
       'grn_approved' => [
         'class' => ApprovalStatusNotification::class,
-        'roles' => ['accountant', 'procurement'],
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
         'priority' => 'normal',
       ],
       'invoice_submitted' => [
         'class' => InvoiceNotification::class,
-        'roles' => ['accountant'],
+        'roles' => ['ACCOUNTANT'],
         'priority' => 'high',
       ],
       'invoice_verified' => [
         'class' => InvoiceNotification::class,
-        'roles' => ['supplier', 'accountant'],
+        'roles' => ['SUPPLIER', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
       'invoice_paid' => [
         'class' => InvoiceNotification::class,
-        'roles' => ['supplier', 'accountant'],
+        'roles' => ['SUPPLIER', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
       'voucher_prepared' => [
         'class' => PaymentVoucherNotification::class,
-        'roles' => ['principal', 'diocesan_accountant'],
+        'roles' => ['HEAD OF INSTITUTION', 'ACCOUNTANT'],
         'priority' => 'high',
       ],
       'voucher_endorsed' => [
         'class' => PaymentVoucherNotification::class,
-        'roles' => ['accountant', 'principal'],
+        'roles' => ['ACCOUNTANT', 'HEAD OF INSTITUTION'],
         'priority' => 'normal',
       ],
       'voucher_approved' => [
         'class' => PaymentVoucherNotification::class,
-        'roles' => ['accountant'],
+        'roles' => ['ACCOUNTANT'],
         'priority' => 'normal',
       ],
       'contract_created' => [
         'class' => ContractNotification::class,
-        'roles' => ['supplier', 'procurement'],
+        'roles' => ['SUPPLIER', 'PROCUREMENT'],
         'priority' => 'normal',
       ],
       'contract_activated' => [
         'class' => ContractNotification::class,
-        'roles' => ['supplier', 'procurement'],
+        'roles' => ['SUPPLIER', 'PROCUREMENT'],
         'priority' => 'normal',
       ],
       'contract_expiring' => [
         'class' => ReminderNotification::class,
-        'roles' => ['procurement', 'supplier'],
+        'roles' => ['PROCUREMENT', 'SUPPLIER'],
         'priority' => 'normal',
       ],
       'tender_published' => [
         'class' => TenderNotification::class,
-        'roles' => ['supplier'],
+        'roles' => ['SUPPLIER'],
         'priority' => 'normal',
       ],
       'tender_awarded' => [
         'class' => TenderNotification::class,
-        'roles' => ['supplier', 'procurement'],
+        'roles' => ['SUPPLIER', 'PROCUREMENT'],
         'priority' => 'high',
       ],
       'approval_required' => [
         'class' => ApprovalRequiredNotification::class,
-        'roles' => ['hod', 'accountant', 'principal', 'final_approver'],
+        'roles' => ['HOD', 'ACCOUNTANT', 'HEAD OF INSTITUTION', 'FINAL_APPROVER'],
         'priority' => 'high',
       ],
       'approval_completed' => [
@@ -601,7 +604,7 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     }
 
     foreach ($roles as $role) {
-      if ($role === 'supplier') {
+      if ($role === 'SUPPLIER') {
         if (isset($data['supplier_ids']) && !empty($data['supplier_ids'])) {
           continue;
         }
@@ -625,9 +628,9 @@ class NotificationDispatcher implements NotificationDispatcherInterface
           }
         }
       } else {
-        // 🔧 FIX: Use Spatie Permission's role checking
+        // 🔧 FIX: Use Spatie Permission's role checking with UPPERCASE role names
         $users = User::where('is_active', true)
-          ->role($role)
+          ->role($role)  // Spatie's role() method will handle the name
           ->get()
           ->toArray();
         $recipients = array_merge($recipients, $users);

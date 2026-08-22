@@ -36,6 +36,10 @@ import {
   Unlock,
   Crown,
   Clock,
+  Calendar,
+  UserCheck,
+  ListFilter,
+  FilterX,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,7 +51,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast-context'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { useRoles } from '@/hooks/useRoles'
@@ -64,6 +68,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Textarea } from '@/components/ui/textarea'
+
+
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag'
 
 // ============================================
 // TYPES
@@ -97,140 +105,140 @@ interface Role {
 const PERMISSION_GROUPS: Record<string, { icon: any; color: string; bgColor: string; label: string; description: string }> = {
   'requisitions': {
     icon: FileText,
-    color: 'text-blue-600',
+    color: 'text-blue-600 dark:text-blue-400',
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     label: 'Requisitions',
     description: 'Create, view, edit, and manage requisitions'
   },
   'approvals': {
     icon: Shield,
-    color: 'text-amber-600',
+    color: 'text-amber-600 dark:text-amber-400',
     bgColor: 'bg-amber-50 dark:bg-amber-900/20',
     label: 'Approvals',
     description: 'Multi-level approval workflow management'
   },
   'procurement': {
     icon: ShoppingCart,
-    color: 'text-cyan-600',
+    color: 'text-cyan-600 dark:text-cyan-400',
     bgColor: 'bg-cyan-50 dark:bg-cyan-900/20',
     label: 'Procurement',
     description: 'Supplier and quotation management'
   },
   'orders': {
     icon: Package,
-    color: 'text-indigo-600',
+    color: 'text-indigo-600 dark:text-indigo-400',
     bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
     label: 'Orders',
     description: 'Purchase orders and tracking'
   },
   'invoices': {
     icon: CreditCard,
-    color: 'text-emerald-600',
+    color: 'text-emerald-600 dark:text-emerald-400',
     bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
     label: 'Invoices & Payments',
     description: 'Invoice verification and payment processing'
   },
   'budget': {
     icon: DollarSign,
-    color: 'text-lime-600',
+    color: 'text-lime-600 dark:text-lime-400',
     bgColor: 'bg-lime-50 dark:bg-lime-900/20',
     label: 'Budget & Finance',
     description: 'Budget allocation and expenditure tracking'
   },
   'reports': {
     icon: BarChart3,
-    color: 'text-purple-600',
+    color: 'text-purple-600 dark:text-purple-400',
     bgColor: 'bg-purple-50 dark:bg-purple-900/20',
     label: 'Reports',
     description: 'Generate and export reports'
   },
   'users': {
     icon: Users,
-    color: 'text-violet-600',
+    color: 'text-violet-600 dark:text-violet-400',
     bgColor: 'bg-violet-50 dark:bg-violet-900/20',
     label: 'Users',
     description: 'User management and role assignment'
   },
   'departments': {
     icon: Building2,
-    color: 'text-sky-600',
+    color: 'text-sky-600 dark:text-sky-400',
     bgColor: 'bg-sky-50 dark:bg-sky-900/20',
     label: 'Departments',
     description: 'Department management'
   },
   'suppliers': {
     icon: Users,
-    color: 'text-orange-600',
+    color: 'text-orange-600 dark:text-orange-400',
     bgColor: 'bg-orange-50 dark:bg-orange-900/20',
     label: 'Suppliers',
     description: 'Supplier registration and management'
   },
   'quotations': {
     icon: FileText,
-    color: 'text-teal-600',
+    color: 'text-teal-600 dark:text-teal-400',
     bgColor: 'bg-teal-50 dark:bg-teal-900/20',
     label: 'Quotations',
     description: 'Quotation requests and responses'
   },
   'audit': {
     icon: Shield,
-    color: 'text-rose-600',
+    color: 'text-rose-600 dark:text-rose-400',
     bgColor: 'bg-rose-50 dark:bg-rose-900/20',
     label: 'Audit',
     description: 'Audit logs and compliance'
   },
   'settings': {
     icon: Settings,
-    color: 'text-slate-600',
+    color: 'text-slate-600 dark:text-slate-400',
     bgColor: 'bg-slate-50 dark:bg-slate-800/50',
     label: 'Settings',
     description: 'System configuration'
   },
   'backup': {
     icon: Database,
-    color: 'text-indigo-600',
+    color: 'text-indigo-600 dark:text-indigo-400',
     bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
     label: 'Backup',
     description: 'Backup and restore management'
   },
   'profile': {
     icon: User,
-    color: 'text-sky-600',
+    color: 'text-sky-600 dark:text-sky-400',
     bgColor: 'bg-sky-50 dark:bg-sky-900/20',
     label: 'Profile',
     description: 'User profile management'
   },
   'support': {
     icon: User,
-    color: 'text-fuchsia-600',
+    color: 'text-fuchsia-600 dark:text-fuchsia-400',
     bgColor: 'bg-fuchsia-50 dark:bg-fuchsia-900/20',
     label: 'Support',
     description: 'Support tickets and help'
   },
   'hr': {
     icon: User,
-    color: 'text-pink-600',
+    color: 'text-pink-600 dark:text-pink-400',
     bgColor: 'bg-pink-50 dark:bg-pink-900/20',
     label: 'Human Resources',
     description: 'Staff and HR management'
   },
   'assets': {
     icon: Package,
-    color: 'text-amber-600',
+    color: 'text-amber-600 dark:text-amber-400',
     bgColor: 'bg-amber-50 dark:bg-amber-900/20',
     label: 'Assets',
     description: 'Asset and inventory management'
   },
   'facilities': {
     icon: Building2,
-    color: 'text-lime-600',
+    color: 'text-lime-600 dark:text-lime-400',
     bgColor: 'bg-lime-50 dark:bg-lime-900/20',
     label: 'Facilities',
     description: 'Facilities and room management'
   },
   'other': {
     icon: Layers,
-    color: 'text-gray-600',
+    color: 'text-gray-600 dark:text-gray-400',
     bgColor: 'bg-gray-50 dark:bg-gray-800/50',
     label: 'Other',
     description: 'Miscellaneous permissions'
@@ -333,7 +341,7 @@ const getRoleBadgeColor = (roleName: string) => {
 // MODALS
 // ============================================
 
-// Create/Edit Role Modal
+// Create/Edit Role Modal - No Tags
 const RoleFormModal = ({
   isOpen,
   isEdit,
@@ -396,10 +404,10 @@ const RoleFormModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEdit ? 'Edit Role' : 'Create New Role'}
@@ -410,7 +418,7 @@ const RoleFormModal = ({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 bg-white dark:bg-gray-900">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Role Name <span className="text-red-500">*</span>
@@ -422,7 +430,10 @@ const RoleFormModal = ({
                 setFormData({ ...formData, name: e.target.value.toUpperCase() })
                 if (formErrors.name) setFormErrors({ ...formErrors, name: '' })
               }}
-              className={cn("dark:bg-gray-800 dark:border-gray-700 dark:text-white", formErrors.name ? 'border-red-500' : '')}
+              className={cn(
+                "rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white",
+                formErrors.name ? 'border-red-500' : ''
+              )}
               readOnly={isEdit}
               disabled={isEdit}
             />
@@ -448,7 +459,7 @@ const RoleFormModal = ({
                 setFormData({ ...formData, label: e.target.value })
                 if (formErrors.label) setFormErrors({ ...formErrors, label: '' })
               }}
-              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
               <Tag className="h-3 w-3" />
@@ -467,7 +478,7 @@ const RoleFormModal = ({
               placeholder="Brief description of this role and its responsibilities"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white min-h-[80px]"
+              className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white min-h-[80px]"
               rows={3}
             />
           </div>
@@ -476,14 +487,14 @@ const RoleFormModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
             >
               {isSubmitting ? (
                 <>
@@ -515,7 +526,7 @@ const RoleFormModal = ({
   return null
 }
 
-// View Role Modal
+// View Role Modal - No Tags
 const ViewRoleModal = ({
   isOpen,
   onClose,
@@ -539,10 +550,10 @@ const ViewRoleModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -556,20 +567,24 @@ const ViewRoleModal = ({
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 bg-white dark:bg-gray-900">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Label</p>
               <p className="font-medium text-gray-900 dark:text-white">{role.label || 'N/A'}</p>
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Role Name</p>
+              <p className="font-medium text-gray-900 dark:text-white">{role.name}</p>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Permissions</p>
               <p className="font-medium text-gray-900 dark:text-white">{role.permissions?.length || 0}</p>
             </div>
           </div>
 
           {role.description && (
-            <div className="mb-4">
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</h4>
               <p className="text-gray-600 dark:text-gray-400">{role.description}</p>
             </div>
@@ -589,7 +604,7 @@ const ViewRoleModal = ({
                   const groupInfo = PERMISSION_GROUPS[group]
                   return (
                     <Badge key={permName}
-                      className={cn("text-xs", groupInfo?.bgColor || "bg-gray-100 dark:bg-gray-800")}>
+                      className={cn("text-xs rounded-full", groupInfo?.bgColor || "bg-gray-100 dark:bg-gray-800")}>
                       {permName}
                     </Badge>
                   )
@@ -602,7 +617,7 @@ const ViewRoleModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
+            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
@@ -623,7 +638,7 @@ const ViewRoleModal = ({
   return null
 }
 
-// Delete Role Modal
+// Delete Role Modal - No Tags
 const DeleteRoleModal = ({
   isOpen,
   onClose,
@@ -657,12 +672,12 @@ const DeleteRoleModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-6 bg-white dark:bg-gray-900 rounded-xl">
+        <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl">
               <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Role</h2>
@@ -681,14 +696,14 @@ const DeleteRoleModal = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
             >
               {isDeleting ? (
                 <>
@@ -772,7 +787,7 @@ export default function PermissionsMatrixPage() {
     return roles.length > 0 ? roles[0] : null
   }, [roles, selectedRoleId])
 
-  // Initialize pending permissions when role changes - handles both data formats
+  // Initialize pending permissions when role changes
   useEffect(() => {
     if (currentRole) {
       let permissionNames: string[] = []
@@ -875,6 +890,8 @@ export default function PermissionsMatrixPage() {
       }))
       .filter(group => group.permissions.length > 0)
   }, [permissionMatrix, searchTerm])
+
+
 
   const getGroupInfo = (groupName: string) => {
     return PERMISSION_GROUPS[groupName] || PERMISSION_GROUPS['other']
@@ -1066,8 +1083,9 @@ export default function PermissionsMatrixPage() {
         background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <Card className="max-w-md">
-            <CardContent className="pt-6 text-center">
+          <Card className="max-w-md relative">
+            <WrappedCornerTag label="DENIED" color="red" position="top-left" size="lg" />
+            <CardContent className="pt-8 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
@@ -1092,12 +1110,12 @@ export default function PermissionsMatrixPage() {
         icon={<Shield className="h-5 w-5" />}
         background="gradient"
       >
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive" className="mb-4 rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Permissions</AlertTitle>
           <AlertDescription>
             <p>Failed to load permissions data. Please try again.</p>
-            <Button variant="outline" className="mt-4" onClick={forceRefresh}>
+            <Button variant="outline" className="mt-4 rounded-xl" onClick={forceRefresh}>
               <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
               Retry
             </Button>
@@ -1111,7 +1129,7 @@ export default function PermissionsMatrixPage() {
     <PageTemplate
       title="Role Management"
       description="Manage roles, labels, and permissions across the system"
-      icon={<Shield className="h-5 w-5" />}
+      icon={<Shield className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />}
       background="gradient"
       variant="default"
       breadcrumbs={[
@@ -1119,8 +1137,8 @@ export default function PermissionsMatrixPage() {
         { label: 'Permissions' },
       ]}
       actions={
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-primary/5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800 rounded-full">
             <Sparkles className="h-3 w-3 mr-1" />
             {roles.length} Roles
           </Badge>
@@ -1128,9 +1146,11 @@ export default function PermissionsMatrixPage() {
             variant="outline"
             size="sm"
             onClick={forceRefresh}
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
             disabled={isLoading}
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            Refresh
           </Button>
           <Button
             size="sm"
@@ -1139,7 +1159,7 @@ export default function PermissionsMatrixPage() {
               setFormErrors({})
               setShowCreateRoleDialog(true)
             }}
-            className="gap-2"
+            className="gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-600/20"
           >
             <Plus className="h-4 w-4" />
             New Role
@@ -1147,321 +1167,306 @@ export default function PermissionsMatrixPage() {
         </div>
       }
     >
-      {/* Stats Row - Removed users count */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Roles</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{roles.length}</p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
+      <div className="space-y-6">
 
-        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Permissions</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {permissionMatrix.reduce((acc, g) => acc + g.permissions.length, 0)}
-              </p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-              <Key className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-          </div>
-        </div>
+        {/* Controls */}
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
 
-        <div className="bg-white dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Permission Groups</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{permissionMatrix.length}</p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-              <Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder="Search permissions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
-          </div>
-          <Select
-            value={selectedRoleId?.toString() || ''}
-            onValueChange={(value) => {
-              const newRoleId = parseInt(value)
-              if (newRoleId > 0) {
-                setSelectedRoleId(newRoleId)
-                setIsDirty(false)
-              }
-            }}
-            disabled={roles.length === 0}
-          >
-            <SelectTrigger className="w-[220px] dark:bg-gray-800 dark:border-gray-700 dark:text-white">
-              <SelectValue placeholder={roles.length === 0 ? "No roles" : "Select role"} />
-            </SelectTrigger>
-            <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-              {roles.map((role) => (
-                <SelectItem key={role.id} value={role.id.toString()} className="dark:text-white">
-                  <div className="flex items-center gap-2">
-                    <span>{role.label || role.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">({role.name})</span>
-                    <Badge variant="secondary" className="text-xs ml-auto">
-                      {role.permissions?.length || 0}
-                    </Badge>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Role Info Card */}
-      {currentRole && (
-        <div className={cn(
-          "bg-white dark:bg-gray-900/50 rounded-lg border p-4 mb-6 transition-all",
-          hasChanges
-            ? "border-amber-400 dark:border-amber-600 shadow-lg shadow-amber-500/10"
-            : "border-gray-200 dark:border-gray-700"
-        )}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className={cn(
-                "p-2.5 rounded-lg",
-                currentRole.name === 'ADMIN' ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-gray-800"
-              )}>
-                {currentRole.name === 'ADMIN' ? (
-                  <Crown className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                ) : (
-                  <Shield className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                )}
+          <CardContent className="p-4 pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Search permissions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                />
               </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {currentRole.label || currentRole.name}
-                  </h3>
-                  <Badge className={cn("text-xs border", getRoleBadgeColor(currentRole.name))}>
-                    {currentRole.name}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    {pendingPermissions.size} permissions
-                  </Badge>
-                  {hasChanges && (
-                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse text-xs">
-                      Unsaved
-                    </Badge>
+              <Select
+                value={selectedRoleId?.toString() || ''}
+                onValueChange={(value) => {
+                  const newRoleId = parseInt(value)
+                  if (newRoleId > 0) {
+                    setSelectedRoleId(newRoleId)
+                    setIsDirty(false)
+                  }
+                }}
+                disabled={roles.length === 0}
+              >
+                <SelectTrigger className="w-[220px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                  <SelectValue placeholder={roles.length === 0 ? "No roles" : "Select role"} />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()} className="dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <span>{role.label || role.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">({role.name})</span>
+                        <Badge variant="secondary" className="text-xs ml-auto rounded-full">
+                          {role.permissions?.length || 0}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm('')}
+                  className="h-11 rounded-xl text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <FilterX className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Role Info Card */}
+        {currentRole && (
+          <div className={cn(
+            "bg-white dark:bg-gray-900/50 rounded-xl border p-4 transition-all shadow-sm",
+            hasChanges
+              ? "border-amber-400 dark:border-amber-600 shadow-lg shadow-amber-500/10"
+              : "border-gray-200 dark:border-gray-700"
+          )}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className={cn(
+                  "p-2.5 rounded-xl",
+                  currentRole.name === 'ADMIN' ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-gray-800"
+                )}>
+                  {currentRole.name === 'ADMIN' ? (
+                    <Crown className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  ) : (
+                    <Shield className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   )}
                 </div>
-                {currentRole.description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{currentRole.description}</p>
-                )}
-                <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Created {formatDate(currentRole.created_at)}
-                  </span>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {currentRole.label || currentRole.name}
+                    </h3>
+                    <Badge className={cn("text-xs border rounded-full", getRoleBadgeColor(currentRole.name))}>
+                      {currentRole.name}
+                    </Badge>
+                    <Badge variant="secondary" className="text-xs rounded-full">
+                      {pendingPermissions.size} permissions
+                    </Badge>
+                    {hasChanges && (
+                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse text-xs rounded-full">
+                        Unsaved
+                      </Badge>
+                    )}
+                  </div>
+                  {currentRole.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{currentRole.description}</p>
+                  )}
+                  <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Created {formatDate(currentRole.created_at)}
+                    </span>
+                  </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedRole(currentRole)
+                    setShowViewRoleDialog(true)
+                  }}
+                  className="rounded-xl"
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedRole(currentRole)
+                    setRoleForm({
+                      name: currentRole.name,
+                      label: currentRole.label || '',
+                      description: currentRole.description || '',
+                    })
+                    setFormErrors({})
+                    setShowEditRoleDialog(true)
+                  }}
+                  className="rounded-xl"
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedRole(currentRole)
+                    setShowDeleteRoleDialog(true)
+                  }}
+                  className="rounded-xl"
+                  disabled={currentRole.name === 'ADMIN' && (currentUser?.roles || []).includes('ADMIN')}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSavePermissions}
+                  disabled={isSubmitting || !hasChanges}
+                  className={cn(
+                    "rounded-xl transition-all",
+                    hasChanges
+                      ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-600/20"
+                      : "bg-gray-400 cursor-not-allowed"
+                  )}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-1" />
+                  )}
+                  {hasChanges ? 'Save Changes' : 'No Changes'}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedRole(currentRole)
-                  setShowViewRoleDialog(true)
-                }}
-              >
-                <Eye className="h-4 w-4 mr-1" />
-                View
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedRole(currentRole)
-                  setRoleForm({
-                    name: currentRole.name,
-                    label: currentRole.label || '',
-                    description: currentRole.description || '',
-                  })
-                  setFormErrors({})
-                  setShowEditRoleDialog(true)
-                }}
-              >
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setSelectedRole(currentRole)
-                  setShowDeleteRoleDialog(true)
-                }}
-                disabled={currentRole.name === 'ADMIN' && (currentUser?.roles || []).includes('ADMIN')}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Delete
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSavePermissions}
-                disabled={isSubmitting || !hasChanges}
-                className={cn(
-                  hasChanges
-                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                    : "bg-gray-400 cursor-not-allowed"
-                )}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-1" />
-                )}
-                {hasChanges ? 'Save Changes' : 'No Changes'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Permissions Grid */}
-      <div className="bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-4" />
-            <p className="text-gray-500">Loading permissions...</p>
-          </div>
-        ) : filteredMatrix.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Shield className="h-12 w-12 text-gray-300 mb-4" />
-            <p className="text-gray-500">No permissions found</p>
-            {searchTerm && <p className="text-sm text-gray-400 mt-1">Try adjusting your search</p>}
-            {roles.length === 0 && <p className="text-sm text-gray-400 mt-1">Create a role to get started</p>}
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredMatrix.map((group) => {
-              const groupInfo = getGroupInfo(group.name)
-              const Icon = groupInfo.icon
-              const allSelected = group.permissions.every(p => pendingPermissions.has(p.name))
-              const someSelected = group.permissions.some(p => pendingPermissions.has(p.name))
-
-              return (
-                <div key={group.name} className="p-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-1.5 rounded", groupInfo.bgColor)}>
-                        <Icon className={cn("h-4 w-4", groupInfo.color)} />
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-900 dark:text-white">{groupInfo.label}</span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                          {group.permissions.length} permissions
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleSelectAllGroup(group.name, group.permissions)}
-                      className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-                    >
-                      {allSelected ? (
-                        <><Unlock className="h-3 w-3" /> Deselect All</>
-                      ) : (
-                        <><Lock className="h-3 w-3" /> Select All</>
-                      )}
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.permissions.map((permission) => {
-                      if (!permission || !permission.name) return null
-                      const isChecked = pendingPermissions.has(permission.name)
-                      const isCritical = ['assign_roles', 'manage_users', 'manage_permissions'].includes(permission.name)
-
-                      return (
-                        <TooltipProvider key={permission.id || permission.name}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleTogglePermission(permission.name)}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                                  isChecked
-                                    ? isCritical
-                                      ? "bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800"
-                                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                                    : "bg-gray-50 text-gray-500 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
-                                )}
-                              >
-                                {isChecked ? (
-                                  <Check className="h-3 w-3" />
-                                ) : (
-                                  <X className="h-3 w-3" />
-                                )}
-                                {permission.name}
-                                {isCritical && isChecked && (
-                                  <span className="text-[10px]">*</span>
-                                )}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">
-                                {isChecked ? 'Click to remove' : 'Click to grant'}
-                                {isCritical && isChecked && ' (Critical permission)'}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
           </div>
         )}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-          <span className="text-sm text-gray-500">
-            {filteredMatrix.reduce((acc, g) => acc + g.permissions.length, 0)} total permissions
-          </span>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              Enabled
-            </span>
-            <span className="flex items-center gap-1.5 text-gray-400">
-              <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600" />
-              Disabled
-            </span>
-            <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-              <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-              Critical
-            </span>
-            {hasChanges && (
-              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
-                <AlertCircle className="h-3.5 w-3.5" />
-                Unsaved changes
-              </span>
+
+        {/* Permissions Grid */}
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 overflow-hidden relative">
+          <WrappedCornerTag label="PERMISSIONS" color="purple" position="top-left" size="lg" />
+          <div className="pt-8">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-4" />
+                <p className="text-gray-500">Loading permissions...</p>
+              </div>
+            ) : filteredMatrix.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Shield className="h-12 w-12 text-gray-300 mb-4" />
+                <p className="text-gray-500">No permissions found</p>
+                {searchTerm && <p className="text-sm text-gray-400 mt-1">Try adjusting your search</p>}
+                {roles.length === 0 && <p className="text-sm text-gray-400 mt-1">Create a role to get started</p>}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredMatrix.map((group) => {
+                  const groupInfo = getGroupInfo(group.name)
+                  const Icon = groupInfo.icon
+                  const allSelected = group.permissions.every(p => pendingPermissions.has(p.name))
+                  const someSelected = group.permissions.some(p => pendingPermissions.has(p.name))
+
+                  return (
+                    <div key={group.name} className="p-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("p-1.5 rounded-lg", groupInfo.bgColor)}>
+                            <Icon className={cn("h-4 w-4", groupInfo.color)} />
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-900 dark:text-white">{groupInfo.label}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                              {group.permissions.length} permissions
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSelectAllGroup(group.name, group.permissions)}
+                          className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                        >
+                          {allSelected ? (
+                            <><Unlock className="h-3 w-3" /> Deselect All</>
+                          ) : (
+                            <><Lock className="h-3 w-3" /> Select All</>
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.permissions.map((permission) => {
+                          if (!permission || !permission.name) return null
+                          const isChecked = pendingPermissions.has(permission.name)
+                          const isCritical = ['assign_roles', 'manage_users', 'manage_permissions'].includes(permission.name)
+
+                          return (
+                            <TooltipProvider key={permission.id || permission.name}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => handleTogglePermission(permission.name)}
+                                    className={cn(
+                                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                      isChecked
+                                        ? isCritical
+                                          ? "bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800"
+                                          : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                                        : "bg-gray-50 text-gray-500 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                                    )}
+                                  >
+                                    {isChecked ? (
+                                      <Check className="h-3 w-3" />
+                                    ) : (
+                                      <X className="h-3 w-3" />
+                                    )}
+                                    {permission.name}
+                                    {isCritical && isChecked && (
+                                      <span className="text-[10px] text-red-500">*</span>
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-xl">
+                                  <p className="text-xs">
+                                    {isChecked ? 'Click to remove' : 'Click to grant'}
+                                    {isCritical && isChecked && ' (Critical permission)'}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
-        </div>
+
+          {/* Footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 gap-2">
+            <span className="text-sm text-gray-500">
+              {filteredMatrix.reduce((acc, g) => acc + g.permissions.length, 0)} total permissions
+            </span>
+            <div className="flex items-center gap-4 text-sm flex-wrap">
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                Enabled
+              </span>
+              <span className="flex items-center gap-1.5 text-gray-400">
+                <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600" />
+                Disabled
+              </span>
+              <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                Critical
+              </span>
+              {hasChanges && (
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Unsaved changes
+                </span>
+              )}
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Modals */}

@@ -551,8 +551,37 @@ class RoleService extends BaseService
       // Get current permissions before update
       $oldPermissions = $role->permissions->pluck('name')->toArray();
 
-      // Sync permissions
-      $role->syncPermissions($permissions);
+      // ✅ FIX: Use the 'web' guard explicitly
+      // Convert permission names to permission IDs using the 'web' guard
+      $permissionIds = [];
+      $validPermissions = [];
+
+      foreach ($permissions as $permissionName) {
+        try {
+          // ✅ Find permission with 'web' guard
+          $permission = \Spatie\Permission\Models\Permission::findByName($permissionName, 'web');
+          if ($permission) {
+            $permissionIds[] = $permission->id;
+            $validPermissions[] = $permissionName;
+          }
+        } catch (\Exception $e) {
+          Log::warning('⚠️ RoleService::assignPermissions - Permission not found', [
+            'permission' => $permissionName,
+            'error' => $e->getMessage()
+          ]);
+        }
+      }
+
+      if (empty($permissionIds)) {
+        Log::warning('⚠️ RoleService::assignPermissions - No valid permissions found', [
+          'role_id' => $roleId,
+          'permissions' => $permissions,
+        ]);
+        throw new \Exception('No valid permissions found. Please ensure permissions exist with the correct guard.');
+      }
+
+      // ✅ Sync permissions using IDs (this avoids guard issues)
+      $role->permissions()->sync($permissionIds);
 
       // Get new permissions after update
       $newPermissions = $role->permissions->pluck('name')->toArray();
@@ -565,7 +594,8 @@ class RoleService extends BaseService
       Log::info('✅ RoleService::assignPermissions - Permissions assigned successfully', [
         'role_id' => $roleId,
         'role_name' => $role->name,
-        'permission_count' => count($permissions)
+        'permission_count' => count($validPermissions),
+        'valid_permissions' => $validPermissions
       ]);
 
       return $role->load('permissions');

@@ -9,6 +9,7 @@ use App\Models\Requisition;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\SupplierQuotation;
+use App\Models\Supplier;
 use App\Services\Procurement\Base\BaseService;
 use App\Services\Procurement\Contracts\Services\PurchaseOrderServiceInterface;
 use App\Services\Procurement\Contracts\Repositories\PurchaseOrderRepositoryInterface;
@@ -17,6 +18,9 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\PurchaseOrderDTO;
 use App\Services\Procurement\Exceptions\PurchaseOrderException;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class PurchaseOrderService extends BaseService implements PurchaseOrderServiceInterface
 {
@@ -24,121 +28,278 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     protected PurchaseOrderRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
   ) {
     parent::__construct();
   }
 
+  /**
+   * Generate a purchase order from a requisition
+   */
   public function generatePurchaseOrder(PurchaseOrderDTO $dto): PurchaseOrder
   {
-    $requisition = Requisition::find($dto->requisitionId);
+    Log::info('[PurchaseOrderService] generatePurchaseOrder - START', [
+      'requisition_id' => $dto->requisitionId,
+      'type' => $dto->type,
+      'title' => $dto->title,
+    ]);
+
+    $requisition = Requisition::with(['items', 'supplier'])->find($dto->requisitionId);
 
     if (!$requisition) {
+      Log::error('[PurchaseOrderService] Requisition not found', [
+        'requisition_id' => $dto->requisitionId
+      ]);
       throw PurchaseOrderException::requisitionNotFound($dto->requisitionId);
     }
 
+    Log::info('[PurchaseOrderService] Requisition found', [
+      'requisition_id' => $requisition->id,
+      'reference_number' => $requisition->reference_number ?? $requisition->id,
+      'supplier_id' => $requisition->supplier_id,
+      'items_count' => $requisition->items->count(),
+    ]);
+
     if (!$requisition->supplier_id) {
+      Log::error('[PurchaseOrderService] No supplier selected for requisition', [
+        'requisition_id' => $requisition->id
+      ]);
       throw PurchaseOrderException::noSupplierSelected();
     }
 
+    $supplierId = $requisition->supplier_id;
+
+    $supplier = Supplier::find($supplierId);
+    if (!$supplier) {
+      Log::error('[PurchaseOrderService] Supplier not found', [
+        'supplier_id' => $supplierId,
+      ]);
+      throw new \Exception("Supplier with ID {$supplierId} not found");
+    }
+
+    Log::info('[PurchaseOrderService] Supplier verified', [
+      'supplier_id' => $supplierId,
+      'supplier_name' => $supplier->company_name ?? $supplier->name,
+    ]);
+
     $existing = PurchaseOrder::where('requisition_id', $requisition->id)
-      ->whereNotIn('status', ['cancelled', 'closed'])
+      ->whereNotIn('status', ['cancelled', 'closed', 'completed'])
       ->first();
 
     if ($existing) {
+      Log::warning('[PurchaseOrderService] PO already exists for requisition', [
+        'requisition_id' => $requisition->id,
+        'existing_po_id' => $existing->id,
+        'existing_po_number' => $existing->po_number,
+      ]);
       throw PurchaseOrderException::poAlreadyExists();
     }
 
-    return $this->transaction(function () use ($requisition, $dto) {
+    $userId = $this->getCurrentUserId();
+    if (!$userId) {
+      Log::error('[PurchaseOrderService] No authenticated user found');
+      throw new \Exception('User must be authenticated to create a purchase order');
+    }
+
+    Log::info('[PurchaseOrderService] User authenticated', [
+      'user_id' => $userId,
+    ]);
+
+    return $this->transaction(function () use ($requisition, $dto, $userId, $supplierId) {
       $metadata = $requisition->metadata ?? [];
-      $selectedQuotationId = $metadata['procurement']['selected_quotation_id'] ?? null;
+      $selectedQuotationId = $metadata['procurement']['selected_quotation_id'] ??
+        $metadata['selected_quotation_id'] ??
+        $dto->supplier_quotation_id ??
+        null;
+
+      Log::info('[PurchaseOrderService] Looking for selected quotation', [
+        'selected_quotation_id' => $selectedQuotationId,
+      ]);
 
       $quotation = null;
       if ($selectedQuotationId) {
-        $quotation = SupplierQuotation::find($selectedQuotationId);
+        $quotation = SupplierQuotation::with(['items', 'supplier'])
+          ->where('id', $selectedQuotationId)
+          ->first();
+
+        if ($quotation) {
+          Log::info('[PurchaseOrderService] Quotation found', [
+            'quotation_id' => $quotation->id,
+            'quotation_number' => $quotation->quotation_number,
+          ]);
+        } else {
+          Log::warning('[PurchaseOrderService] Quotation not found', [
+            'selected_quotation_id' => $selectedQuotationId,
+          ]);
+        }
       }
 
-      $totalAmount = $requisition->total_amount ?? 0;
-      $taxAmount = $totalAmount * 0.16;
+      $totalAmount = 0;
+      $taxAmount = 0;
+      $totalWithTax = 0;
+
+      foreach ($requisition->items as $item) {
+        $quotationItem = null;
+        if ($quotation && $quotation->items) {
+          $quotationItem = $quotation->items->firstWhere('requisition_item_id', $item->id);
+        }
+
+        $unitPrice = $quotationItem?->unit_price ??
+          $item->estimated_unit_cost ??
+          $item->unit_price ??
+          0;
+        $itemTotal = $item->quantity * $unitPrice;
+        $totalAmount += $itemTotal;
+
+        $itemTaxRate = $quotationItem?->tax_rate ?? 0;
+        $taxAmount += $itemTotal * ($itemTaxRate / 100);
+      }
+
       $totalWithTax = $totalAmount + $taxAmount;
 
-      $po = $this->repository->createPurchaseOrder([
-        'requisition_id' => $requisition->id,
-        'supplier_id' => $requisition->supplier_id,
-        'supplier_quotation_id' => $quotation?->id,
-        'po_number' => $this->referenceGenerator->generatePoNumber($dto->type),
-        'type' => $dto->type,
-        'title' => $dto->title,
-        'description' => $dto->description,
+      Log::info('[PurchaseOrderService] Calculated totals', [
         'total_amount' => $totalAmount,
         'tax_amount' => $taxAmount,
         'total_with_tax' => $totalWithTax,
-        'currency' => $dto->currency,
-        'issue_date' => $dto->issueDate->toDateString(),
-        'expected_delivery_date' => $dto->expectedDeliveryDate->toDateString(),
-        'delivery_address' => $dto->deliveryAddress,
-        'delivery_contact' => $dto->deliveryContact,
-        'delivery_phone' => $dto->deliveryPhone,
-        'delivery_email' => $dto->deliveryEmail,
-        'payment_terms' => $dto->paymentTerms,
-        'delivery_terms' => $dto->deliveryTerms,
+      ]);
+
+      $poNumber = $this->referenceGenerator->generatePoNumber($dto->type);
+
+      Log::info('[PurchaseOrderService] Generated PO number', [
+        'po_number' => $poNumber,
+        'type' => $dto->type,
+      ]);
+
+      $po = $this->repository->createPurchaseOrder([
+        'requisition_id' => $requisition->id,
+        'supplier_id' => $supplierId,
+        'supplier_quotation_id' => $quotation?->id,
+        'po_number' => $poNumber,
+        'type' => $dto->type,
+        'title' => $dto->title ?? "Order from {$requisition->reference_number}",
+        'description' => $dto->description ?? $requisition->description,
+        'total_amount' => $totalAmount,
+        'tax_amount' => $taxAmount,
+        'total_with_tax' => $totalWithTax,
+        'currency' => $dto->currency ?? 'KES',
+        'issue_date' => $dto->issueDate?->toDateString() ?? now()->toDateString(),
+        'expected_delivery_date' => $dto->expectedDeliveryDate?->toDateString(),
+        'delivery_address' => $dto->deliveryAddress ?? $requisition->delivery_address,
+        'delivery_contact' => $dto->deliveryContact ?? $requisition->delivery_contact,
+        'delivery_phone' => $dto->deliveryPhone ?? $requisition->delivery_phone,
+        'delivery_email' => $dto->deliveryEmail ?? $requisition->delivery_email,
+        'payment_terms' => $dto->paymentTerms ?? $requisition->payment_terms,
+        'delivery_terms' => $dto->deliveryTerms ?? $requisition->delivery_terms,
         'special_conditions' => $dto->specialConditions,
         'terms_and_conditions' => $dto->termsAndConditions,
-        'validity_period_days' => $dto->validityPeriodDays,
+        'validity_period_days' => $dto->validityPeriodDays ?? 30,
         'contract_number' => $dto->contractNumber,
         'contract_start_date' => $dto->contractStartDate?->toDateString(),
         'contract_end_date' => $dto->contractEndDate?->toDateString(),
         'status' => 'draft',
-        'generated_by' => $this->getCurrentUserId(),
-        'metadata' => $dto->metadata,
+        'generated_by' => $userId,
+        'metadata' => array_merge($dto->metadata ?? [], [
+          'selected_quotation_id' => $quotation?->id,
+          'generated_from' => 'purchase_order_creation',
+          'generated_at' => now()->toIso8601String(),
+        ]),
       ]);
 
-      $requisitionItems = $requisition->items;
+      Log::info('[PurchaseOrderService] Purchase order created', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'supplier_id' => $po->supplier_id,
+      ]);
 
-      foreach ($requisitionItems as $item) {
+      foreach ($requisition->items as $item) {
         $quotationItem = null;
-        if ($quotation) {
-          $quotationItem = $quotation->items()
-            ->where('requisition_item_id', $item->id)
-            ->first();
+        if ($quotation && $quotation->items) {
+          $quotationItem = $quotation->items->firstWhere('requisition_item_id', $item->id);
         }
+
+        $unitPrice = $quotationItem?->unit_price ??
+          $item->estimated_unit_cost ??
+          $item->unit_price ??
+          0;
+
+        $itemTotal = $item->quantity * $unitPrice;
+        $taxRate = $quotationItem?->tax_rate ?? 0;
+        $itemTaxAmount = $itemTotal * ($taxRate / 100);
+        $itemNetPrice = $itemTotal + $itemTaxAmount;
+
+        Log::info('[PurchaseOrderService] Creating PO item', [
+          'requisition_item_id' => $item->id,
+          'item_name' => $item->item_name,
+          'quantity' => $item->quantity,
+          'unit_price' => $unitPrice,
+          'total_price' => $itemTotal,
+        ]);
 
         $this->repository->createPurchaseOrderItem([
           'purchase_order_id' => $po->id,
           'requisition_item_id' => $item->id,
           'supplier_quotation_item_id' => $quotationItem?->id,
           'item_name' => $item->item_name,
-          'description' => $item->description,
-          'unit_of_measure' => $item->unit_of_measure,
+          'description' => $item->description ?? $quotationItem?->description,
+          'unit_of_measure' => $item->unit_of_measure ?? $quotationItem?->unit_of_measure ?? 'pcs',
           'quantity' => $item->quantity,
-          'unit_price' => $quotationItem?->unit_price ?? $item->estimated_unit_cost,
-          'total_price' => $item->total_cost,
-          'tax_rate' => $quotationItem?->tax_rate ?? 0,
-          'tax_amount' => 0,
-          'discount_rate' => 0,
+          'unit_price' => $unitPrice,
+          'total_price' => $itemTotal,
+          'tax_rate' => $taxRate,
+          'tax_amount' => $itemTaxAmount,
+          'discount_rate' => $quotationItem?->discount_rate ?? 0,
           'discount_amount' => 0,
-          'net_price' => $item->total_cost,
-          'delivery_days' => $quotationItem?->delivery_days ?? null,
-          'warranty_months' => $quotationItem?->warranty_months ?? null,
-          'specifications' => $item->specifications,
-          'brand' => $quotationItem?->brand ?? null,
-          'model' => $quotationItem?->model ?? null,
-          'catalog_number' => $quotationItem?->catalog_number ?? null,
+          'net_price' => $itemNetPrice,
+          'delivery_days' => $quotationItem?->delivery_days ?? $item->delivery_days ?? null,
+          'warranty_months' => $quotationItem?->warranty_months ?? $item->warranty_months ?? null,
+          'specifications' => $item->specifications ?? $quotationItem?->specifications,
+          'brand' => $quotationItem?->brand ?? $item->brand,
+          'model' => $quotationItem?->model ?? $item->model,
+          'catalog_number' => $quotationItem?->catalog_number ?? $item->catalog_number,
           'status' => 'pending',
         ]);
       }
 
       $po->updateTotalAmount();
 
+      try {
+        $requisition->status = 'final_approved';
+        $requisition->save();
+
+        Log::info('[PurchaseOrderService] Requisition status updated to final_approved', [
+          'requisition_id' => $requisition->id,
+          'old_status' => $requisition->getOriginal('status'),
+        ]);
+      } catch (\Exception $e) {
+        Log::warning('[PurchaseOrderService] Could not update requisition status to final_approved', [
+          'requisition_id' => $requisition->id,
+          'error' => $e->getMessage(),
+        ]);
+      }
+
       $this->logHistory(
         $requisition->id,
         'po_generated',
         'purchase_order',
         $po->id,
+        $userId,
         null,
-        ['po_number' => $po->po_number, 'type' => $po->type],
-        "Purchase Order {$po->po_number} generated"
+        [
+          'po_number' => $po->po_number,
+          'type' => $po->type,
+          'total_amount' => $po->total_amount,
+          'requisition_status' => 'final_approved',
+        ],
+        "Purchase Order {$po->po_number} generated for requisition {$requisition->reference_number}"
       );
+
+      Log::info('[PurchaseOrderService] generatePurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+        'total_amount' => $po->total_amount,
+        'requisition_status' => $requisition->status,
+      ]);
 
       return $po;
     });
@@ -160,37 +321,304 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     return $this->repository->getPurchaseOrdersForRequisition($requisitionId);
   }
 
+  /**
+   * ✅ Approve purchase order (Director/Principal)
+   * ONLY updates approved_by and approved_at - status remains as draft
+   */
   public function approvePurchaseOrder(int $poId, int $userId, ?string $comment = null): PurchaseOrder
   {
-    $po = $this->getPurchaseOrder($poId);
+    Log::info('[PurchaseOrderService] approvePurchaseOrder - START', [
+      'po_id' => $poId,
+      'user_id' => $userId,
+      'timestamp' => now()->toIso8601String(),
+    ]);
 
-    if ($po->status !== 'draft' && $po->status !== 'issued') {
-      throw new \Exception('PO can only be approved from draft or issued status.');
-    }
-
-    return $this->transaction(function () use ($po, $userId, $comment) {
-      $po->update([
-        'status' => 'issued',
-        'approved_by' => $userId,
-        'approved_at' => now(),
+    try {
+      // ✅ 1. Get the purchase order
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Fetching purchase order', [
+        'po_id' => $poId,
       ]);
 
-      $this->logHistory(
-        $po->requisition_id,
-        'po_approved',
-        'purchase_order',
-        $po->id,
-        null,
-        ['status' => 'issued'],
-        "Purchase Order {$po->po_number} approved" . ($comment ? ": {$comment}" : "")
-      );
+      $po = $this->getPurchaseOrder($poId);
 
-      return $po;
-    });
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Purchase order retrieved', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+        'endorsed_by' => $po->endorsed_by,
+        'endorsed_at' => $po->endorsed_at,
+        'approved_by' => $po->approved_by,
+        'approved_at' => $po->approved_at,
+      ]);
+
+      // ✅ 2. Validate: User exists
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Fetching user', [
+        'user_id' => $userId,
+      ]);
+
+      $user = \App\Models\User::with('roles')->find($userId);
+
+      if (!$user) {
+        Log::error('[PurchaseOrderService] approvePurchaseOrder - User not found', [
+          'user_id' => $userId,
+          'po_id' => $poId,
+          'po_number' => $po->po_number,
+        ]);
+        throw new \Exception('User not found');
+      }
+
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - User found', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+        'user_full_name' => $user->full_name ?? $user->name ?? 'Unknown',
+      ]);
+
+      // ✅ 3. Validate: Only Director/Principal can approve
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Checking user role', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+        'is_final_approver' => $user->isFinalApprover(),
+        'is_principal' => $user->isPrincipal(),
+        'is_admin' => $user->isAdmin(),
+        'roles' => $user->roles->map(function ($role) {
+          return [
+            'id' => $role->id,
+            'name' => $role->name,
+            'label' => $role->label ?? $role->name,
+          ];
+        })->toArray(),
+      ]);
+
+      $canApprove = $user->isFinalApprover() || $user->isPrincipal() || $user->isAdmin();
+
+      if (!$canApprove) {
+        Log::warning('[PurchaseOrderService] approvePurchaseOrder - User is not authorized to approve', [
+          'user_id' => $user->id,
+          'user_email' => $user->email,
+          'user_roles' => $user->roles->pluck('name')->toArray(),
+          'user_roles_labels' => $user->roles->pluck('label')->toArray(),
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+        throw new \Exception('Only Director/Finance Administrator or Principal can approve purchase orders');
+      }
+
+      Log::info('[PurchaseOrderService] approvePurchaseOrder - User role validated successfully', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+      ]);
+
+      // ✅ 4. Validate: PO must be checked by HOD
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO has been checked', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+      ]);
+
+      if (is_null($po->checked_by) || is_null($po->checked_at)) {
+        Log::warning('[PurchaseOrderService] approvePurchaseOrder - PO has not been checked by HOD', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'checked_by' => $po->checked_by,
+          'checked_at' => $po->checked_at,
+        ]);
+        throw new \Exception('Purchase order must be checked by HOD before approval.');
+      }
+
+      // ✅ 5. Validate: PO must be endorsed by Accountant
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO has been endorsed', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'endorsed_by' => $po->endorsed_by,
+        'endorsed_at' => $po->endorsed_at,
+      ]);
+
+      if (is_null($po->endorsed_by) || is_null($po->endorsed_at)) {
+        Log::warning('[PurchaseOrderService] approvePurchaseOrder - PO has not been endorsed by Accountant', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'endorsed_by' => $po->endorsed_by,
+          'endorsed_at' => $po->endorsed_at,
+        ]);
+        throw new \Exception('Purchase order must be endorsed by Accountant before approval.');
+      }
+
+      // ✅ 6. Validate: PO is not already approved
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO is not already approved', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'approved_by' => $po->approved_by,
+        'approved_at' => $po->approved_at,
+      ]);
+
+      if (!is_null($po->approved_by) || !is_null($po->approved_at)) {
+        Log::warning('[PurchaseOrderService] approvePurchaseOrder - PO is already approved', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'approved_by' => $po->approved_by,
+          'approved_at' => $po->approved_at,
+        ]);
+        throw new \Exception('Purchase order has already been approved.');
+      }
+
+      Log::info('[PurchaseOrderService] approvePurchaseOrder - All validations passed', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+        'endorsed_by' => $po->endorsed_by,
+        'endorsed_at' => $po->endorsed_at,
+      ]);
+
+      // ✅ 7. Execute approval in transaction
+      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Executing approval transaction', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'user_id' => $userId,
+        'has_comment' => !empty($comment),
+        'comment' => $comment,
+      ]);
+
+      $result = $this->transaction(function () use ($po, $userId, $comment) {
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Transaction START', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        // ✅ Approve the purchase order (ONLY updates approved_by and approved_at)
+        // Status remains as 'draft'
+        $po->update([
+          'approved_by' => $userId,
+          'approved_at' => now(),
+          'metadata' => array_merge($po->metadata ?? [], [
+            'approved_comment' => $comment,
+            'approved_at' => now()->toIso8601String(),
+            'approved_by_name' => \App\Models\User::find($userId)?->full_name ?? $userId,
+          ]),
+        ]);
+
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Repository approval completed', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'status' => $po->status, // Should still be 'draft'
+          'approved_by' => $po->approved_by,
+          'approved_at' => $po->approved_at,
+          'checked_by' => $po->checked_by,
+          'checked_at' => $po->checked_at,
+          'endorsed_by' => $po->endorsed_by,
+          'endorsed_at' => $po->endorsed_at,
+        ]);
+
+        // ✅ Log history
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Logging history', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'user_id' => $userId,
+          'action' => 'po_approved',
+        ]);
+
+        $this->logHistory(
+          $po->requisition_id,
+          'po_approved',
+          'purchase_order',
+          $po->id,
+          $userId,
+          null,
+          [
+            'approved_by' => $userId,
+            'approved_at' => now()->toIso8601String(),
+            'comment' => $comment,
+            'status_unchanged' => $po->status,
+            'checked_by' => $po->checked_by,
+            'checked_at' => $po->checked_at,
+            'endorsed_by' => $po->endorsed_by,
+            'endorsed_at' => $po->endorsed_at,
+          ],
+          "Purchase Order {$po->po_number} approved by Director" . ($comment ? ": {$comment}" : "")
+        );
+
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - History logged successfully', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        // ✅ 8. Notify Procurement that PO is ready for issuance
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Dispatching notification', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'total_amount' => $po->total_amount,
+        ]);
+
+        $this->notificationDispatcher->notify('po_approved', [
+          'purchase_order_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'approved_by' => $userId,
+          'approved_by_name' => $po->approved_by_user ?? 'Director',
+          'total_amount' => $po->total_amount,
+          'formatted_total' => number_format((float) $po->total_amount, 2),
+          'department' => $po->requisition?->department?->name ?? 'Unknown',
+          'checked_by' => $po->checked_by_user ?? 'HOD',
+          'endorsed_by' => $po->endorsed_by_user ?? 'Accountant',
+        ]);
+
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Notification dispatched successfully', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        Log::debug('[PurchaseOrderService] approvePurchaseOrder - Transaction END', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'final_status' => $po->status,
+          'approved_by' => $userId,
+          'approved_at' => $po->approved_at,
+        ]);
+
+        return $po->fresh();
+      });
+
+      Log::info('[PurchaseOrderService] approvePurchaseOrder - COMPLETED', [
+        'po_id' => $result->id,
+        'po_number' => $result->po_number,
+        'status' => $result->status, // Should still be 'draft'
+        'approved_by' => $result->approved_by,
+        'approved_at' => $result->approved_at,
+        'user_id' => $userId,
+        'total_amount' => $result->total_amount,
+        'checked_by' => $result->checked_by,
+        'checked_at' => $result->checked_at,
+        'endorsed_by' => $result->endorsed_by,
+        'endorsed_at' => $result->endorsed_at,
+      ]);
+
+      return $result;
+    } catch (\Exception $e) {
+      Log::error('[PurchaseOrderService] approvePurchaseOrder - FAILED', [
+        'po_id' => $poId,
+        'user_id' => $userId,
+        'error_message' => $e->getMessage(),
+        'error_code' => $e->getCode(),
+        'error_file' => $e->getFile(),
+        'error_line' => $e->getLine(),
+        'timestamp' => now()->toIso8601String(),
+      ]);
+
+      throw $e;
+    }
   }
 
   public function issuePurchaseOrder(int $poId): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] issuePurchaseOrder - START', [
+      'po_id' => $poId,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if ($po->status !== 'draft') {
@@ -198,17 +626,27 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
-      $po->markAsIssued();
+      $po->update([
+        'status' => 'issued',
+        'issued_at' => now(),
+      ]);
 
       $this->logHistory(
         $po->requisition_id,
         'po_issued',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['status' => 'issued'],
         "Purchase Order {$po->po_number} issued"
       );
+
+      Log::info('[PurchaseOrderService] issuePurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -216,6 +654,10 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function sendPurchaseOrderToSupplier(int $poId): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] sendPurchaseOrderToSupplier - START', [
+      'po_id' => $poId,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if ($po->status !== 'issued') {
@@ -223,16 +665,9 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
-      $po->markAsSent();
-
-      $pdfContent = $this->generatePurchaseOrderPdf($po->id);
-
-      $this->notificationDispatcher->notify('po_sent', [
-        'purchase_order_id' => $po->id,
-        'po_number' => $po->po_number,
-        'supplier_id' => $po->supplier_id,
-        'requisition_id' => $po->requisition_id,
-        'pdf_content' => base64_encode($pdfContent),
+      $po->update([
+        'status' => 'sent',
+        'sent_at' => now(),
       ]);
 
       $this->logHistory(
@@ -240,10 +675,17 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'po_sent',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['sent_to' => $po->supplier_id],
         "Purchase Order {$po->po_number} sent to supplier"
       );
+
+      Log::info('[PurchaseOrderService] sendPurchaseOrderToSupplier - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -251,6 +693,11 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function acknowledgePurchaseOrder(int $poId, int $supplierId): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] acknowledgePurchaseOrder - START', [
+      'po_id' => $poId,
+      'supplier_id' => $supplierId,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if ($po->supplier_id !== $supplierId) {
@@ -262,17 +709,27 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
-      $po->markAsAcknowledged();
+      $po->update([
+        'status' => 'acknowledged',
+        'acknowledged_at' => now(),
+      ]);
 
       $this->logHistory(
         $po->requisition_id,
         'po_acknowledged',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['status' => 'acknowledged'],
         "Purchase Order {$po->po_number} acknowledged by supplier"
       );
+
+      Log::info('[PurchaseOrderService] acknowledgePurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -280,6 +737,10 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function markPurchaseOrderDelivered(int $poId): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] markPurchaseOrderDelivered - START', [
+      'po_id' => $poId,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if ($po->status === 'completed') {
@@ -297,10 +758,17 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'po_delivered',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['status' => 'delivered'],
         "Purchase Order {$po->po_number} delivered"
       );
+
+      Log::info('[PurchaseOrderService] markPurchaseOrderDelivered - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -308,21 +776,34 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function completePurchaseOrder(int $poId): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] completePurchaseOrder - START', [
+      'po_id' => $poId,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     return $this->transaction(function () use ($po) {
-      $po->markAsCompleted();
-      $po->checkDeliveryStatus();
+      $po->update([
+        'status' => 'completed',
+        'completed_at' => now(),
+      ]);
 
       $this->logHistory(
         $po->requisition_id,
         'po_completed',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['status' => 'completed'],
         "Purchase Order {$po->po_number} completed"
       );
+
+      Log::info('[PurchaseOrderService] completePurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -330,6 +811,11 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function cancelPurchaseOrder(int $poId, string $reason): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] cancelPurchaseOrder - START', [
+      'po_id' => $poId,
+      'reason' => $reason,
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if ($po->status === 'completed') {
@@ -337,7 +823,11 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po, $reason) {
-      $po->markAsCancelled($reason);
+      $po->update([
+        'status' => 'cancelled',
+        'cancelled_at' => now(),
+        'cancellation_reason' => $reason,
+      ]);
 
       $this->notificationDispatcher->notify('po_cancelled', [
         'purchase_order_id' => $po->id,
@@ -351,10 +841,17 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'po_cancelled',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['cancellation_reason' => $reason],
         "Purchase Order {$po->po_number} cancelled: {$reason}"
       );
+
+      Log::info('[PurchaseOrderService] cancelPurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+      ]);
 
       return $po;
     });
@@ -420,10 +917,77 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     ];
   }
 
+  /**
+   * Generate purchase order PDF and return as string
+   */
   public function generatePurchaseOrderPdf(int $poId): string
   {
     $po = $this->getPurchaseOrder($poId);
     return $this->pdfGenerator->generatePurchaseOrder($po);
+  }
+
+  /**
+   * Generate purchase order PDF and return as download response
+   */
+  public function generatePurchaseOrderPdfResponse(int $poId): Response
+  {
+    Log::info('[PurchaseOrderService] generatePurchaseOrderPdfResponse - START', [
+      'po_id' => $poId,
+    ]);
+
+    $po = $this->getPurchaseOrder($poId);
+    $po->load(['requisition', 'supplier', 'items']);
+
+    $pdfContent = $this->pdfGenerator->generatePurchaseOrder($po);
+
+    $filename = $this->getPdfFilename($po);
+
+    Log::info('[PurchaseOrderService] generatePurchaseOrderPdfResponse - COMPLETED', [
+      'po_id' => $poId,
+      'filename' => $filename,
+    ]);
+
+    return new Response($pdfContent, 200, [
+      'Content-Type' => 'application/pdf',
+      'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+      'Content-Length' => strlen($pdfContent),
+      'X-Generated-At' => now()->toDateTimeString(),
+    ]);
+  }
+
+  /**
+   * Stream purchase order PDF for preview
+   */
+  public function streamPurchaseOrderPDF(int $poId): Response
+  {
+    Log::info('[PurchaseOrderService] streamPurchaseOrderPDF - START', [
+      'po_id' => $poId,
+    ]);
+
+    $po = $this->getPurchaseOrder($poId);
+    $po->load(['requisition', 'supplier', 'items']);
+
+    $pdfContent = $this->pdfGenerator->generatePurchaseOrder($po);
+
+    $filename = $this->getPdfFilename($po);
+
+    Log::info('[PurchaseOrderService] streamPurchaseOrderPDF - COMPLETED', [
+      'po_id' => $poId,
+    ]);
+
+    return new Response($pdfContent, 200, [
+      'Content-Type' => 'application/pdf',
+      'Content-Disposition' => "inline; filename=\"{$filename}\"",
+      'Content-Length' => strlen($pdfContent),
+    ]);
+  }
+
+  /**
+   * Generate PDF filename for purchase order
+   */
+  protected function getPdfFilename(PurchaseOrder $po): string
+  {
+    return $po->po_number . '.pdf';
   }
 
   public function canModifyPurchaseOrder(int $poId): bool
@@ -444,6 +1008,11 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
 
   public function updatePurchaseOrderItems(int $poId, array $items): PurchaseOrder
   {
+    Log::info('[PurchaseOrderService] updatePurchaseOrderItems - START', [
+      'po_id' => $poId,
+      'items_count' => count($items),
+    ]);
+
     $po = $this->getPurchaseOrder($poId);
 
     if (!$this->canModifyPurchaseOrder($poId)) {
@@ -466,38 +1035,596 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'po_items_updated',
         'purchase_order',
         $po->id,
+        $this->getCurrentUserId(),
         null,
         ['item_count' => count($items)],
         "Purchase Order {$po->po_number} items updated"
       );
+
+      Log::info('[PurchaseOrderService] updatePurchaseOrderItems - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+      ]);
 
       return $po;
     });
   }
 
   /**
-   * Log history.
+   * Get all purchase orders with filters and pagination
+   */
+  public function getPurchaseOrders(array $filters = [], int $perPage = 15): LengthAwarePaginator
+  {
+    Log::info('[PurchaseOrderService] getPurchaseOrders - START', [
+      'filters' => $filters,
+      'per_page' => $perPage,
+    ]);
+
+    $query = PurchaseOrder::with([
+      'requisition',
+      'supplier',
+      'items',
+      'checkedBy',
+      'endorsedBy',
+      'approvedBy'
+    ]);
+
+    if (isset($filters['status']) && $filters['status']) {
+      $query->where('status', $filters['status']);
+    }
+
+    if (isset($filters['type']) && $filters['type']) {
+      $query->where('type', $filters['type']);
+    }
+
+    if (isset($filters['date_from']) && $filters['date_from']) {
+      $query->whereDate('created_at', '>=', $filters['date_from']);
+    }
+
+    if (isset($filters['date_to']) && $filters['date_to']) {
+      $query->whereDate('created_at', '<=', $filters['date_to']);
+    }
+
+    if (isset($filters['search']) && $filters['search']) {
+      $search = $filters['search'];
+      $query->where(function ($q) use ($search) {
+        $q->where('po_number', 'LIKE', "%{$search}%")
+          ->orWhereHas('supplier', function ($sq) use ($search) {
+            $sq->where('company_name', 'LIKE', "%{$search}%")
+              ->orWhere('full_name', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+          })
+          ->orWhereHas('requisition', function ($rq) use ($search) {
+            $rq->where('reference_number', 'LIKE', "%{$search}%")
+              ->orWhere('title', 'LIKE', "%{$search}%");
+          });
+      });
+    }
+
+    $result = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+    $result->getCollection()->transform(function ($po) {
+      return $this->enrichPurchaseOrderWithWorkflow($po);
+    });
+
+    Log::info('[PurchaseOrderService] getPurchaseOrders - COMPLETED', [
+      'total' => $result->total(),
+      'current_page' => $result->currentPage(),
+      'per_page' => $result->perPage(),
+    ]);
+
+    return $result;
+  }
+
+  /**
+   * Enrich a purchase order with workflow status fields
+   */
+  protected function enrichPurchaseOrderWithWorkflow(PurchaseOrder $po): PurchaseOrder
+  {
+    $isChecked = $po->checked_by !== null && $po->checked_at !== null;
+    $isEndorsed = $po->endorsed_by !== null && $po->endorsed_at !== null;
+    $isApproved = $po->approved_by !== null && $po->approved_at !== null;
+    $hasAllSignatures = $isChecked && $isEndorsed && $isApproved;
+
+    $needsCheck = $po->status === 'draft' && !$isChecked;
+    $needsEndorsement = $po->status === 'draft' && $isChecked && !$isEndorsed;
+    $needsApproval = $po->status === 'draft' && $isChecked && $isEndorsed && !$isApproved;
+
+    $step = 'draft';
+    if ($needsCheck) $step = 'check';
+    elseif ($needsEndorsement) $step = 'endorse';
+    elseif ($needsApproval) $step = 'approve';
+    elseif ($hasAllSignatures && $po->status === 'draft') $step = 'ready';
+    elseif ($po->status === 'issued') $step = 'issued';
+    elseif ($po->status === 'sent') $step = 'sent';
+    elseif ($po->status === 'delivered') $step = 'delivered';
+    elseif ($po->status === 'completed') $step = 'completed';
+    elseif ($po->status === 'cancelled') $step = 'cancelled';
+
+    $po->setAttribute('needs_check', $needsCheck);
+    $po->setAttribute('needs_endorsement', $needsEndorsement);
+    $po->setAttribute('needs_approval', $needsApproval);
+    $po->setAttribute('is_checked', $isChecked);
+    $po->setAttribute('is_endorsed', $isEndorsed);
+    $po->setAttribute('is_approved', $isApproved);
+    $po->setAttribute('workflow_completion', [
+      'check' => $isChecked,
+      'endorse' => $isEndorsed,
+      'approve' => $isApproved,
+      'all_complete' => $hasAllSignatures,
+      'step' => $step,
+    ]);
+
+    $po->setAttribute('checked_by_user', $po->checkedBy?->full_name);
+    $po->setAttribute('endorsed_by_user', $po->endorsedBy?->full_name);
+    $po->setAttribute('approved_by_user', $po->approvedBy?->full_name);
+
+    return $po;
+  }
+
+  /**
+   * Log history with proper user ID
    */
   protected function logHistory(
     int $requisitionId,
     string $action,
     string $entityType,
     int $entityId,
+    ?int $userId = null,
     ?array $oldValues = null,
     ?array $newValues = null,
     ?string $comment = null
   ): void {
-    \App\Models\ProcurementHistory::create([
-      'requisition_id' => $requisitionId,
-      'user_id' => $this->getCurrentUserId(),
-      'action' => $action,
-      'entity_type' => $entityType,
-      'entity_id' => $entityId,
-      'old_values' => $oldValues,
-      'new_values' => $newValues,
-      'comment' => $comment,
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
+    try {
+      \App\Models\ProcurementHistory::create([
+        'requisition_id' => $requisitionId,
+        'user_id' => $userId ?? $this->getCurrentUserId(),
+        'action' => $action,
+        'entity_type' => $entityType,
+        'entity_id' => $entityId,
+        'old_values' => $oldValues,
+        'new_values' => $newValues,
+        'comment' => $comment,
+        'ip_address' => request()->ip(),
+        'user_agent' => request()->userAgent(),
+      ]);
+    } catch (\Exception $e) {
+      Log::error('[PurchaseOrderService] Failed to log history', [
+        'error' => $e->getMessage(),
+        'requisition_id' => $requisitionId,
+        'action' => $action,
+      ]);
+    }
+  }
+
+  /**
+   * Check purchase order (HOD)
+   */
+  public function checkPurchaseOrder(int $poId, int $userId, ?string $comment = null): PurchaseOrder
+  {
+    Log::info('[PurchaseOrderService] checkPurchaseOrder - START', [
+      'po_id' => $poId,
+      'user_id' => $userId,
+    ]);
+
+    $po = $this->getPurchaseOrder($poId);
+
+    $requisition = $po->requisition;
+    $user = \App\Models\User::find($userId);
+
+    if (!$user) {
+      throw new \Exception('User not found');
+    }
+
+    $department = \App\Models\Department::where('hod_id', $userId)->first();
+
+    if (!$department) {
+      Log::warning('[PurchaseOrderService] User is not an HOD of any department', [
+        'user_id' => $userId,
+      ]);
+      throw new \Exception('Only HOD can check purchase orders');
+    }
+
+    if ($department->id !== $requisition->department_id) {
+      Log::warning('[PurchaseOrderService] Department mismatch', [
+        'user_id' => $userId,
+        'hod_department_id' => $department->id,
+        'hod_department_name' => $department->name,
+        'requisition_department_id' => $requisition->department_id,
+        'requisition_department_name' => $requisition->department?->name,
+      ]);
+      throw new \Exception('You can only check orders for your department');
+    }
+
+    if ($po->generated_by === $userId) {
+      throw new \Exception('You cannot check your own purchase order. Another HOD must check it.');
+    }
+
+    if ($po->status !== 'draft') {
+      throw new \Exception('Purchase order must be in draft status to check.');
+    }
+
+    if ($po->checked_by !== null && $po->checked_at !== null) {
+      throw new \Exception('This purchase order has already been checked.');
+    }
+
+    return $this->transaction(function () use ($po, $userId, $comment) {
+      $po->update([
+        'checked_by' => $userId,
+        'checked_at' => now(),
+        'metadata' => array_merge($po->metadata ?? [], [
+          'check_comment' => $comment,
+          'checked_at' => now()->toIso8601String(),
+        ]),
+      ]);
+
+      $this->logHistory(
+        $po->requisition_id,
+        'po_checked',
+        'purchase_order',
+        $po->id,
+        $userId,
+        null,
+        ['checked_by' => $userId, 'checked_at' => now()],
+        "Purchase Order {$po->po_number} checked" . ($comment ? ": {$comment}" : "")
+      );
+
+      $this->notificationDispatcher->notify('po_ready_for_endorsement', [
+        'purchase_order_id' => $po->id,
+        'po_number' => $po->po_number,
+        'requisition_id' => $po->requisition_id,
+        'checked_by' => $userId,
+        'department' => $po->requisition?->department?->name,
+      ]);
+
+      Log::info('[PurchaseOrderService] checkPurchaseOrder - COMPLETED', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+        'checked_by' => $userId,
+        'checked_at' => $po->checked_at,
+      ]);
+
+      return $po->fresh();
+    });
+  }
+
+  /**
+   * Endorse purchase order (Accountant)
+   */
+  public function endorsePurchaseOrder(int $poId, int $userId, ?string $comment = null): PurchaseOrder
+  {
+    Log::info('[PurchaseOrderService] endorsePurchaseOrder - START', [
+      'po_id' => $poId,
+      'user_id' => $userId,
+      'timestamp' => now()->toIso8601String(),
+    ]);
+
+    try {
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Fetching purchase order', [
+        'po_id' => $poId,
+      ]);
+
+      $po = $this->getPurchaseOrder($poId);
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Purchase order retrieved', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'status' => $po->status,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+        'endorsed_by' => $po->endorsed_by,
+        'endorsed_at' => $po->endorsed_at,
+        'approved_by' => $po->approved_by,
+        'approved_at' => $po->approved_at,
+      ]);
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Fetching user', [
+        'user_id' => $userId,
+      ]);
+
+      $user = \App\Models\User::with('roles')->find($userId);
+
+      if (!$user) {
+        Log::error('[PurchaseOrderService] endorsePurchaseOrder - User not found', [
+          'user_id' => $userId,
+          'po_id' => $poId,
+          'po_number' => $po->po_number,
+        ]);
+        throw new \Exception('User not found');
+      }
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - User found', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+        'user_full_name' => $user->full_name ?? $user->name ?? 'Unknown',
+      ]);
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Checking user role', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+        'is_accountant' => $user->isAccountant(),
+        'roles' => $user->roles->map(function ($role) {
+          return [
+            'id' => $role->id,
+            'name' => $role->name,
+            'label' => $role->label ?? $role->name,
+          ];
+        })->toArray(),
+      ]);
+
+      if (!$user->isAccountant()) {
+        Log::warning('[PurchaseOrderService] endorsePurchaseOrder - User is not an Accountant', [
+          'user_id' => $user->id,
+          'user_email' => $user->email,
+          'user_roles' => $user->roles->pluck('name')->toArray(),
+          'user_roles_labels' => $user->roles->pluck('label')->toArray(),
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+        throw new \Exception('Only Accountant can endorse purchase orders');
+      }
+
+      Log::info('[PurchaseOrderService] endorsePurchaseOrder - User role validated successfully', [
+        'user_id' => $user->id,
+        'user_email' => $user->email,
+      ]);
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Validating PO has been checked', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+      ]);
+
+      if (is_null($po->checked_by) || is_null($po->checked_at)) {
+        Log::warning('[PurchaseOrderService] endorsePurchaseOrder - PO has not been checked by HOD', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'checked_by' => $po->checked_by,
+          'checked_at' => $po->checked_at,
+        ]);
+        throw new \Exception('Purchase order must be checked by HOD before endorsement.');
+      }
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Validating PO is not already endorsed', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'endorsed_by' => $po->endorsed_by,
+        'endorsed_at' => $po->endorsed_at,
+      ]);
+
+      if (!is_null($po->endorsed_by) || !is_null($po->endorsed_at)) {
+        Log::warning('[PurchaseOrderService] endorsePurchaseOrder - PO is already endorsed', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'endorsed_by' => $po->endorsed_by,
+          'endorsed_at' => $po->endorsed_at,
+        ]);
+        throw new \Exception('Purchase order has already been endorsed.');
+      }
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Validating PO is not already approved', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'approved_by' => $po->approved_by,
+        'approved_at' => $po->approved_at,
+      ]);
+
+      if (!is_null($po->approved_by) || !is_null($po->approved_at)) {
+        Log::warning('[PurchaseOrderService] endorsePurchaseOrder - PO is already approved', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'approved_by' => $po->approved_by,
+          'approved_at' => $po->approved_at,
+        ]);
+        throw new \Exception('Purchase order has already been approved.');
+      }
+
+      Log::info('[PurchaseOrderService] endorsePurchaseOrder - All validations passed', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'checked_by' => $po->checked_by,
+        'checked_at' => $po->checked_at,
+      ]);
+
+      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Executing endorsement transaction', [
+        'po_id' => $po->id,
+        'po_number' => $po->po_number,
+        'user_id' => $userId,
+        'has_comment' => !empty($comment),
+        'comment' => $comment,
+      ]);
+
+      $result = $this->transaction(function () use ($po, $userId, $comment) {
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Transaction START', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        $po = $this->repository->endorsePurchaseOrder($po->id, $userId, $comment);
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Repository endorsement completed', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'status' => $po->status,
+          'endorsed_by' => $po->endorsed_by,
+          'endorsed_at' => $po->endorsed_at,
+          'checked_by' => $po->checked_by,
+          'checked_at' => $po->checked_at,
+        ]);
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Logging history', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'user_id' => $userId,
+          'action' => 'po_endorsed',
+        ]);
+
+        $this->logHistory(
+          $po->requisition_id,
+          'po_endorsed',
+          'purchase_order',
+          $po->id,
+          $userId,
+          null,
+          [
+            'endorsed_by' => $userId,
+            'endorsed_at' => now()->toIso8601String(),
+            'comment' => $comment,
+            'status_unchanged' => $po->status,
+            'checked_by' => $po->checked_by,
+            'checked_at' => $po->checked_at,
+          ],
+          "Purchase Order {$po->po_number} endorsed by Accountant" . ($comment ? ": {$comment}" : "")
+        );
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - History logged successfully', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Dispatching notification', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'total_amount' => $po->total_amount,
+        ]);
+
+        $this->notificationDispatcher->notify('po_ready_for_approval', [
+          'purchase_order_id' => $po->id,
+          'po_number' => $po->po_number,
+          'requisition_id' => $po->requisition_id,
+          'endorsed_by' => $userId,
+          'endorsed_by_name' => $po->endorsed_by_user ?? 'Accountant',
+          'total_amount' => $po->total_amount,
+          'formatted_total' => number_format((float) $po->total_amount, 2),
+          'department' => $po->requisition?->department?->name ?? 'Unknown',
+          'checked_by' => $po->checked_by_user ?? 'HOD',
+          'checked_at' => $po->checked_at,
+        ]);
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Notification dispatched successfully', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+        ]);
+
+        Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Transaction END', [
+          'po_id' => $po->id,
+          'po_number' => $po->po_number,
+          'final_status' => $po->status,
+          'endorsed_by' => $userId,
+          'endorsed_at' => $po->endorsed_at,
+        ]);
+
+        return $po;
+      });
+
+      Log::info('[PurchaseOrderService] endorsePurchaseOrder - COMPLETED', [
+        'po_id' => $result->id,
+        'po_number' => $result->po_number,
+        'status' => $result->status,
+        'endorsed_by' => $result->endorsed_by,
+        'endorsed_at' => $result->endorsed_at,
+        'user_id' => $userId,
+        'total_amount' => $result->total_amount,
+        'checked_by' => $result->checked_by,
+        'checked_at' => $result->checked_at,
+      ]);
+
+      return $result;
+    } catch (\Exception $e) {
+      Log::error('[PurchaseOrderService] endorsePurchaseOrder - FAILED', [
+        'po_id' => $poId,
+        'user_id' => $userId,
+        'error_message' => $e->getMessage(),
+        'error_code' => $e->getCode(),
+        'error_file' => $e->getFile(),
+        'error_line' => $e->getLine(),
+        'timestamp' => now()->toIso8601String(),
+      ]);
+
+      throw $e;
+    }
+  }
+
+  /**
+   * Get workflow status for current user
+   */
+  public function getWorkflowStatus(int $poId, ?int $userId = null): array
+  {
+    Log::info('[PurchaseOrderService] getWorkflowStatus - START', [
+      'po_id' => $poId,
+      'user_id' => $userId,
+    ]);
+
+    $po = $this->getPurchaseOrder($poId);
+    $workflow = $this->repository->getWorkflowStatus($poId);
+
+    $canCheck = false;
+    $canEndorse = false;
+    $canApprove = false;
+    $canDownload = false;
+    $currentStep = 'done';
+    $nextAction = null;
+    $missingSignature = null;
+
+    if ($userId) {
+      $user = \App\Models\User::with('roles')->find($userId);
+
+      if ($user) {
+        $canDownload = $po->status === 'pending_approval' ||
+          $po->status === 'issued' ||
+          $po->status === 'sent' ||
+          $po->status === 'acknowledged' ||
+          $po->status === 'delivered' ||
+          $po->status === 'completed';
+
+        if ($user->hasRole('hod') && $po->status === 'draft') {
+          $canCheck = true;
+          $currentStep = 'check';
+          $nextAction = 'Check this purchase order';
+          $missingSignature = 'HOD Check';
+        }
+
+        if ($user->hasRole('accountant') && $po->status === 'pending_endorsement') {
+          $canEndorse = true;
+          $currentStep = 'endorse';
+          $nextAction = 'Endorse this purchase order';
+          $missingSignature = 'Accountant Endorsement';
+        }
+
+        if (($user->isFinalApprover() || $user->hasRole('admin')) &&
+          $po->status === 'pending_approval'
+        ) {
+          $canApprove = true;
+          $currentStep = 'approve';
+          $nextAction = 'Approve this purchase order';
+          $missingSignature = 'Director Approval';
+        }
+      }
+    }
+
+    Log::info('[PurchaseOrderService] getWorkflowStatus - COMPLETED', [
+      'po_id' => $poId,
+      'can_check' => $canCheck,
+      'can_endorse' => $canEndorse,
+      'can_approve' => $canApprove,
+      'current_step' => $currentStep,
+    ]);
+
+    return array_merge($workflow, [
+      'can_check' => $canCheck,
+      'can_endorse' => $canEndorse,
+      'can_approve' => $canApprove,
+      'can_download' => $canDownload,
+      'current_step' => $currentStep,
+      'next_action' => $nextAction,
+      'missing_signature' => $missingSignature,
+      'is_checkable' => $canCheck,
+      'is_endorsable' => $canEndorse,
+      'is_approvable' => $canApprove,
     ]);
   }
 }

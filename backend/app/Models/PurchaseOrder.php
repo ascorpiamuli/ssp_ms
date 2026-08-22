@@ -10,10 +10,183 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PurchaseOrder extends Model
 {
   use HasFactory, SoftDeletes;
+
+    // ============================================
+    // STATUS CONSTANTS
+    // ============================================
+
+  /**
+   * Purchase order status constants
+   */
+  public const STATUS_DRAFT = 'draft';
+  public const STATUS_PENDING_CHECK = 'pending_check';
+  public const STATUS_PENDING_ENDORSEMENT = 'pending_endorsement';
+  public const STATUS_PENDING_APPROVAL = 'pending_approval';
+  public const STATUS_ISSUED = 'issued';
+  public const STATUS_SENT = 'sent';
+  public const STATUS_ACKNOWLEDGED = 'acknowledged';
+  public const STATUS_DELIVERED = 'delivered';
+  public const STATUS_PARTIAL = 'partial';
+  public const STATUS_COMPLETED = 'completed';
+  public const STATUS_CANCELLED = 'cancelled';
+  public const STATUS_CLOSED = 'closed';
+
+  /**
+   * Workflow configuration
+   */
+  public const WORKFLOW = [
+    self::STATUS_DRAFT => [
+      'step' => 'draft',
+      'label' => 'Draft',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => true,
+      'next' => self::STATUS_PENDING_CHECK,
+      'permission' => 'purchase_orders.edit',
+      'color' => 'gray',
+    ],
+    self::STATUS_PENDING_CHECK => [
+      'step' => 'check',
+      'label' => 'Pending Check',
+      'requires_check' => true,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_PENDING_ENDORSEMENT,
+      'permission' => 'purchase_orders.check',
+      'color' => 'warning',
+    ],
+    self::STATUS_PENDING_ENDORSEMENT => [
+      'step' => 'endorse',
+      'label' => 'Pending Endorsement',
+      'requires_check' => false,
+      'requires_endorse' => true,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_PENDING_APPROVAL,
+      'permission' => 'purchase_orders.endorse',
+      'color' => 'info',
+    ],
+    self::STATUS_PENDING_APPROVAL => [
+      'step' => 'approve',
+      'label' => 'Pending Approval',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => true,
+      'can_edit' => false,
+      'next' => self::STATUS_ISSUED,
+      'permission' => 'purchase_orders.approve',
+      'color' => 'primary',
+    ],
+    self::STATUS_ISSUED => [
+      'step' => 'issued',
+      'label' => 'Issued',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_SENT,
+      'permission' => 'purchase_orders.send',
+      'color' => 'indigo',
+    ],
+    self::STATUS_SENT => [
+      'step' => 'sent',
+      'label' => 'Sent to Supplier',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_ACKNOWLEDGED,
+      'permission' => null,
+      'color' => 'primary',
+    ],
+    self::STATUS_ACKNOWLEDGED => [
+      'step' => 'acknowledged',
+      'label' => 'Acknowledged',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_DELIVERED,
+      'permission' => null,
+      'color' => 'purple',
+    ],
+    self::STATUS_DELIVERED => [
+      'step' => 'delivered',
+      'label' => 'Delivered',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_COMPLETED,
+      'permission' => 'purchase_orders.complete',
+      'color' => 'emerald',
+    ],
+    self::STATUS_PARTIAL => [
+      'step' => 'partial',
+      'label' => 'Partially Delivered',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => self::STATUS_DELIVERED,
+      'permission' => null,
+      'color' => 'amber',
+    ],
+    self::STATUS_COMPLETED => [
+      'step' => 'completed',
+      'label' => 'Completed',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => null,
+      'permission' => null,
+      'color' => 'teal',
+    ],
+    self::STATUS_CANCELLED => [
+      'step' => 'cancelled',
+      'label' => 'Cancelled',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => null,
+      'permission' => null,
+      'color' => 'danger',
+    ],
+    self::STATUS_CLOSED => [
+      'step' => 'closed',
+      'label' => 'Closed',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => null,
+      'permission' => null,
+      'color' => 'secondary',
+    ],
+  ];
+
+  /**
+   * Statuses that allow PDF download
+   */
+  public const DOWNLOADABLE_STATUSES = [
+    self::STATUS_PENDING_ENDORSEMENT,
+    self::STATUS_PENDING_APPROVAL,
+    self::STATUS_ISSUED,
+    self::STATUS_SENT,
+    self::STATUS_ACKNOWLEDGED,
+    self::STATUS_DELIVERED,
+    self::STATUS_PARTIAL,
+    self::STATUS_COMPLETED,
+  ];
 
   /**
    * The attributes that are mass assignable.
@@ -66,6 +239,11 @@ class PurchaseOrder extends Model
     'digital_signature_endorser',
     'digital_signature_approver',
     'metadata',
+    'download_count',
+    'pdf_upload_id',
+    'pdf_storage_path',
+    'pdf_filename',
+    'last_downloaded_at'
   ];
 
   /**
@@ -104,6 +282,7 @@ class PurchaseOrder extends Model
   protected $appends = [
     'status_label',
     'status_color',
+    'status_step',
     'type_label',
     'type_color',
     'formatted_total_amount',
@@ -113,6 +292,14 @@ class PurchaseOrder extends Model
     'is_overdue',
     'is_fully_delivered',
     'delivery_progress',
+    'can_download_pdf',
+    'needs_check',
+    'needs_endorsement',
+    'needs_approval',
+    'is_checked',
+    'is_endorsed',
+    'is_approved',
+    'workflow_completion',
   ];
 
   // ============================================
@@ -184,43 +371,89 @@ class PurchaseOrder extends Model
     return $this->hasMany(Contract::class, 'purchase_order_id');
   }
 
+  public function pdfUpload(): BelongsTo
+  {
+    return $this->belongsTo(Upload::class, 'pdf_upload_id');
+  }
+
+  /**
+   * Get the upload record (alias for pdfUpload)
+   */
+  public function upload(): BelongsTo
+  {
+    return $this->belongsTo(Upload::class, 'pdf_upload_id');
+  }
+
   // ============================================
-  // ACCESSORS & MUTATORS
+  // WORKFLOW ACCESSORS
   // ============================================
 
   public function getStatusLabelAttribute(): string
   {
-    $labels = [
-      'draft' => 'Draft',
-      'issued' => 'Issued',
-      'sent' => 'Sent to Supplier',
-      'acknowledged' => 'Acknowledged',
-      'delivered' => 'Delivered',
-      'partial' => 'Partially Delivered',
-      'completed' => 'Completed',
-      'cancelled' => 'Cancelled',
-      'closed' => 'Closed',
-    ];
-
-    return $labels[$this->status] ?? ucfirst($this->status ?? 'Unknown');
+    return self::WORKFLOW[$this->status]['label'] ?? ucfirst($this->status ?? 'Unknown');
   }
 
   public function getStatusColorAttribute(): string
   {
-    $colors = [
-      'draft' => 'gray',
-      'issued' => 'info',
-      'sent' => 'primary',
-      'acknowledged' => 'info',
-      'delivered' => 'success',
-      'partial' => 'warning',
-      'completed' => 'success',
-      'cancelled' => 'danger',
-      'closed' => 'secondary',
-    ];
-
-    return $colors[$this->status] ?? 'secondary';
+    return self::WORKFLOW[$this->status]['color'] ?? 'secondary';
   }
+
+  public function getStatusStepAttribute(): string
+  {
+    return self::WORKFLOW[$this->status]['step'] ?? $this->status;
+  }
+
+  public function getCanDownloadPdfAttribute(): bool
+  {
+    return in_array($this->status, self::DOWNLOADABLE_STATUSES) && $this->pdf_storage_path;
+  }
+
+  public function getNeedsCheckAttribute(): bool
+  {
+    return $this->status === self::STATUS_PENDING_CHECK;
+  }
+
+  public function getNeedsEndorsementAttribute(): bool
+  {
+    return $this->status === self::STATUS_PENDING_ENDORSEMENT;
+  }
+
+  public function getNeedsApprovalAttribute(): bool
+  {
+    return $this->status === self::STATUS_PENDING_APPROVAL;
+  }
+
+  public function getIsCheckedAttribute(): bool
+  {
+    return $this->checked_by !== null && $this->checked_at !== null;
+  }
+
+  public function getIsEndorsedAttribute(): bool
+  {
+    return $this->endorsed_by !== null && $this->endorsed_at !== null;
+  }
+
+  public function getIsApprovedAttribute(): bool
+  {
+    return $this->approved_by !== null && $this->approved_at !== null;
+  }
+
+  public function getWorkflowCompletionAttribute(): array
+  {
+    return [
+      'check' => $this->getIsCheckedAttribute(),
+      'endorse' => $this->getIsEndorsedAttribute(),
+      'approve' => $this->getIsApprovedAttribute(),
+      'all_complete' => $this->getIsCheckedAttribute() &&
+        $this->getIsEndorsedAttribute() &&
+        $this->getIsApprovedAttribute(),
+      'step' => $this->getStatusStepAttribute(),
+    ];
+  }
+
+  // ============================================
+  // OTHER ACCESSORS
+  // ============================================
 
   public function getTypeLabelAttribute(): string
   {
@@ -254,7 +487,11 @@ class PurchaseOrder extends Model
 
   public function getIsOverdueAttribute(): bool
   {
-    if ($this->status === 'completed' || $this->status === 'cancelled') {
+    if (
+      $this->status === self::STATUS_COMPLETED ||
+      $this->status === self::STATUS_CANCELLED ||
+      $this->status === self::STATUS_CLOSED
+    ) {
       return false;
     }
     return $this->expected_delivery_date && $this->expected_delivery_date->isPast();
@@ -262,7 +499,7 @@ class PurchaseOrder extends Model
 
   public function getIsFullyDeliveredAttribute(): bool
   {
-    return $this->status === 'completed';
+    return $this->status === self::STATUS_COMPLETED;
   }
 
   public function getDeliveryProgressAttribute(): float
@@ -300,23 +537,64 @@ class PurchaseOrder extends Model
 
   public function scopeDraft($query)
   {
-    return $query->where('status', 'draft');
+    return $query->where('status', self::STATUS_DRAFT);
+  }
+
+  public function scopePendingCheck($query)
+  {
+    return $query->where('status', self::STATUS_PENDING_CHECK);
+  }
+
+  public function scopePendingEndorsement($query)
+  {
+    return $query->where('status', self::STATUS_PENDING_ENDORSEMENT);
+  }
+
+  public function scopePendingApproval($query)
+  {
+    return $query->where('status', self::STATUS_PENDING_APPROVAL);
   }
 
   public function scopeIssued($query)
   {
-    return $query->where('status', 'issued');
+    return $query->where('status', self::STATUS_ISSUED);
+  }
+
+  public function scopeSent($query)
+  {
+    return $query->where('status', self::STATUS_SENT);
+  }
+
+  public function scopeDelivered($query)
+  {
+    return $query->where('status', self::STATUS_DELIVERED);
   }
 
   public function scopeCompleted($query)
   {
-    return $query->where('status', 'completed');
+    return $query->where('status', self::STATUS_COMPLETED);
+  }
+
+  public function scopeCancelled($query)
+  {
+    return $query->where('status', self::STATUS_CANCELLED);
   }
 
   public function scopeOverdue($query)
   {
     return $query->whereDate('expected_delivery_date', '<', now())
-      ->whereNotIn('status', ['completed', 'cancelled', 'closed']);
+      ->whereNotIn('status', [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_CLOSED]);
+  }
+
+  public function scopeActive($query)
+  {
+    return $query->whereIn('status', [
+      self::STATUS_ISSUED,
+      self::STATUS_SENT,
+      self::STATUS_ACKNOWLEDGED,
+      self::STATUS_DELIVERED,
+      self::STATUS_PARTIAL
+    ]);
   }
 
   public function scopeBySupplier($query, int $supplierId)
@@ -345,27 +623,62 @@ class PurchaseOrder extends Model
 
   public function isDraft(): bool
   {
-    return $this->status === 'draft';
+    return $this->status === self::STATUS_DRAFT;
+  }
+
+  public function isPendingCheck(): bool
+  {
+    return $this->status === self::STATUS_PENDING_CHECK;
+  }
+
+  public function isPendingEndorsement(): bool
+  {
+    return $this->status === self::STATUS_PENDING_ENDORSEMENT;
+  }
+
+  public function isPendingApproval(): bool
+  {
+    return $this->status === self::STATUS_PENDING_APPROVAL;
   }
 
   public function isIssued(): bool
   {
-    return $this->status === 'issued';
+    return $this->status === self::STATUS_ISSUED;
   }
 
   public function isSent(): bool
   {
-    return $this->status === 'sent';
+    return $this->status === self::STATUS_SENT;
+  }
+
+  public function isAcknowledged(): bool
+  {
+    return $this->status === self::STATUS_ACKNOWLEDGED;
+  }
+
+  public function isDelivered(): bool
+  {
+    return $this->status === self::STATUS_DELIVERED;
+  }
+
+  public function isPartial(): bool
+  {
+    return $this->status === self::STATUS_PARTIAL;
   }
 
   public function isCompleted(): bool
   {
-    return $this->status === 'completed';
+    return $this->status === self::STATUS_COMPLETED;
   }
 
   public function isCancelled(): bool
   {
-    return $this->status === 'cancelled';
+    return $this->status === self::STATUS_CANCELLED;
+  }
+
+  public function isClosed(): bool
+  {
+    return $this->status === self::STATUS_CLOSED;
   }
 
   public function isOverdue(): bool
@@ -385,7 +698,133 @@ class PurchaseOrder extends Model
 
   public function canBeModified(): bool
   {
-    return in_array($this->status, ['draft', 'issued']);
+    return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_ISSUED]);
+  }
+
+  public function canBeDeleted(): bool
+  {
+    return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED]);
+  }
+
+  public function canBeCheckedBy(int $userId): bool
+  {
+    if (!$this->isPendingCheck()) {
+      return false;
+    }
+
+    if ($this->generated_by === $userId) {
+      return false;
+    }
+
+    $user = \App\Models\User::find($userId);
+    if (!$user || !$user->hasRole('hod')) {
+      return false;
+    }
+
+    $requisition = $this->requisition;
+    if ($requisition && $user->department_id !== $requisition->department_id) {
+      return false;
+    }
+
+    return true;
+  }
+
+  public function canBeEndorsedBy(int $userId): bool
+  {
+    if (!$this->isPendingEndorsement()) {
+      return false;
+    }
+
+    $user = \App\Models\User::find($userId);
+    if (!$user || !$user->hasRole('accountant')) {
+      return false;
+    }
+
+    return true;
+  }
+
+  public function canBeApprovedBy(int $userId): bool
+  {
+    if (!$this->isPendingApproval()) {
+      return false;
+    }
+
+    $user = \App\Models\User::find($userId);
+    if (!$user) {
+      return false;
+    }
+
+    return $user->hasRole('director') ||
+      $user->hasRole('finance_admin') ||
+      $user->hasRole('admin');
+  }
+
+  public function canDownloadPdf(): bool
+  {
+    return $this->can_download_pdf;
+  }
+
+  public function needsAction(): bool
+  {
+    return in_array($this->status, [
+      self::STATUS_PENDING_CHECK,
+      self::STATUS_PENDING_ENDORSEMENT,
+      self::STATUS_PENDING_APPROVAL,
+    ]);
+  }
+
+  public function getNextAction(): ?string
+  {
+    if ($this->isPendingCheck()) {
+      return 'HOD Check';
+    }
+
+    if ($this->isPendingEndorsement()) {
+      return 'Accountant Endorsement';
+    }
+
+    if ($this->isPendingApproval()) {
+      return 'Director Approval';
+    }
+
+    return null;
+  }
+
+  public function getMissingSignatures(): array
+  {
+    $missing = [];
+
+    if (!$this->getIsCheckedAttribute() && $this->needs_check) {
+      $missing[] = 'HOD Check';
+    }
+
+    if (!$this->getIsEndorsedAttribute() && $this->needs_endorsement) {
+      $missing[] = 'Accountant Endorsement';
+    }
+
+    if (!$this->getIsApprovedAttribute() && $this->needs_approval) {
+      $missing[] = 'Director Approval';
+    }
+
+    return $missing;
+  }
+
+  public function getSignatureProgress(): float
+  {
+    $total = 3; // Check, Endorse, Approve
+    $done = 0;
+
+    if ($this->getIsCheckedAttribute()) {
+      $done++;
+    }
+    if ($this->getIsEndorsedAttribute()) {
+      $done++;
+    }
+    if ($this->getIsApprovedAttribute()) {
+      $done++;
+    }
+
+    return round(($done / $total) * 100, 2);
   }
 
   public function updateTotalAmount(): self
@@ -402,10 +841,40 @@ class PurchaseOrder extends Model
     return $this;
   }
 
+  public function markAsChecked(int $userId, ?string $comment = null): self
+  {
+    $this->update([
+      'checked_by' => $userId,
+      'checked_at' => now(),
+      'status' => self::STATUS_PENDING_ENDORSEMENT,
+    ]);
+    return $this;
+  }
+
+  public function markAsEndorsed(int $userId, ?string $comment = null): self
+  {
+    $this->update([
+      'endorsed_by' => $userId,
+      'endorsed_at' => now(),
+      'status' => self::STATUS_PENDING_APPROVAL,
+    ]);
+    return $this;
+  }
+
+  public function markAsApproved(int $userId, ?string $comment = null): self
+  {
+    $this->update([
+      'approved_by' => $userId,
+      'approved_at' => now(),
+      'status' => self::STATUS_ISSUED,
+    ]);
+    return $this;
+  }
+
   public function markAsIssued(): self
   {
     $this->update([
-      'status' => 'issued',
+      'status' => self::STATUS_ISSUED,
       'issued_at' => now(),
     ]);
     return $this;
@@ -414,7 +883,7 @@ class PurchaseOrder extends Model
   public function markAsSent(): self
   {
     $this->update([
-      'status' => 'sent',
+      'status' => self::STATUS_SENT,
       'sent_at' => now(),
     ]);
     return $this;
@@ -423,22 +892,31 @@ class PurchaseOrder extends Model
   public function markAsAcknowledged(): self
   {
     $this->update([
-      'status' => 'acknowledged',
+      'status' => self::STATUS_ACKNOWLEDGED,
       'acknowledged_at' => now(),
+    ]);
+    return $this;
+  }
+
+  public function markAsDelivered(): self
+  {
+    $this->update([
+      'status' => self::STATUS_DELIVERED,
+      'actual_delivery_date' => now(),
     ]);
     return $this;
   }
 
   public function markAsPartial(): self
   {
-    $this->update(['status' => 'partial']);
+    $this->update(['status' => self::STATUS_PARTIAL]);
     return $this;
   }
 
   public function markAsCompleted(): self
   {
     $this->update([
-      'status' => 'completed',
+      'status' => self::STATUS_COMPLETED,
       'completed_at' => now(),
     ]);
     return $this;
@@ -447,9 +925,17 @@ class PurchaseOrder extends Model
   public function markAsCancelled(string $reason): self
   {
     $this->update([
-      'status' => 'cancelled',
+      'status' => self::STATUS_CANCELLED,
       'cancelled_at' => now(),
       'cancellation_reason' => $reason,
+    ]);
+    return $this;
+  }
+
+  public function markAsClosed(): self
+  {
+    $this->update([
+      'status' => self::STATUS_CLOSED,
     ]);
     return $this;
   }
@@ -482,6 +968,39 @@ class PurchaseOrder extends Model
     return $prefix . '-' . $year . '-' . str_pad((string) $last, 5, '0', STR_PAD_LEFT);
   }
 
+  /**
+   * Get the workflow configuration for the current status
+   */
+  public function getWorkflowConfig(): array
+  {
+    return self::WORKFLOW[$this->status] ?? [
+      'step' => 'unknown',
+      'label' => 'Unknown',
+      'requires_check' => false,
+      'requires_endorse' => false,
+      'requires_approve' => false,
+      'can_edit' => false,
+      'next' => null,
+      'permission' => null,
+      'color' => 'secondary',
+    ];
+  }
+
+  /**
+   * Check if the purchase order is in a workflow status
+   */
+  public function isInWorkflow(): bool
+  {
+    return in_array($this->status, [
+      self::STATUS_PENDING_CHECK,
+      self::STATUS_PENDING_ENDORSEMENT,
+      self::STATUS_PENDING_APPROVAL,
+    ]);
+  }
+
+  /**
+   * Log activity for this purchase order
+   */
   public function logActivity(string $action, ?array $oldValues = null, ?array $newValues = null, ?string $comment = null): void
   {
     ProcurementHistory::create([
@@ -496,5 +1015,47 @@ class PurchaseOrder extends Model
       'ip_address' => request()->ip(),
       'user_agent' => request()->userAgent(),
     ]);
+  }
+
+  /**
+   * Get the next status in the workflow
+   */
+  public function getNextStatus(): ?string
+  {
+    return self::WORKFLOW[$this->status]['next'] ?? null;
+  }
+
+  /**
+   * Check if the purchase order has all required signatures
+   */
+  public function hasAllRequiredSignatures(): bool
+  {
+    return $this->getIsCheckedAttribute() &&
+      $this->getIsEndorsedAttribute() &&
+      $this->getIsApprovedAttribute();
+  }
+
+  /**
+   * Get the user who performed each action
+   */
+  public function getSignatureDetails(): array
+  {
+    return [
+      'checked' => [
+        'by' => $this->checkedBy?->full_name,
+        'at' => $this->checked_at?->toDateTimeString(),
+        'done' => $this->getIsCheckedAttribute(),
+      ],
+      'endorsed' => [
+        'by' => $this->endorsedBy?->full_name,
+        'at' => $this->endorsed_at?->toDateTimeString(),
+        'done' => $this->getIsEndorsedAttribute(),
+      ],
+      'approved' => [
+        'by' => $this->approvedBy?->full_name,
+        'at' => $this->approved_at?->toDateTimeString(),
+        'done' => $this->getIsApprovedAttribute(),
+      ],
+    ];
   }
 }

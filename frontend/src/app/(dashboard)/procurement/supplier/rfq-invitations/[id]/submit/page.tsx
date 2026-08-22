@@ -264,6 +264,7 @@ export default function SubmitQuotationPage() {
         item_name: item.item_name,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        unit_of_measure: item.unit_of_measure || 'pcs', // ✅ ADD THIS!
         delivery_days: item.delivery_days,
         warranty_months: item.warranty_months,
       })),
@@ -276,7 +277,6 @@ export default function SubmitQuotationPage() {
       },
     });
   };
-
   const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   const pricedItems = items.filter(item => item.unit_price > 0).length;
   const totalItems = items.length;

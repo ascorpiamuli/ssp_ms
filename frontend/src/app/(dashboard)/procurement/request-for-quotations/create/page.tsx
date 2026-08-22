@@ -748,7 +748,7 @@ export default function CreateQuotationPage() {
       };
       await createQuotation.mutateAsync(data);
       success('Quotation created successfully!');
-      router.push('/procurement/quotations/manage');
+      router.push('/procurement/request-for-quotations/manage');
     } catch (error) {
       // Error handled by hook
     } finally {
@@ -757,7 +757,7 @@ export default function CreateQuotationPage() {
   };
 
   const handleCancel = () => {
-    router.push('/procurement/quotations/manage');
+    router.push('/procurement/request-for-quotations/manage');
   };
 
   const selectAllSuppliers = () => {

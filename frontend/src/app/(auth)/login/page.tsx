@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { login, isLoading: authLoading, isAuthenticated } = useAuthContext()
+  const { login, isLoading: authLoading, isAuthenticated, user } = useAuthContext()
 
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -27,6 +27,7 @@ export default function LoginPage() {
   })
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [loginSuccess, setLoginSuccess] = useState(false)
 
   // Prevent duplicate submissions
   const isSubmitting = useRef(false)
@@ -45,12 +46,24 @@ export default function LoginPage() {
     }
   }, [registered, reset])
 
-  // Redirect if already authenticated
+  // ✅ Redirect if already authenticated - with proper refresh
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/dashboard')
+    if (isAuthenticated && user) {
+      // Force a hard navigation to ensure fresh state
+      window.location.href = '/dashboard'
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, user])
+
+  // ✅ Handle redirect after successful login
+  useEffect(() => {
+    if (loginSuccess && isAuthenticated && user) {
+      // Small delay to ensure state is updated, then redirect
+      const timer = setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [loginSuccess, isAuthenticated, user])
 
   const validateForm = () => {
     let valid = true
@@ -91,19 +104,26 @@ export default function LoginPage() {
 
     try {
       await login(formData.email, formData.password, formData.rememberMe)
-      // The redirect is handled in the auth context
+      // ✅ Set success state to trigger redirect
+      setLoginSuccess(true)
+
+      // ✅ Force immediate redirect after successful login
+      // The useEffect above will handle the redirect with a small delay
+      // But we also try an immediate redirect as a fallback
+      setTimeout(() => {
+        if (isAuthenticated && user) {
+          window.location.href = '/dashboard'
+        }
+      }, 500)
     } catch (err: any) {
-      // Handle specific error messages
       let errorMessage = err.message || 'Login failed. Please try again.'
 
-      // Check for specific server errors
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message
       } else if (err.message) {
         errorMessage = err.message
       }
 
-      // Handle specific error cases
       if (errorMessage.toLowerCase().includes('pending admin approval')) {
         setServerError('Your account is pending admin approval. Please wait for confirmation.')
       } else if (errorMessage.toLowerCase().includes('deactivated')) {
@@ -113,9 +133,10 @@ export default function LoginPage() {
       } else {
         setServerError(errorMessage)
       }
+
+      setLoginSuccess(false)
     } finally {
       setIsLoading(false)
-      // Reset submission flag after a short delay to prevent race conditions
       setTimeout(() => {
         isSubmitting.current = false
       }, 500)
@@ -278,13 +299,18 @@ export default function LoginPage() {
           <Button
             type="submit"
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
-            disabled={isLoadingState}
+            disabled={isLoadingState || loginSuccess}
             aria-label="Sign in to your account"
           >
             {isLoadingState ? (
               <div className="flex items-center justify-center gap-2">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 <span>Signing in...</span>
+              </div>
+            ) : loginSuccess ? (
+              <div className="flex items-center justify-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Redirecting...</span>
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2">
@@ -314,7 +340,7 @@ export default function LoginPage() {
           type="button"
           variant="outline"
           className="w-full relative flex items-center justify-center gap-3 py-5 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all group"
-          disabled={isLoadingState}
+          disabled={isLoadingState || loginSuccess}
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path

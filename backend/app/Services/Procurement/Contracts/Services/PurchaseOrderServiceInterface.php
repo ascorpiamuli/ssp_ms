@@ -100,4 +100,22 @@ interface PurchaseOrderServiceInterface
    * Update purchase order items.
    */
   public function updatePurchaseOrderItems(int $poId, array $items): PurchaseOrder;
+
+
+
+      /**
+     * ✅ Check purchase order (HOD)
+     */
+    public function checkPurchaseOrder(int $poId, int $userId, ?string $comment = null): PurchaseOrder;
+
+    /**
+     * ✅ Endorse purchase order (Accountant)
+     */
+    public function endorsePurchaseOrder(int $poId, int $userId, ?string $comment = null): PurchaseOrder;
+
+
+    /**
+     * ✅ Get workflow status
+     */
+    public function getWorkflowStatus(int $poId, ?int $userId = null): array;
 }

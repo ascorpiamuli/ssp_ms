@@ -493,6 +493,7 @@ class RequestForQuotationController extends Controller
       ], 500);
     }
   }
+
   public function selectSupplier(Request $request): JsonResponse
   {
     Log::info('🔍 [RequestForQuotationController::selectSupplier] ========== START ==========');
@@ -642,6 +643,7 @@ class RequestForQuotationController extends Controller
       ], 500);
     }
   }
+
     // ============================================================
     // PDF GENERATION METHODS
     // ============================================================
@@ -674,6 +676,58 @@ class RequestForQuotationController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to download PDF: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * ✅ Track RFQ download (counts the download without returning file)
+   *
+   * @param int $id The RFQ ID
+   * @return JsonResponse
+   */
+  public function trackDownload(int $id): JsonResponse
+  {
+    Log::info('[RequestForQuotationController::trackDownload] ========== START ==========');
+    Log::info('[RequestForQuotationController::trackDownload] RFQ ID:', ['id' => $id]);
+    Log::info('[RequestForQuotationController::trackDownload] User ID:', ['user_id' => auth()->id()]);
+
+    try {
+      $qtn = QuotationRequestModel::findOrFail($id);
+
+      // ✅ Increment download count
+      $oldCount = $qtn->download_count ?? 0;
+      $qtn->increment('download_count');
+      $qtn->update(['last_downloaded_at' => now()]);
+      $newCount = $qtn->refresh()->download_count;
+
+      Log::info('[RequestForQuotationController::trackDownload] Download count incremented', [
+        'rfq_id' => $id,
+        'rfq_number' => $qtn->qtn_number,
+        'old_count' => $oldCount,
+        'new_count' => $newCount,
+      ]);
+
+      Log::info('[RequestForQuotationController::trackDownload] ========== END ==========');
+
+      return response()->json([
+        'success' => true,
+        'data' => [
+          'download_count' => $newCount,
+          'last_downloaded_at' => $qtn->last_downloaded_at,
+        ],
+        'message' => 'Download tracked successfully.',
+      ]);
+    } catch (\Exception $e) {
+      Log::error('[RequestForQuotationController::trackDownload] Error:', [
+        'rfq_id' => $id,
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to track download: ' . $e->getMessage(),
       ], 500);
     }
   }
@@ -861,6 +915,219 @@ class RequestForQuotationController extends Controller
       return response()->json([
         'success' => false,
         'message' => 'Failed to save PDF: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get download statistics for a specific RFQ.
+   *
+   * @param int $id The RFQ ID
+   * @return JsonResponse
+   */
+  public function getDownloadStats(int $id): JsonResponse
+  {
+    Log::info('🔍 [RequestForQuotationController::getDownloadStats] ========== START ==========');
+    Log::info('🔍 [RequestForQuotationController::getDownloadStats] RFQ ID:', ['id' => $id]);
+
+    try {
+      $qtn = QuotationRequestModel::findOrFail($id);
+
+      $stats = [
+        'download_count' => $qtn->download_count ?? 0,
+        'last_downloaded_at' => $qtn->last_downloaded_at,
+        'view_count' => $qtn->view_count ?? 0,
+        'last_viewed_at' => $qtn->last_viewed_at,
+        'shared_count' => $qtn->shared_count ?? 0,
+        'last_shared_at' => $qtn->last_shared_at,
+      ];
+
+      Log::info('✅ [RequestForQuotationController::getDownloadStats] Statistics retrieved');
+
+      Log::info('🔍 [RequestForQuotationController::getDownloadStats] ========== END ==========');
+
+      return response()->json([
+        'success' => true,
+        'data' => $stats,
+        'message' => 'Download statistics retrieved successfully.',
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ [RequestForQuotationController::getDownloadStats] Error:', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve download statistics: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Track RFQ view (without downloading).
+   *
+   * @param int $id The RFQ ID
+   * @return JsonResponse
+   */
+  public function trackView(int $id): JsonResponse
+  {
+    Log::info('🔍 [RequestForQuotationController::trackView] ========== START ==========');
+    Log::info('🔍 [RequestForQuotationController::trackView] RFQ ID:', ['id' => $id]);
+
+    try {
+      $qtn = QuotationRequestModel::findOrFail($id);
+
+      $oldCount = $qtn->view_count ?? 0;
+      $qtn->increment('view_count');
+      $qtn->update(['last_viewed_at' => now()]);
+      $newCount = $qtn->refresh()->view_count;
+
+      Log::info('✅ [RequestForQuotationController::trackView] View tracked successfully', [
+        'rfq_id' => $id,
+        'old_count' => $oldCount,
+        'new_count' => $newCount,
+      ]);
+
+      Log::info('🔍 [RequestForQuotationController::trackView] ========== END ==========');
+
+      return response()->json([
+        'success' => true,
+        'data' => [
+          'view_count' => $newCount,
+          'last_viewed_at' => $qtn->last_viewed_at,
+        ],
+        'message' => 'View tracked successfully.',
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ [RequestForQuotationController::trackView] Error:', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to track view: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Track RFQ share.
+   *
+   * @param int $id The RFQ ID
+   * @param Request $request
+   * @return JsonResponse
+   */
+  public function trackShare(int $id, Request $request): JsonResponse
+  {
+    Log::info('🔍 [RequestForQuotationController::trackShare] ========== START ==========');
+    Log::info('🔍 [RequestForQuotationController::trackShare] RFQ ID:', ['id' => $id]);
+
+    try {
+      $qtn = QuotationRequestModel::findOrFail($id);
+
+      $oldCount = $qtn->shared_count ?? 0;
+      $qtn->increment('shared_count');
+      $qtn->update(['last_shared_at' => now()]);
+      $newCount = $qtn->refresh()->shared_count;
+
+      // Optionally store share details
+      if ($request->has('share_method')) {
+        $metadata = $qtn->metadata ?? [];
+        $metadata['shares'][] = [
+          'method' => $request->input('share_method'),
+          'recipient' => $request->input('recipient'),
+          'timestamp' => now()->toDateTimeString(),
+          'ip' => $request->ip(),
+        ];
+        $qtn->update(['metadata' => $metadata]);
+      }
+
+      Log::info('✅ [RequestForQuotationController::trackShare] Share tracked successfully', [
+        'rfq_id' => $id,
+        'old_count' => $oldCount,
+        'new_count' => $newCount,
+      ]);
+
+      Log::info('🔍 [RequestForQuotationController::trackShare] ========== END ==========');
+
+      return response()->json([
+        'success' => true,
+        'data' => [
+          'shared_count' => $newCount,
+          'last_shared_at' => $qtn->last_shared_at,
+        ],
+        'message' => 'Share tracked successfully.',
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ [RequestForQuotationController::trackShare] Error:', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to track share: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Bulk track multiple downloads.
+   *
+   * @param Request $request
+   * @return JsonResponse
+   */
+  public function bulkTrackDownloads(Request $request): JsonResponse
+  {
+    Log::info('🔍 [RequestForQuotationController::bulkTrackDownloads] ========== START ==========');
+    Log::info('🔍 [RequestForQuotationController::bulkTrackDownloads] Request data:', $request->all());
+
+    try {
+      $request->validate([
+        'ids' => 'required|array|min:1',
+        'ids.*' => 'integer|exists:quotation_requests,id',
+      ]);
+
+      $updated = [];
+      foreach ($request->ids as $id) {
+        $qtn = QuotationRequestModel::find($id);
+        if ($qtn) {
+          $oldCount = $qtn->download_count ?? 0;
+          $qtn->increment('download_count');
+          $qtn->update(['last_downloaded_at' => now()]);
+          $newCount = $qtn->refresh()->download_count;
+
+          $updated[] = [
+            'id' => $id,
+            'qtn_number' => $qtn->qtn_number,
+            'old_count' => $oldCount,
+            'new_count' => $newCount,
+          ];
+        }
+      }
+
+      Log::info('✅ [RequestForQuotationController::bulkTrackDownloads] Bulk download tracked successfully', [
+        'count' => count($updated),
+      ]);
+
+      Log::info('🔍 [RequestForQuotationController::bulkTrackDownloads] ========== END ==========');
+
+      return response()->json([
+        'success' => true,
+        'data' => $updated,
+        'message' => 'Bulk downloads tracked successfully for ' . count($updated) . ' RFQs.',
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ [RequestForQuotationController::bulkTrackDownloads] Error:', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to track bulk downloads: ' . $e->getMessage(),
       ], 500);
     }
   }

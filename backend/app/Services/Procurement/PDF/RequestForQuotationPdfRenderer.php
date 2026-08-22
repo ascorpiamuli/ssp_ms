@@ -16,12 +16,25 @@ use Illuminate\Support\Facades\Log;
 class RequestForQuotationPdfRenderer extends BasePdfRenderer
 {
   private QRCodeServiceInterface $qrCodeService;
-  private bool $confidentialRendered = false;
+  private bool $copyLabelRendered = false;
+  private int $downloadCount = 0;
+  private string $copyLabel = '';
+  private array $copyColors = [];
 
   public function __construct(QRCodeServiceInterface $qrCodeService)
   {
     parent::__construct();
     $this->qrCodeService = $qrCodeService;
+
+    // Define copy colors for different download counts
+    $this->copyColors = [
+      0 => ['bg' => [200, 50, 50], 'text' => [255, 255, 255], 'label' => 'ORIGINAL'],
+      1 => ['bg' => [0, 150, 200], 'text' => [255, 255, 255], 'label' => 'COPY 1'],
+      2 => ['bg' => [200, 150, 0], 'text' => [255, 255, 255], 'label' => 'COPY 2'],
+      3 => ['bg' => [150, 0, 150], 'text' => [255, 255, 255], 'label' => 'COPY 3'],
+      4 => ['bg' => [0, 150, 0], 'text' => [255, 255, 255], 'label' => 'COPY 4'],
+      5 => ['bg' => [200, 0, 150], 'text' => [255, 255, 255], 'label' => 'COPY 5'],
+    ];
   }
 
   public function render(QuotationRequest $quotation): string
@@ -29,6 +42,11 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
     Log::info('=== PDF GENERATION START ===');
     Log::info('[PDF] Quotation ID: ' . $quotation->id);
     Log::info('[PDF] RFQ Number: ' . $quotation->qtn_number);
+    Log::info('[PDF] Download Count: ' . ($quotation->download_count ?? 0));
+
+    // Store download count for copy labeling
+    $this->downloadCount = $quotation->download_count ?? 0;
+    $this->copyLabel = $this->getCopyLabel($this->downloadCount);
 
     $this->loadCompanyProfile();
     $this->applyCompanyColors();
@@ -46,7 +64,9 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
       $this->addWatermarkText($pdf, $this->watermarkText);
     }
 
+    // ✅ Render CONFIDENTIAL label at top right (replacing COPY label)
     $this->renderConfidentialLabel($pdf);
+
     $this->renderHeader($pdf, $quotation);
     $this->renderQuotationInfo($pdf, $quotation);
     $this->renderRequisitionInfo($pdf, $quotation);
@@ -62,40 +82,89 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
     return $pdf->Output('', 'S');
   }
 
+  /**
+   * Get the copy label based on download count
+   */
+  protected function getCopyLabel(int $downloadCount): string
+  {
+    // After 5 copies, use "COPY N" format
+    if ($downloadCount > 5) {
+      return 'COPY ' . $downloadCount;
+    }
+
+    return $this->copyColors[$downloadCount]['label'] ?? 'ORIGINAL';
+  }
+
+  /**
+   * Get copy colors based on download count
+   */
+  protected function getCopyColor(int $downloadCount): array
+  {
+    if ($downloadCount > 5) {
+      // For copies beyond 5, use a dark gray
+      return [
+        'bg' => [80, 80, 80],
+        'text' => [255, 255, 255],
+        'label' => 'COPY ' . $downloadCount
+      ];
+    }
+
+    return $this->copyColors[$downloadCount] ?? $this->copyColors[0];
+  }
+
+  /**
+   * Render CONFIDENTIAL Label - Top Right, First Page Only
+   * Same position, size, and format as the original COPY label
+   */
+  protected function renderConfidentialLabel(TCPDF $pdf): void
+  {
+    if ($this->copyLabelRendered) {
+      return;
+    }
+
+    $y = 2;
+    $x = 144; // Position at top right (same as original)
+
+    // Same colors as the original COPY label
+    $colors = [
+      'bg' => [200, 50, 50],  // Red background (same as ORIGINAL)
+      'text' => [255, 255, 255] // White text
+    ];
+
+    $pdf->SetY($y);
+    $pdf->SetX($x);
+
+    $pdf->SetFillColor($colors['bg'][0], $colors['bg'][1], $colors['bg'][2]);
+    $pdf->SetTextColor($colors['text'][0], $colors['text'][1], $colors['text'][2]);
+    $pdf->SetFont('helvetica', 'B', 10);
+
+    $label = 'CONFIDENTIAL';
+    // Same width calculation as original
+    $width = strlen($label) * 6 + 10;
+    if ($width < 40) $width = 40;
+    if ($width > 65) $width = 65;
+
+    // Rounded rectangle with border - same as original
+    $pdf->RoundedRect($x, $y, $width, 7, 2, '1111', 'F');
+
+    // Center the text - same as original
+    $pdf->SetXY($x + 2, $y + 1.5);
+    $pdf->Cell($width - 4, 4, $label, 0, 1, 'C');
+
+    // Reset text color
+    $pdf->SetTextColor(0, 0, 0);
+
+    $this->copyLabelRendered = true;
+  }
+
   protected function generateQrCode(string $data): ?string
   {
     return $this->qrCodeService->generateQrCode($data);
   }
 
   /**
-   * Render Confidential Label - Top Right, First Page Only
+   * Render Header with Title moved here
    */
-  protected function renderConfidentialLabel(TCPDF $pdf): void
-  {
-    if ($this->confidentialRendered) {
-      return;
-    }
-
-    $y = 2;
-    $x = 160;
-
-    $pdf->SetY($y);
-    $pdf->SetX($x);
-
-    $pdf->SetFillColor(200, 50, 50);
-    $pdf->SetTextColor(255, 255, 255);
-    $pdf->SetFont('helvetica', 'B', 10);
-
-    $pdf->RoundedRect($x, $y, 35, 6, 2, '1111', 'F');
-
-    $pdf->SetXY($x + 2, $y + 1.5);
-    $pdf->Cell(31, 4, 'CONFIDENTIAL', 0, 1, 'C');
-
-    $pdf->SetTextColor(0, 0, 0);
-
-    $this->confidentialRendered = true;
-  }
-
   protected function renderHeader(TCPDF $pdf, QuotationRequest $quotation): void
   {
     $pdf->SetY(15);
@@ -111,17 +180,25 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
 
     $this->addHeaderLine($pdf, 48);
 
+    // REQUEST FOR QUOTATION
     $pdf->SetY(55);
     $pdf->SetFont('helvetica', 'B', 20);
     $pdf->SetTextColor($this->primary[0], $this->primary[1], $this->primary[2]);
     $pdf->Cell(0, 9, 'REQUEST FOR QUOTATION', 0, 1, 'C');
 
+    // RFQ Number
     $pdf->SetY(64);
     $pdf->SetFont('helvetica', 'B', 16);
     $pdf->SetTextColor($this->secondary[0], $this->secondary[1], $this->secondary[2]);
     $pdf->Cell(0, 9, $quotation->qtn_number, 0, 1, 'C');
 
-    $pdf->SetY(75);
+    // ✅ Title - moved here (below RFQ number)
+    $pdf->SetY(74);
+    $pdf->SetFont('helvetica', 'B', 12);
+    $pdf->SetTextColor($this->textDark[0], $this->textDark[1], $this->textDark[2]);
+    $pdf->Cell(0, 6, $quotation->title, 0, 1, 'C');
+
+    $pdf->SetY(82);
   }
 
   protected function renderQrCode(TCPDF $pdf, QuotationRequest $quotation): void
@@ -195,12 +272,17 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
     $pdf->Cell(80, 5.5, 'Email: ' . $this->getCompanyEmail(), 0, 1, 'R');
   }
 
+  /**
+   * Render Quotation Info - Title removed, replaced with RFQ Type
+   */
   protected function renderQuotationInfo(TCPDF $pdf, QuotationRequest $quotation): void
   {
     $pdf->SetX(15);
     $this->addSectionHeader($pdf, 'REQUEST FOR QUOTATION INFORMATION');
 
-    $this->addFieldPair($pdf, 'Title', $quotation->title, 15, 28, 55, false);
+    // Keep original formatting - no bolding
+    // Title removed - now using RFQ Type instead
+    $this->addFieldPair($pdf, 'RFQ Type', $quotation->type ?? 'Standard', 15, 28, 55, false);
     $this->addFieldPair($pdf, 'Issue Date', $this->formatDate($quotation->issue_date), 110, 30, 0, true);
 
     $this->addFieldPair($pdf, 'Closing Date', $this->formatDate($quotation->closing_date), 15, 28, 55, false);
@@ -216,6 +298,7 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
     $pdf->SetX(15);
     $this->addSectionHeader($pdf, 'REQUISITION INFORMATION');
 
+    // Keep original formatting - no bolding
     $this->addFieldPair($pdf, 'Requisition No.', $requisition->reference_number, 15, 40, 55, false);
     $this->addFieldPair($pdf, 'Department', $requisition->department->name ?? 'N/A', 110, 35, 0, true);
 
@@ -517,7 +600,7 @@ class RequestForQuotationPdfRenderer extends BasePdfRenderer
     $padding = 4;
     $colWidth = ($usableWidth - ($padding * ($numPerRow - 1))) / $numPerRow;
     $qrSize = 18;
-    $rowHeight = 50; // Increased to fit "Scan to verify signature"
+    $rowHeight = 50;
 
     $pdf->SetY($pdf->GetY() + 2);
     $startY = $pdf->GetY();

@@ -217,4 +217,73 @@ class PurchaseOrderRepository extends BaseRepository implements PurchaseOrderRep
     }
     return $item->delete();
   }
+
+  /**
+   * ✅ Check purchase order (HOD)
+   */
+  public function checkPurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder
+  {
+    $po = $this->findPurchaseOrderOrFail($id);
+
+    $po->update([
+      'checked_by' => $userId,
+      'checked_at' => now(),
+    ]);
+
+    return $po->fresh();
+  }
+
+  /**
+   * ✅ Endorse purchase order (Accountant)
+   */
+  public function endorsePurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder
+  {
+    $po = $this->findPurchaseOrderOrFail($id);
+
+    $po->update([
+      'endorsed_by' => $userId,
+      'endorsed_at' => now(),
+    ]);
+
+    return $po->fresh();
+  }
+
+  /**
+   * ✅ Approve purchase order (Director/Finance Admin)
+   */
+  public function approvePurchaseOrder(int $id, int $userId, ?string $comment = null): PurchaseOrder
+  {
+    $po = $this->findPurchaseOrderOrFail($id);
+
+    $po->update([
+      'approved_by' => $userId,
+      'approved_at' => now(),
+      'status' => 'issued',  // Ready to send to supplier
+    ]);
+
+    return $po->fresh();
+  }
+
+  /**
+   * ✅ Get workflow status for a purchase order
+   */
+  public function getWorkflowStatus(int $id): array
+  {
+    $po = $this->findPurchaseOrderOrFail($id);
+
+    return [
+      'id' => $po->id,
+      'po_number' => $po->po_number,
+      'status' => $po->status,
+      'checked_by' => $po->checked_by,
+      'checked_at' => $po->checked_at,
+      'endorsed_by' => $po->endorsed_by,
+      'endorsed_at' => $po->endorsed_at,
+      'approved_by' => $po->approved_by,
+      'approved_at' => $po->approved_at,
+      'checked_by_user' => $po->checkedBy?->full_name,
+      'endorsed_by_user' => $po->endorsedBy?->full_name,
+      'approved_by_user' => $po->approvedBy?->full_name,
+    ];
+  }
 }

@@ -247,7 +247,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('suppliers')->group(function () {
       Route::get('/me', [SupplierController::class, 'me']);
 
-      Route::middleware(['role:ADMIN,PROCUREMENT,HOD,ACCOUNTANT,PRINCIPAL,FINAL APPROVER,HEAD OF INSTITUTION,SUPPLIER'])->group(function () {
+      Route::middleware(['role:ADMIN,PROCUREMENT,HOD,ACCOUNTANT,PRINCIPAL,FINAL_APPROVER,HEAD OF INSTITUTION,SUPPLIER,STAFF'])->group(function () {
         Route::get('/', [SupplierController::class, 'index']);
         Route::get('/active', [SupplierController::class, 'active']);
         Route::get('/stats', [SupplierController::class, 'stats']);
@@ -427,21 +427,45 @@ Route::prefix('v1')->group(function () {
 
       // PDF Routes
       Route::get('/{id}/download-pdf', [RequestForQuotationController::class, 'downloadPDF']);      // Download as attachment
+      Route::post('/{id}/track-download', [RequestForQuotationController::class, 'trackDownload']);
       Route::get('/{id}/preview-pdf', [RequestForQuotationController::class, 'previewPDF']);        // Preview inline
       Route::get('/{id}/base64-pdf', [RequestForQuotationController::class, 'getBase64PDF']);       // Base64 for emails
     });
 
-    // --------------------------------------------
-    // SUPPLIER QUOTATION ROUTES
-    // --------------------------------------------
-    Route::prefix('supplier-quotations')->group(function () {
-      Route::get('/', [SupplierQuotationController::class, 'index']);
-      Route::post('/', [SupplierQuotationController::class, 'store']);
-      Route::get('/lowest/{qtnId}', [SupplierQuotationController::class, 'lowest']);
-      Route::get('/{id}', [SupplierQuotationController::class, 'show']);
-      Route::post('/{id}/verify', [SupplierQuotationController::class, 'verify']);
-      Route::post('/{id}/evaluate', [SupplierQuotationController::class, 'evaluate']);
-    });
+
+      // ============================================
+      // SUPPLIER QUOTATION ROUTES
+      // ============================================
+      Route::prefix('supplier-quotations')->group(function () {
+          // CRUD Operations
+          Route::get('/', [SupplierQuotationController::class, 'index']);
+          Route::post('/', [SupplierQuotationController::class, 'store']);
+          Route::get('/lowest/{qtnId}', [SupplierQuotationController::class, 'lowest']);
+          Route::get('/{id}', [SupplierQuotationController::class, 'show']);
+
+          // Verification & Evaluation
+          Route::post('/{id}/verify', [SupplierQuotationController::class, 'verify']);
+          Route::post('/{id}/evaluate', [SupplierQuotationController::class, 'evaluate']);
+
+          // ============================================
+          // PDF GENERATION ROUTES
+          // ============================================
+
+          // Download PDF
+          Route::get('/{id}/download-pdf', [SupplierQuotationController::class, 'downloadPDF']);
+          Route::post('/{id}/track-download', [SupplierQuotationController::class, 'trackDownload']);
+          Route::get('/{id}/download-verified', [SupplierQuotationController::class, 'downloadVerifiedPDF']);
+          Route::get('/{id}/download-draft', [SupplierQuotationController::class, 'downloadDraftPDF']);
+
+          // Preview PDF (inline display)
+          Route::get('/{id}/preview-pdf', [SupplierQuotationController::class, 'previewPDF']);
+
+          // Base64 PDF (for email attachments)
+          Route::get('/{id}/base64-pdf', [SupplierQuotationController::class, 'getBase64PDF']);
+
+          // Save PDF to storage
+          Route::post('/{id}/save-pdf', [SupplierQuotationController::class, 'savePDF']);
+      });
 
     // --------------------------------------------
     // PURCHASE ORDER ROUTES
@@ -453,7 +477,16 @@ Route::prefix('v1')->group(function () {
       Route::get('/{id}', [PurchaseOrderController::class, 'show']);
       Route::get('/{id}/summary', [PurchaseOrderController::class, 'summary']);
       Route::get('/{id}/delivery-progress', [PurchaseOrderController::class, 'deliveryProgress']);
-      Route::get('/{id}/pdf', [PurchaseOrderController::class, 'pdf']);
+      Route::get('/{id}/pdf', [PurchaseOrderController::class, 'downloadPDF']);
+      Route::post('/{id}/track-download', [PurchaseOrderController::class, 'trackDownload']);
+      Route::get('/{id}/download-verified', [PurchaseOrderController::class, 'downloadVerifiedPDF']);
+      Route::get('/{id}/download-draft', [PurchaseOrderController::class, 'downloadDraftPDF']);
+      Route::get('/{id}/preview-pdf', [PurchaseOrderController::class, 'previewPDF']);
+      Route::post('/{id}/check', [PurchaseOrderController::class, 'check']);        // HOD
+      Route::post('/{id}/endorse', [PurchaseOrderController::class, 'endorse']);    // Accountant
+      Route::post('/{id}/approve', [PurchaseOrderController::class, 'approve']);    // Director/Finance Admin
+      Route::get('/{id}/workflow', [PurchaseOrderController::class, 'workflow']);   // Get workflow status
+      Route::get('/{id}/base64-pdf', [PurchaseOrderController::class, 'getBase64PDF']);
       Route::post('/{id}/approve', [PurchaseOrderController::class, 'approve']);
       Route::post('/{id}/issue', [PurchaseOrderController::class, 'issue']);
       Route::post('/{id}/send', [PurchaseOrderController::class, 'sendToSupplier']);
@@ -464,18 +497,9 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::prefix('company')->middleware(['auth:sanctum'])->group(function () {
-      // GET: Fetch the company profile (returns existing or default)
       Route::get('/profile', [CompanyProfileController::class, 'index']);
-
-      // POST: Create or update the company profile
-      // - If no profile exists, it creates one
-      // - If a profile exists, it updates it
       Route::post('/profile', [CompanyProfileController::class, 'save']);
-
-      // DELETE: Remove the company logo
       Route::delete('/profile/logo', [CompanyProfileController::class, 'deleteLogo']);
-
-      // Add these new routes
       Route::get('/completion', [CompanyProfileController::class, 'getCompletionStatus']);
       Route::get('/settings', [CompanyProfileController::class, 'getSettings']);
       Route::put('/settings', [CompanyProfileController::class, 'updateSettings']);

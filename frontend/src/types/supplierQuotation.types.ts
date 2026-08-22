@@ -49,6 +49,8 @@ export interface SupplierQuotation {
   delivery_terms: string | null;
   warranty_terms: string | null;
   total_amount: number;
+  download_count:number,
+  upload:string,
   formatted_total_amount: string;
   tax_amount: number;
   discount_amount: number;

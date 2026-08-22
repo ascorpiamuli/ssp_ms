@@ -8,6 +8,7 @@ namespace App\Services\Procurement\Repositories;
 use App\Models\QuotationRequest;
 use App\Models\SupplierQuotation;
 use App\Models\SupplierQuotationItem;
+use App\Models\Upload;
 use App\Services\Procurement\Contracts\Repositories\QuotationRepositoryInterface;
 use App\Services\Procurement\Repositories\BaseRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -20,51 +21,62 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
     parent::__construct(new QuotationRequest());
   }
 
+  /**
+   * Add upload relationship to supplier quotation query if pdf_upload_id exists
+   */
+  protected function withUploadIfExists($query)
+  {
+    return $query->with(['supplier', 'quotationRequest', 'items', 'pdfUpload']);
+  }
+
   public function findQuotationRequest(int $id): ?QuotationRequest
   {
-    return QuotationRequest::with(['requisition', 'supplierQuotations.supplier', 'generatedBy'])
+    return QuotationRequest::with(['requisition', 'supplierQuotations.supplier', 'supplierQuotations.pdfUpload', 'generatedBy'])
       ->find($id);
   }
 
   public function findQuotationRequestOrFail(int $id): QuotationRequest
   {
-    return QuotationRequest::with(['requisition', 'supplierQuotations.supplier', 'generatedBy'])
+    return QuotationRequest::with(['requisition', 'supplierQuotations.supplier', 'supplierQuotations.pdfUpload', 'generatedBy'])
       ->findOrFail($id);
   }
 
   public function findSupplierQuotation(int $id): ?SupplierQuotation
   {
-    return SupplierQuotation::with(['quotationRequest', 'supplier', 'items'])
+    return SupplierQuotation::with(['quotationRequest', 'supplier', 'items', 'pdfUpload'])
       ->find($id);
   }
 
   public function findSupplierQuotationOrFail(int $id): SupplierQuotation
   {
-    return SupplierQuotation::with(['quotationRequest', 'supplier', 'items'])
+    return SupplierQuotation::with(['quotationRequest', 'supplier', 'items', 'pdfUpload'])
       ->findOrFail($id);
   }
 
   public function getQuotationRequestsForRequisition(int $requisitionId): array
   {
-    return QuotationRequest::where('requisition_id', $requisitionId)
+    $requests = QuotationRequest::where('requisition_id', $requisitionId)
+      ->with(['supplierQuotations.pdfUpload'])
       ->orderBy('created_at', 'desc')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($requests);
   }
 
   /**
    * Get all supplier quotations for a specific QTN (Quotation Request)
    *
    * @param int $qtnId The QTN ID
-   * @return array Array of supplier quotations with supplier and items
+   * @return array Array of supplier quotations with supplier, items, and upload
    */
   public function getSupplierQuotationsForQtn(int $qtnId): array
   {
-    return SupplierQuotation::where('quotation_request_id', $qtnId)
-      ->with(['supplier', 'items'])
+    $quotations = SupplierQuotation::where('quotation_request_id', $qtnId)
+      ->with(['supplier', 'items', 'pdfUpload'])
       ->orderBy('net_amount')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
@@ -78,6 +90,7 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
     return SupplierQuotation::where('quotation_request_id', $qtnId)
       ->where('status', 'submitted')
       ->where('verification_status', 'verified')
+      ->with(['pdfUpload'])
       ->orderBy('net_amount')
       ->first();
   }
@@ -86,26 +99,27 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
    * Get all quotations for a specific supplier
    *
    * @param int $supplierId The supplier ID
-   * @return array Array of supplier quotations with quotation request
+   * @return array Array of supplier quotations with quotation request and upload
    */
   public function getQuotationsBySupplier(int $supplierId): array
   {
-    return SupplierQuotation::where('supplier_id', $supplierId)
-      ->with(['quotationRequest', 'items'])
+    $quotations = SupplierQuotation::where('supplier_id', $supplierId)
+      ->with(['quotationRequest', 'items', 'pdfUpload'])
       ->orderBy('created_at', 'desc')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
    * Get all supplier quotations with optional filters
    *
    * @param array $filters Optional filters (status, verification_status, date range, etc.)
-   * @return array Array of supplier quotations
+   * @return array Array of supplier quotations with upload data
    */
   public function getAllSupplierQuotations(array $filters = []): array
   {
-    $query = SupplierQuotation::with(['supplier', 'quotationRequest', 'items']);
+    $query = SupplierQuotation::with(['supplier', 'quotationRequest', 'items', 'pdfUpload']);
 
     // Apply filters if provided
     if (!empty($filters['status'])) {
@@ -150,7 +164,8 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
       $query->limit((int) $filters['limit']);
     }
 
-    return $query->get()->toArray();
+    $quotations = $query->get();
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
@@ -158,11 +173,11 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
    *
    * @param int $perPage Number of items per page
    * @param array $filters Optional filters
-   * @return LengthAwarePaginator Paginated results
+   * @return LengthAwarePaginator Paginated results with upload data
    */
   public function paginateSupplierQuotations(int $perPage = 15, array $filters = []): LengthAwarePaginator
   {
-    $query = SupplierQuotation::with(['supplier', 'quotationRequest', 'items']);
+    $query = SupplierQuotation::with(['supplier', 'quotationRequest', 'items', 'pdfUpload']);
 
     // Apply filters
     if (!empty($filters['status'])) {
@@ -194,7 +209,57 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
     $sortOrder = $filters['sort_order'] ?? 'desc';
     $query->orderBy($sortBy, $sortOrder);
 
-    return $query->paginate($perPage);
+    $paginator = $query->paginate($perPage);
+
+    // Transform the items to include upload data
+    $items = $this->toArrayWithUploads($paginator->items());
+    $paginator->setCollection(collect($items));
+
+    return $paginator;
+  }
+
+  /**
+   * Convert collection to array with upload data included
+   */
+  protected function toArrayWithUploads($items): array
+  {
+    if ($items instanceof \Illuminate\Support\Collection) {
+      $items = $items->toArray();
+    }
+
+    // If it's already an array, process each item
+    if (is_array($items)) {
+      foreach ($items as &$item) {
+        $item = $this->addUploadData($item);
+      }
+    }
+
+    return $items;
+  }
+
+  /**
+   * Add upload data to a single item array if pdf_upload_id exists
+   */
+  protected function addUploadData(array $item): array
+  {
+    // Check if pdf_upload_id exists and is not null
+    if (isset($item['pdf_upload_id']) && !empty($item['pdf_upload_id'])) {
+      // If the upload relationship was loaded, get the upload data
+      if (isset($item['pdf_upload']) && !empty($item['pdf_upload'])) {
+        $item['upload'] = $item['pdf_upload'];
+      } else {
+        // Try to fetch the upload directly if not loaded
+        $upload = Upload::find($item['pdf_upload_id']);
+        if ($upload) {
+          $item['upload'] = $upload->toArray();
+        }
+      }
+    }
+
+    // Remove the pdf_upload key from the item (it's already used)
+    unset($item['pdf_upload']);
+
+    return $item;
   }
 
   public function createQuotationRequest(array $data): QuotationRequest
@@ -228,37 +293,42 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
 
   public function getActiveQtns(): array
   {
-    return QuotationRequest::whereIn('status', ['sent', 'responded', 'evaluating'])
-      ->with(['requisition'])
+    $qtns = QuotationRequest::whereIn('status', ['sent', 'responded', 'evaluating'])
+      ->with(['requisition', 'supplierQuotations.pdfUpload'])
       ->orderBy('closing_date')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $qtns->toArray();
   }
 
   public function getExpiredQtns(): array
   {
-    return QuotationRequest::whereDate('closing_date', '<', now())
+    $qtns = QuotationRequest::whereDate('closing_date', '<', now())
       ->whereNotIn('status', ['closed', 'cancelled'])
-      ->with(['requisition'])
-      ->get()
-      ->toArray();
+      ->with(['requisition', 'supplierQuotations.pdfUpload'])
+      ->get();
+
+    return $qtns->toArray();
   }
 
   public function getQtnsClosingSoon(int $days = 2): array
   {
-    return QuotationRequest::whereDate('closing_date', '<=', now()->addDays($days))
+    $qtns = QuotationRequest::whereDate('closing_date', '<=', now()->addDays($days))
       ->whereDate('closing_date', '>=', now())
       ->whereIn('status', ['sent', 'responded'])
-      ->with(['requisition'])
-      ->get()
-      ->toArray();
+      ->with(['requisition', 'supplierQuotations.pdfUpload'])
+      ->get();
+
+    return $qtns->toArray();
   }
 
   public function paginateQtns(int $perPage = 15): LengthAwarePaginator
   {
-    return QuotationRequest::with(['requisition', 'generatedBy'])
+    $paginator = QuotationRequest::with(['requisition', 'generatedBy', 'supplierQuotations.pdfUpload'])
       ->orderBy('created_at', 'desc')
       ->paginate($perPage);
+
+    return $paginator;
   }
 
   public function hasSupplierResponded(int $qtnId, int $supplierId): bool
@@ -297,27 +367,29 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
 
   public function getQuotationsPendingVerification(): array
   {
-    return SupplierQuotation::where('verification_status', 'pending')
+    $quotations = SupplierQuotation::where('verification_status', 'pending')
       ->where('status', 'submitted')
-      ->with(['quotationRequest', 'supplier'])
+      ->with(['quotationRequest', 'supplier', 'pdfUpload'])
       ->orderBy('created_at')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   public function getQuotationsPendingEvaluation(): array
   {
-    return SupplierQuotation::where('status', 'submitted')
+    $quotations = SupplierQuotation::where('status', 'submitted')
       ->where('verification_status', 'verified')
-      ->with(['quotationRequest', 'supplier'])
+      ->with(['quotationRequest', 'supplier', 'pdfUpload'])
       ->orderBy('created_at')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   public function getSupplierQuotationWithItems(int $quotationId): SupplierQuotation
   {
-    return SupplierQuotation::with(['items', 'supplier', 'quotationRequest'])
+    return SupplierQuotation::with(['items', 'supplier', 'quotationRequest', 'pdfUpload'])
       ->findOrFail($quotationId);
   }
 
@@ -325,30 +397,32 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
    * Get supplier quotations by status
    *
    * @param string $status The status to filter by
-   * @return array Array of supplier quotations
+   * @return array Array of supplier quotations with upload data
    */
   public function getQuotationsByStatus(string $status): array
   {
-    return SupplierQuotation::where('status', $status)
-      ->with(['supplier', 'quotationRequest'])
+    $quotations = SupplierQuotation::where('status', $status)
+      ->with(['supplier', 'quotationRequest', 'pdfUpload'])
       ->orderBy('created_at', 'desc')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
    * Get verified quotations
    *
-   * @return array Array of verified supplier quotations
+   * @return array Array of verified supplier quotations with upload data
    */
   public function getVerifiedQuotations(): array
   {
-    return SupplierQuotation::where('verification_status', 'verified')
+    $quotations = SupplierQuotation::where('verification_status', 'verified')
       ->where('status', 'submitted')
-      ->with(['supplier', 'quotationRequest'])
+      ->with(['supplier', 'quotationRequest', 'pdfUpload'])
       ->orderBy('net_amount')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
@@ -362,6 +436,7 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
     return SupplierQuotation::where('quotation_request_id', $qtnId)
       ->where('status', 'submitted')
       ->where('verification_status', 'verified')
+      ->with(['pdfUpload'])
       ->orderBy('net_amount', 'desc')
       ->first();
   }
@@ -413,16 +488,17 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
    *
    * @param string $startDate Start date (Y-m-d)
    * @param string $endDate End date (Y-m-d)
-   * @return array Array of supplier quotations
+   * @return array Array of supplier quotations with upload data
    */
   public function getQuotationsByDateRange(string $startDate, string $endDate): array
   {
-    return SupplierQuotation::whereDate('submission_date', '>=', $startDate)
+    $quotations = SupplierQuotation::whereDate('submission_date', '>=', $startDate)
       ->whereDate('submission_date', '<=', $endDate)
-      ->with(['supplier', 'quotationRequest'])
+      ->with(['supplier', 'quotationRequest', 'pdfUpload'])
       ->orderBy('submission_date')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**
@@ -430,18 +506,19 @@ class QuotationRepository extends BaseRepository implements QuotationRepositoryI
    *
    * @param float $minAmount Minimum amount
    * @param float $maxAmount Maximum amount
-   * @return array Array of supplier quotations
+   * @return array Array of supplier quotations with upload data
    */
   public function getQuotationsByAmountRange(float $minAmount, float $maxAmount): array
   {
-    return SupplierQuotation::where('net_amount', '>=', $minAmount)
+    $quotations = SupplierQuotation::where('net_amount', '>=', $minAmount)
       ->where('net_amount', '<=', $maxAmount)
       ->where('status', 'submitted')
       ->where('verification_status', 'verified')
-      ->with(['supplier', 'quotationRequest'])
+      ->with(['supplier', 'quotationRequest', 'pdfUpload'])
       ->orderBy('net_amount')
-      ->get()
-      ->toArray();
+      ->get();
+
+    return $this->toArrayWithUploads($quotations);
   }
 
   /**

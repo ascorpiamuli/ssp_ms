@@ -107,6 +107,11 @@ import {
 // Types
 import type { Requisition, RequisitionFilters, RequisitionHistory } from '@/types/requisition.types';
 
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -196,7 +201,6 @@ const ITEMS_PER_PAGE = 10;
 // HELPERS
 // ============================================
 
-// Safe get helper for nested properties - returns any with proper fallback
 const safeGet = (obj: any, path: string, fallback: any = null): any => {
   if (!obj || typeof obj !== 'object') return fallback;
   const keys = path.split('.');
@@ -210,13 +214,11 @@ const safeGet = (obj: any, path: string, fallback: any = null): any => {
   return (result === undefined || result === null) ? fallback : result;
 };
 
-// Safe check if value equals target
 const safeEquals = (obj: any, path: string, target: string): boolean => {
   const value = safeGet(obj, path, '');
   return String(value) === target;
 };
 
-// Stage weights for completion calculation
 const STAGE_WEIGHTS: Record<string, number> = {
   'initiated': 10,
   'quotation_in_progress': 25,
@@ -340,7 +342,6 @@ const isProcurementComplete = (requisition: Requisition): boolean => {
       requisition.metadata?.cheque_issued === true);
 };
 
-// Get procurement progress from summary
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
 
@@ -350,11 +351,9 @@ const getProcurementProgress = (summary: any): number => {
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
 
-  // Use stage weights if status is known
   if (status && STAGE_WEIGHTS[status]) {
     let progress = STAGE_WEIGHTS[status];
 
-    // Add extra progress for completed steps within the stage
     const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
     if (status === 'evaluating_quotations' && String(sqStatus) === 'completed') {
       progress += 5;
@@ -368,10 +367,8 @@ const getProcurementProgress = (summary: any): number => {
     return Math.min(progress, 99);
   }
 
-  // Fallback: calculate from steps
   let progress = 0;
 
-  // Quotation step
   const qtnStatus = safeGet(steps, 'quotation.status', '');
   if (String(qtnStatus) === 'closed' || String(qtnStatus) === 'completed') {
     progress += 20;
@@ -379,7 +376,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 15;
   }
 
-  // Supplier quotations step
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const sqReceived = safeGet(steps, 'supplier_quotations.quotes_received', 0);
   if (String(sqStatus) === 'completed') {
@@ -388,7 +384,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 15;
   }
 
-  // Supplier selection step
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   if (String(ssStatus) === 'completed') {
     progress += 20;
@@ -396,7 +391,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // PO generation step
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   if (String(pgStatus) === 'completed') {
     progress += 15;
@@ -404,7 +398,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // Delivery step
   const delStatus = safeGet(steps, 'delivery.status', '');
   if (String(delStatus) === 'completed') {
     progress += 15;
@@ -412,7 +405,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // Payment step
   const payStatus = safeGet(steps, 'payment.status', '');
   if (String(payStatus) === 'completed') {
     progress += 10;
@@ -446,7 +438,6 @@ const getProcurementStatusLabel = (summary: any): string => {
 
   if (statusMap[status]) return statusMap[status];
 
-  // Fallback based on steps
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   const pgStatus = safeGet(steps, 'po_generation.status', '');
@@ -677,160 +668,6 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
 };
 
 // ============================================
-// STATS CARDS
-// ============================================
-
-interface StatsCardsProps {
-  requisitions: Requisition[];
-  isLoading: boolean;
-}
-
-const StatsCards = ({ requisitions, isLoading }: StatsCardsProps) => {
-  const stats = useMemo(() => {
-    if (!requisitions || requisitions.length === 0) {
-      return {
-        total: 0,
-        pending: 0,
-        approved: 0,
-        declined: 0,
-        returned: 0,
-        cancelled: 0,
-        readyForProcurement: 0,
-        inProcurement: 0,
-        procurementComplete: 0,
-      };
-    }
-
-    const submitted = requisitions.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
-    const total = submitted.length;
-    const pending = submitted.filter(r =>
-      r.status === 'submitted' ||
-      r.status === 'hod_approved' ||
-      r.status === 'accountant_approved' ||
-      r.status === 'principal_approved'
-    ).length;
-    const approved = submitted.filter(r => r.status === 'final_approved').length;
-    const declined = submitted.filter(r =>
-      r.status === 'hod_declined' ||
-      r.status === 'accountant_declined' ||
-      r.status === 'principal_declined' ||
-      r.status === 'final_declined'
-    ).length;
-    const returned = submitted.filter(r => r.status === 'returned').length;
-    const cancelled = requisitions.filter(r => r.status === 'cancelled').length;
-
-    // Procurement stats
-    const readyForProcurement = requisitions.filter(r =>
-      r.status === 'final_approved' &&
-      !hasProcurementStarted(r) &&
-      !isProcurementComplete(r)
-    ).length;
-
-    const inProcurement = requisitions.filter(r =>
-      r.status === 'final_approved' &&
-      hasProcurementStarted(r) &&
-      !isProcurementComplete(r)
-    ).length;
-
-    const procurementComplete = requisitions.filter(r =>
-      r.status === 'final_approved' &&
-      isProcurementComplete(r)
-    ).length;
-
-    return {
-      total,
-      pending,
-      approved,
-      declined,
-      returned,
-      cancelled,
-      readyForProcurement,
-      inProcurement,
-      procurementComplete,
-    };
-  }, [requisitions]);
-
-  const statItems = useMemo(() => [
-    {
-      label: 'Total Submitted',
-      value: stats.total,
-      icon: FileText,
-      color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400',
-      description: 'All submitted requisitions'
-    },
-    {
-      label: 'Pending Approval',
-      value: stats.pending,
-      icon: Clock,
-      color: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-400',
-      description: 'In approval process'
-    },
-    {
-      label: 'Approved',
-      value: stats.approved,
-      icon: CheckCircle,
-      color: 'text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400',
-      description: 'Fully approved'
-    },
-    {
-      label: 'Ready for Procurement',
-      value: stats.readyForProcurement,
-      icon: ShoppingCart,
-      color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400',
-      description: 'Approved, not started'
-    },
-    {
-      label: 'In Procurement',
-      value: stats.inProcurement,
-      icon: Activity,
-      color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400',
-      description: 'In progress'
-    },
-    {
-      label: 'Procurement Complete',
-      value: stats.procurementComplete,
-      icon: CheckCircle,
-      color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400',
-      description: 'Fully completed'
-    },
-  ], [stats]);
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i} className="animate-pulse border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="h-4 bg-gray-200 rounded dark:bg-gray-700 w-2/3 mb-2" />
-              <div className="h-8 bg-gray-200 rounded dark:bg-gray-700 w-1/2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {statItems.map((item) => (
-        <Card key={item.label} className="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
-              <div className={cn("p-2 rounded-xl", item.color)}>
-                <item.icon className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold mt-2">{item.value}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{item.description}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-};
-
-// ============================================
 // HISTORY DETAILS CARD
 // ============================================
 
@@ -908,8 +745,9 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
   }
 
   return (
-    <Card className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20 rounded-xl">
-      <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 rounded-t-xl">
+    <Card className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20 rounded-xl relative">
+      <WrappedCornerTag label="HISTORY" color="blue" position="top-left" size="lg" />
+      <CardHeader className="pb-3 pt-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 rounded-t-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/50">
@@ -1106,8 +944,9 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
-      <CardContent className="p-4">
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl relative">
+      <HorizontalCornerTag label="FILTERS" color="blue" position="top-left" size="sm" variant="rounded" />
+      <CardContent className="p-4 pt-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
@@ -1318,6 +1157,14 @@ const HistoryTable = ({
               const isHistoryExpanded = expandedHistoryId === req.id;
               const procurementStarted = hasProcurementStarted(req);
               const procurementComplete = isProcurementComplete(req);
+              const statusColor = isApproved ? 'emerald' :
+                isCancelledStatus ? 'gray' :
+                  isDeclined ? 'red' :
+                    isReturned ? 'amber' :
+                      req.status === 'submitted' ? 'blue' :
+                        req.status === 'hod_approved' ? 'indigo' :
+                          req.status === 'accountant_approved' ? 'purple' :
+                            req.status === 'principal_approved' ? 'teal' : 'gray';
 
               return (
                 <React.Fragment key={req.id}>
@@ -1587,21 +1434,8 @@ export default function RequisitionHistoryPage() {
   const data = filterSubmittedOnly(rawData);
   const isLoading = allRequisitionsQuery.isLoading || departmentsLoading;
 
-  const stats = useMemo(() => {
-    if (!rawData || rawData.length === 0) {
-      return {
-        total: 0,
-        pending: 0,
-        approved: 0,
-        declined: 0,
-        returned: 0,
-        cancelled: 0,
-        readyForProcurement: 0,
-        inProcurement: 0,
-        procurementComplete: 0,
-      };
-    }
-
+  // Build stats for StatsCards component
+  const statsItems: StatCardItem[] = useMemo(() => {
     const submitted = rawData.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
     const total = submitted.length;
     const pending = submitted.filter(r =>
@@ -1637,17 +1471,56 @@ export default function RequisitionHistoryPage() {
       isProcurementComplete(r)
     ).length;
 
-    return {
-      total,
-      pending,
-      approved,
-      declined,
-      returned,
-      cancelled,
-      readyForProcurement,
-      inProcurement,
-      procurementComplete,
-    };
+    return [
+      {
+        label: "Total Submitted",
+        value: total,
+        icon: FileText,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All submitted requisitions",
+      },
+      {
+        label: "Pending Approval",
+        value: pending,
+        icon: Clock,
+        tagLabel: "PENDING",
+        tagColor: "amber",
+        subtitle: "In approval process",
+      },
+      {
+        label: "Approved",
+        value: approved,
+        icon: CheckCircle,
+        tagLabel: "APPROVED",
+        tagColor: "emerald",
+        subtitle: "Fully approved",
+      },
+      {
+        label: "Ready for Procurement",
+        value: readyForProcurement,
+        icon: ShoppingCart,
+        tagLabel: "READY",
+        tagColor: "blue",
+        subtitle: "Approved, not started",
+      },
+      {
+        label: "In Procurement",
+        value: inProcurement,
+        icon: Activity,
+        tagLabel: "ACTIVE",
+        tagColor: "amber",
+        subtitle: "In progress",
+      },
+      {
+        label: "Procurement Complete",
+        value: procurementComplete,
+        icon: CheckCircle,
+        tagLabel: "DONE",
+        tagColor: "emerald",
+        subtitle: "Fully completed",
+      },
+    ];
   }, [rawData]);
 
   const procurementReady = useMemo(() => {
@@ -1746,8 +1619,9 @@ export default function RequisitionHistoryPage() {
     >
       {/* Info Banner - Procurement Ready */}
       {procurementReady > 0 && canManageProcurement && (
-        <Card className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm">
-          <CardContent className="p-4">
+        <Card className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm relative">
+          <HorizontalCornerTag label="READY" color="blue" position="top-left" size="sm" variant="rounded" />
+          <CardContent className="p-4 pt-6">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex-shrink-0">
                 <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -1776,7 +1650,15 @@ export default function RequisitionHistoryPage() {
         </Card>
       )}
 
-      <StatsCards requisitions={rawData} isLoading={isLoading} />
+      {/* Stats Cards - Using the component with no tags */}
+      <StatsCards
+        stats={statsItems}
+        isLoading={isLoading}
+        columns={6}
+        variant="default"
+        formatCompact={true}
+        tagOrientation="none"
+      />
 
       <div className="mt-6">
         <Filters

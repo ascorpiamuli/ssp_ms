@@ -16,6 +16,53 @@ export type PurchaseOrderStatus =
   | 'cancelled'
   | 'closed';
 
+// frontend/src/types/purchaseOrder.types.ts
+
+// ... existing types ...
+
+export type PurchaseOrderWorkflowStatus =
+  | 'draft'
+  | 'pending_check'
+  | 'pending_endorsement'
+  | 'pending_approval'
+  | 'issued'
+  | 'sent'
+  | 'acknowledged'
+  | 'delivered'
+  | 'partial'
+  | 'completed'
+  | 'cancelled'
+  | 'closed';
+
+export interface PurchaseOrderWorkflow {
+  id: number;
+  po_number: string;
+  status: PurchaseOrderWorkflowStatus;
+  checked_by: number | null;
+  checked_at: string | null;
+  endorsed_by: number | null;
+  endorsed_at: string | null;
+  approved_by: number | null;
+  approved_at: string | null;
+  checked_by_user: string | null;
+  endorsed_by_user: string | null;
+  approved_by_user: string | null;
+  can_check: boolean;
+  can_endorse: boolean;
+  can_approve: boolean;
+  can_download: boolean;
+  can_issue: boolean;
+  can_send: boolean;
+  can_cancel: boolean;
+  can_complete: boolean;
+  is_checkable: boolean;
+  is_endorsable: boolean;
+  is_approvable: boolean;
+  current_step: 'check' | 'endorse' | 'approve' | 'issue' | 'send' | 'complete' | 'done';
+  next_action: string | null;
+  missing_signature: string | null;
+}
+
 export interface PurchaseOrderItem {
   id: number;
   purchase_order_id: number;
@@ -69,6 +116,7 @@ export interface PurchaseOrder {
   type: PurchaseOrderType;
   type_label: string;
   type_color: string;
+  download_count:number,
   is_lpo: boolean;
   is_lso: boolean;
   title: string;

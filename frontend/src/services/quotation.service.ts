@@ -321,6 +321,180 @@ export const quotationService = {
 
     window.location.href = mailtoLink;
   },
+
+  /**
+   * Download verified QTN as PDF
+   *
+   * @param id - The QTN ID
+   * @param customFilename - Optional custom filename
+   */
+  downloadVerifiedPDF: async (id: number, customFilename?: string): Promise<void> => {
+    const client = api.getClient();
+    const response = await client.get(`${BASE_URL}/${id}/download-verified`, {
+      responseType: 'blob',
+    });
+
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = extractFilenameFromHeader(contentDisposition);
+    if (!filename) {
+      filename = customFilename || `QTN-${id}-verified.pdf`;
+    }
+
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Download draft QTN as PDF
+   *
+   * @param id - The QTN ID
+   * @param customFilename - Optional custom filename
+   */
+  downloadDraftPDF: async (id: number, customFilename?: string): Promise<void> => {
+    const client = api.getClient();
+    const response = await client.get(`${BASE_URL}/${id}/download-draft`, {
+      responseType: 'blob',
+    });
+
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = extractFilenameFromHeader(contentDisposition);
+    if (!filename) {
+      filename = customFilename || `QTN-${id}-draft.pdf`;
+    }
+
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  // ============================================================
+  // TRACKING METHODS
+  // ============================================================
+
+  /**
+   * ✅ Track RFQ download (increments download count without returning file)
+   *
+   * @param id - The QTN ID
+   * @returns Promise<{ download_count: number; last_downloaded_at: string }>
+   */
+  trackDownload: async (id: number): Promise<{ download_count: number; last_downloaded_at: string }> => {
+    const response = await api.post<{
+      success: boolean;
+      data: { download_count: number; last_downloaded_at: string };
+      message: string;
+    }>(`${BASE_URL}/${id}/track-download`);
+
+    return response.data;
+  },
+
+  /**
+   * ✅ Track download and then download the PDF
+   * Combines tracking and downloading in one call
+   *
+   * @param id - The QTN ID
+   * @param customFilename - Optional custom filename
+   */
+  trackAndDownloadPDF: async (id: number, customFilename?: string): Promise<void> => {
+    // Track the download first
+    await quotationService.trackDownload(id);
+    // Then download the PDF
+    await quotationService.downloadPDFDirect(id, customFilename);
+  },
+
+  /**
+   * Get download statistics for a specific RFQ
+   *
+   * @param id - The QTN ID
+   * @returns Promise<{ download_count: number; last_downloaded_at: string; view_count: number; last_viewed_at: string; shared_count: number; last_shared_at: string }>
+   */
+  getDownloadStats: async (id: number): Promise<{
+    download_count: number;
+    last_downloaded_at: string;
+    view_count: number;
+    last_viewed_at: string;
+    shared_count: number;
+    last_shared_at: string;
+  }> => {
+    const response = await api.get<{
+      success: boolean;
+      data: {
+        download_count: number;
+        last_downloaded_at: string;
+        view_count: number;
+        last_viewed_at: string;
+        shared_count: number;
+        last_shared_at: string;
+      };
+      message: string;
+    }>(`${BASE_URL}/${id}/download-stats`);
+
+    return response.data;
+  },
+
+  /**
+   * ✅ Track RFQ view (without downloading)
+   *
+   * @param id - The QTN ID
+   * @returns Promise<{ view_count: number; last_viewed_at: string }>
+   */
+  trackView: async (id: number): Promise<{ view_count: number; last_viewed_at: string }> => {
+    const response = await api.post<{
+      success: boolean;
+      data: { view_count: number; last_viewed_at: string };
+      message: string;
+    }>(`${BASE_URL}/${id}/track-view`);
+
+    return response.data;
+  },
+
+  /**
+   * ✅ Track RFQ share
+   *
+   * @param id - The QTN ID
+   * @param shareData - Share data (method, recipient, etc.)
+   * @returns Promise<{ shared_count: number; last_shared_at: string }>
+   */
+  trackShare: async (
+    id: number,
+    shareData?: { share_method?: string; recipient?: string }
+  ): Promise<{ shared_count: number; last_shared_at: string }> => {
+    const response = await api.post<{
+      success: boolean;
+      data: { shared_count: number; last_shared_at: string };
+      message: string;
+    }>(`${BASE_URL}/${id}/track-share`, shareData);
+
+    return response.data;
+  },
+
+  /**
+   * ✅ Bulk track multiple downloads
+   *
+   * @param ids - Array of QTN IDs
+   * @returns Promise<Array<{ id: number; qtn_number: string; old_count: number; new_count: number }>>
+   */
+  bulkTrackDownloads: async (ids: number[]): Promise<
+    Array<{ id: number; qtn_number: string; old_count: number; new_count: number }>
+  > => {
+    const response = await api.post<{
+      success: boolean;
+      data: Array<{ id: number; qtn_number: string; old_count: number; new_count: number }>;
+      message: string;
+    }>(`${BASE_URL}/bulk-track-downloads`, { ids });
+
+    return response.data;
+  },
 };
 
 export default quotationService;

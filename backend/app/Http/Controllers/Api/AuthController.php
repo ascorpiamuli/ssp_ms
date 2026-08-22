@@ -91,13 +91,6 @@ class AuthController extends Controller
   public function me(Request $request)
   {
     try {
-      // Debug the user
-      \Log::info('AuthController::me - Request details', [
-        'user_id' => $request->user()?->id,
-        'user_email' => $request->user()?->email,
-        'headers' => $request->headers->all(),
-        'token' => $request->bearerToken(),
-      ]);
 
       $data = $this->authService->getAuthUserData($request->user());
 
@@ -107,10 +100,7 @@ class AuthController extends Controller
         'roles' => $data['roles'],
       ], 'User retrieved successfully');
     } catch (\Exception $e) {
-      \Log::error('AuthController::me - Error', [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString(),
-      ]);
+      
       return $this->error('Failed to get user: ' . $e->getMessage(), 500);
     }
   }

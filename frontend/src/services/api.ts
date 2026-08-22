@@ -87,16 +87,16 @@ privateApiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// ✅ FIX: Removed all page redirects from interceptors
+// The API should only handle data, not navigation
 privateApiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // ✅ Only handle token removal, NO redirects
+    if (error.response?.status === 401) {
+      // Remove invalid token
       removeToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
+      // ✅ DO NOT redirect - let the auth context handle it
     }
     return Promise.reject(error);
   }

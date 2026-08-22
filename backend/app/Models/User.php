@@ -186,13 +186,15 @@ class User extends Authenticatable
   }
 
   /**
-   * Check if user has a specific role by name or label.
+   * Check if user has a specific role by name or label (case-insensitive).
    */
   public function hasRoleByNameOrLabel(string $roleNameOrLabel): bool
   {
+    $roleNameOrLabel = strtolower($roleNameOrLabel);
+
     return $this->roles()
-      ->where('name', $roleNameOrLabel)
-      ->orWhere('label', $roleNameOrLabel)
+      ->whereRaw('LOWER(name) = ?', [$roleNameOrLabel])
+      ->orWhereRaw('LOWER(label) = ?', [$roleNameOrLabel])
       ->exists();
   }
 
@@ -301,31 +303,33 @@ class User extends Authenticatable
   }
 
   /**
-   * Scope for users with a specific role.
+   * Scope for users with a specific role (case-insensitive).
    */
   public function scopeWithRole($query, string $roleName)
   {
+    $roleName = strtolower($roleName);
     return $query->whereHas('roles', function ($q) use ($roleName) {
-      $q->where('name', $roleName);
+      $q->whereRaw('LOWER(name) = ?', [$roleName]);
     });
   }
 
   /**
-   * Scope for users with a specific role label.
+   * Scope for users with a specific role label (case-insensitive).
    */
   public function scopeWithRoleLabel($query, string $roleLabel)
   {
+    $roleLabel = strtolower($roleLabel);
     return $query->whereHas('roles', function ($q) use ($roleLabel) {
-      $q->where('label', $roleLabel);
+      $q->whereRaw('LOWER(label) = ?', [$roleLabel]);
     });
   }
 
     // ============================================
-    // HELPER METHODS
+    // ROLE CHECK METHODS (CASE-INSENSITIVE)
     // ============================================
 
   /**
-   * Check if user is a specific role (by name or label).
+   * Check if user is a specific role (by name or label) - case-insensitive.
    */
   public function isRole(string $roleNameOrLabel): bool
   {
@@ -334,10 +338,22 @@ class User extends Authenticatable
 
   /**
    * Check if user is an admin.
+   * Handles: 'ADMIN', 'admin', 'Admin', 'super_admin', 'SUPER_ADMIN'
    */
   public function isAdmin(): bool
   {
-    return $this->hasRole('admin') || $this->hasRole('super_admin');
+    $roleNames = ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN', 'Admin', 'Super_Admin'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    // Check by label
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%admin%'])
+      ->exists();
   }
 
   /**
@@ -345,31 +361,191 @@ class User extends Authenticatable
    */
   public function isSuperAdmin(): bool
   {
-    return $this->hasRole('super_admin');
+    $roleNames = ['super_admin', 'SUPER_ADMIN', 'Super_Admin'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
    * Check if user is a department head.
+   * Handles: 'HOD', 'hod', 'Head of Department'
    */
   public function isHOD(): bool
   {
-    return $this->hasRole('hod');
+    // Check by exact role names
+    $roleNames = ['hod', 'HOD', 'Head of Department'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    // Check by label
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%head of department%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%hod%'])
+      ->exists();
   }
 
   /**
    * Check if user is an accountant.
+   * Handles: 'ACCOUNTANT', 'accountant', 'Accountant', 'Accountant/Finance'
    */
   public function isAccountant(): bool
   {
-    return $this->hasRole('accountant');
+    // Check by exact role names
+    $roleNames = ['accountant', 'ACCOUNTANT', 'Accountant'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    // Check by label
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%accountant%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%finance%'])
+      ->exists();
   }
 
   /**
    * Check if user is a principal.
+   * Handles: 'HEAD OF INSTITUTION', 'head of institution', 'principal', 'PRINCIPAL'
    */
   public function isPrincipal(): bool
   {
-    return $this->hasRole('principal');
+    // Check by exact role names
+    $roleNames = [
+      'head of institution',
+      'HEAD OF INSTITUTION',
+      'principal',
+      'PRINCIPAL',
+      'Head of Institution'
+    ];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    // Check by label
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%head of institution%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%principal%'])
+      ->exists();
+  }
+
+  /**
+   * Check if user is a final approver (Director/Finance Administrator).
+   * Handles: 'FINAL_APPROVER', 'final_approver', 'Director', 'Finance Administrator'
+   */
+  public function isFinalApprover(): bool
+  {
+    // Check by exact role names
+    $roleNames = [
+      'final_approver',
+      'FINAL_APPROVER',
+      'Final_Approver',
+    ];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    // Check by label
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%director%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%finance administrator%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%final approver%'])
+      ->exists();
+  }
+
+  /**
+   * Check if user is a staff member.
+   * Staff = has no specific role or has basic staff role
+   */
+  public function isStaff(): bool
+  {
+    // If user has any of the admin/procurement/management roles, they're not staff
+    if (
+      $this->isAdmin() || $this->isHOD() || $this->isAccountant() ||
+      $this->isPrincipal() || $this->isFinalApprover() || $this->isProcurement() ||
+      $this->isAuditor() || $this->isSupplier()
+    ) {
+      return false;
+    }
+
+    // User has roles but none of the above - treat as staff
+    return $this->roles()->exists();
+  }
+
+  /**
+   * Check if user is a supplier.
+   * Handles: 'SUPPLIER', 'supplier', 'Supplier/Vendor'
+   */
+  public function isSupplier(): bool
+  {
+    $roleNames = ['supplier', 'SUPPLIER', 'Supplier', 'vendor', 'VENDOR'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%supplier%'])
+      ->orWhereRaw('LOWER(label) LIKE ?', ['%vendor%'])
+      ->exists();
+  }
+
+  /**
+   * Check if user is an auditor.
+   * Handles: 'AUDITOR', 'auditor', 'Auditorial Staff Officer'
+   */
+  public function isAuditor(): bool
+  {
+    $roleNames = ['auditor', 'AUDITOR', 'Auditor'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%auditor%'])
+      ->exists();
+  }
+
+  /**
+   * Check if user is a procurement officer.
+   * Handles: 'PROCUREMENT', 'procurement', 'Procurement Officer'
+   */
+  public function isProcurement(): bool
+  {
+    $roleNames = ['procurement', 'PROCUREMENT', 'Procurement', 'procurement_officer', 'PROCUREMENT_OFFICER'];
+
+    foreach ($roleNames as $role) {
+      if ($this->hasRole($role) || $this->hasRole($role, 'web') || $this->hasRole($role, 'api')) {
+        return true;
+      }
+    }
+
+    return $this->roles()
+      ->whereRaw('LOWER(label) LIKE ?', ['%procurement%'])
+      ->exists();
   }
 
   /**

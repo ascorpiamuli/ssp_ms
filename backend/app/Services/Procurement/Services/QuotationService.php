@@ -21,6 +21,8 @@ use App\Services\Procurement\Exceptions\QuotationException;
 use App\Services\Procurement\Services\ProcurementService;
 use App\Services\Procurement\Utilities\PdfGenerator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Response;
+use Illuminate\Http\JsonResponse;
 
 class QuotationService extends BaseService implements QuotationServiceInterface
 {
@@ -31,17 +33,22 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     protected ProcurementService $procurementService
   ) {
     parent::__construct();
+    Log::info('[QuotationService] Constructed');
   }
 
   public function createQuotationRequest(QuotationDTO $dto): QuotationRequest
   {
+    Log::info('[QuotationService] createQuotationRequest - START', [
+      'requisition_id' => $dto->requisitionId,
+      'title' => $dto->title,
+    ]);
+
     $requisition = Requisition::find($dto->requisitionId);
 
     if (!$requisition) {
       throw QuotationException::requisitionNotFound($dto->requisitionId);
     }
 
-    // Auto-start procurement if not started
     if (!$requisition->is_procurement_created) {
       try {
         $this->procurementService->startProcurement($requisition->id);
@@ -91,12 +98,22 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         "Quotation Request {$qtn->qtn_number} generated"
       );
 
+      Log::info('[QuotationService] createQuotationRequest - COMPLETED', [
+        'qtn_id' => $qtn->id,
+        'qtn_number' => $qtn->qtn_number,
+      ]);
+
       return $qtn;
     });
   }
 
   public function sendQtnToSuppliers(int $qtnId, array $supplierIds): QuotationRequest
   {
+    Log::info('[QuotationService] sendQtnToSuppliers - START', [
+      'qtn_id' => $qtnId,
+      'supplier_count' => count($supplierIds),
+    ]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
     if ($qtn->status !== 'draft') {
@@ -142,23 +159,42 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         "QTN {$qtn->qtn_number} sent to " . count($supplierIds) . " suppliers"
       );
 
+      Log::info('[QuotationService] sendQtnToSuppliers - COMPLETED', [
+        'qtn_id' => $qtn->id,
+        'qtn_number' => $qtn->qtn_number,
+      ]);
+
       return $qtn;
     });
   }
 
   public function getQuotationRequest(int $qtnId): QuotationRequest
   {
+    Log::info('[QuotationService] getQuotationRequest - START', ['qtn_id' => $qtnId]);
+
     $qtn = $this->repository->findQuotationRequest($qtnId);
 
     if (!$qtn) {
       throw QuotationException::qtnNotFound($qtnId);
     }
 
+    Log::info('[QuotationService] getQuotationRequest - FOUND', [
+      'qtn_id' => $qtn->id,
+      'qtn_number' => $qtn->qtn_number,
+      'status' => $qtn->status,
+    ]);
+
     return $qtn;
   }
 
   public function submitSupplierQuotation(SupplierQuotationDTO $dto): SupplierQuotation
   {
+    Log::info('[QuotationService] submitSupplierQuotation - START', [
+      'quotation_request_id' => $dto->quotationRequestId,
+      'supplier_id' => $dto->supplierId,
+      'items_count' => count($dto->items),
+    ]);
+
     $qtn = $this->getQuotationRequest($dto->quotationRequestId);
 
     if (!$qtn->canRespond()) {
@@ -182,7 +218,7 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($qtn, $dto) {
-      $quotation = $this->repository->createSupplierQuotation([
+      $quotationData = [
         'quotation_request_id' => $qtn->id,
         'supplier_id' => $dto->supplierId,
         'quotation_number' => $this->referenceGenerator->generateSupplierQuotationNumber(),
@@ -204,12 +240,14 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'original_filename' => $dto->originalFilename,
         'notes' => $dto->notes,
         'metadata' => $dto->metadata,
-      ]);
+      ];
+
+      $quotation = $this->repository->createSupplierQuotation($quotationData);
 
       foreach ($dto->items as $itemData) {
-        $item = $this->repository->createSupplierQuotationItem([
+        $itemCreateData = [
           'supplier_quotation_id' => $quotation->id,
-          'requisition_item_id' => $itemData['requisition_item_id'],
+          'requisition_item_id' => $itemData['requisition_item_id'] ?? null,
           'item_name' => $itemData['item_name'],
           'description' => $itemData['description'] ?? null,
           'unit_of_measure' => $itemData['unit_of_measure'] ?? null,
@@ -228,8 +266,9 @@ class QuotationService extends BaseService implements QuotationServiceInterface
           'model' => $itemData['model'] ?? null,
           'is_alternative' => $itemData['is_alternative'] ?? false,
           'alternative_notes' => $itemData['alternative_notes'] ?? null,
-        ]);
+        ];
 
+        $item = $this->repository->createSupplierQuotationItem($itemCreateData);
         $item->calculateTotals();
       }
 
@@ -240,7 +279,7 @@ class QuotationService extends BaseService implements QuotationServiceInterface
       $respondedCount = count($qtn->getRespondedSuppliers());
       $sentCount = count($qtn->getSentSuppliers());
 
-      if ($respondedCount >= $sentCount) {
+      if ($respondedCount >= $sentCount && $sentCount > 0) {
         $qtn->markAsResponded();
       }
 
@@ -260,9 +299,18 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'supplier_quotation',
         $quotation->id,
         null,
-        ['quotation_number' => $quotation->quotation_number],
+        [
+          'quotation_number' => $quotation->quotation_number,
+          'items_count' => count($dto->items),
+        ],
         "Quotation submitted by supplier ID: {$dto->supplierId}"
       );
+
+      Log::info('[QuotationService] submitSupplierQuotation - COMPLETED', [
+        'quotation_id' => $quotation->id,
+        'quotation_number' => $quotation->quotation_number,
+        'items_count' => count($dto->items),
+      ]);
 
       return $quotation;
     });
@@ -270,6 +318,12 @@ class QuotationService extends BaseService implements QuotationServiceInterface
 
   public function verifySupplierQuotation(int $quotationId, int $userId, string $status, ?string $notes = null): SupplierQuotation
   {
+    Log::info('[QuotationService] verifySupplierQuotation - START', [
+      'quotation_id' => $quotationId,
+      'user_id' => $userId,
+      'status' => $status,
+    ]);
+
     $quotation = $this->getSupplierQuotation($quotationId);
 
     if ($quotation->verification_status === 'verified') {
@@ -287,7 +341,6 @@ class QuotationService extends BaseService implements QuotationServiceInterface
       if ($status === 'verified') {
         $this->checkAndMarkLowest($quotation);
 
-        // ✅ Auto-update QTN to evaluating when all quotations are verified
         $qtn = $quotation->quotationRequest;
         if ($qtn && $qtn->status === 'responded') {
           $allQuotations = $qtn->supplierQuotations()
@@ -324,6 +377,11 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         "Quotation {$quotation->quotation_number} verified"
       );
 
+      Log::info('[QuotationService] verifySupplierQuotation - COMPLETED', [
+        'quotation_id' => $quotation->id,
+        'verification_status' => $quotation->verification_status,
+      ]);
+
       return $quotation;
     });
   }
@@ -333,336 +391,193 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     Log::info('[QuotationService] evaluateSupplierQuotation - START', [
       'quotation_id' => $quotationId,
       'score' => $score,
-      'notes' => $notes,
       'user_id' => $this->getCurrentUserId(),
-      'timestamp' => now()->toDateTimeString()
     ]);
 
-    try {
-      Log::info('[QuotationService] evaluateSupplierQuotation - fetching quotation', [
-        'quotation_id' => $quotationId
+    $quotation = $this->getSupplierQuotation($quotationId);
+
+    if ($quotation->status === 'evaluated') {
+      throw QuotationException::quotationAlreadyEvaluated();
+    }
+
+    return $this->transaction(function () use ($quotation, $score, $notes) {
+      $quotation->update([
+        'status' => 'evaluated',
+        'evaluated_by' => $this->getCurrentUserId(),
+        'evaluated_at' => now(),
+        'evaluation_score' => $score,
+        'evaluation_notes' => $notes,
       ]);
 
-      $quotation = $this->getSupplierQuotation($quotationId);
+      $qtn = $quotation->quotationRequest;
+      if ($qtn) {
+        if ($qtn->status === 'responded') {
+          $qtn->update(['status' => 'evaluating']);
 
-      Log::info('[QuotationService] evaluateSupplierQuotation - quotation found', [
-        'quotation_id' => $quotation->id,
-        'quotation_number' => $quotation->quotation_number,
-        'current_status' => $quotation->status,
-        'current_verification_status' => $quotation->verification_status,
-        'supplier_id' => $quotation->supplier_id,
-        'qtn_id' => $quotation->quotation_request_id
-      ]);
-
-      if ($quotation->status === 'evaluated') {
-        Log::warning('[QuotationService] evaluateSupplierQuotation - quotation already evaluated', [
-          'quotation_id' => $quotationId,
-          'quotation_number' => $quotation->quotation_number,
-          'current_status' => $quotation->status
-        ]);
-        throw QuotationException::quotationAlreadyEvaluated();
-      }
-
-      Log::info('[QuotationService] evaluateSupplierQuotation - starting transaction');
-
-      return $this->transaction(function () use ($quotation, $score, $notes) {
-        Log::info('[QuotationService] evaluateSupplierQuotation - transaction started');
-
-        // 1. Update the supplier quotation
-        Log::info('[QuotationService] evaluateSupplierQuotation - updating supplier quotation', [
-          'quotation_id' => $quotation->id,
-          'score' => $score,
-          'evaluated_by' => $this->getCurrentUserId()
-        ]);
-
-        $quotation->update([
-          'status' => 'evaluated',
-          'evaluated_by' => $this->getCurrentUserId(),
-          'evaluated_at' => now(),
-          'evaluation_score' => $score,
-          'evaluation_notes' => $notes,
-        ]);
-
-        Log::info('[QuotationService] evaluateSupplierQuotation - supplier quotation updated', [
-          'quotation_id' => $quotation->id,
-          'new_status' => 'evaluated',
-          'evaluation_score' => $score,
-          'evaluated_at' => now()->toDateTimeString()
-        ]);
-
-        // 2. Get the QTN/RFQ
-        $qtn = $quotation->quotationRequest;
-        Log::info('[QuotationService] evaluateSupplierQuotation - QTN details', [
-          'qtn_id' => $qtn->id,
-          'qtn_number' => $qtn->qtn_number,
-          'qtn_status' => $qtn->status,
-          'requisition_id' => $qtn->requisition_id
-        ]);
-
-        // 3. UPDATE THE QUOTATION REQUEST TABLE
-        if ($qtn) {
-          // Only update if current status is 'responded' (has responses)
-          if ($qtn->status === 'responded') {
-            Log::info('[QuotationService] evaluateSupplierQuotation - moving QTN to evaluating', [
-              'qtn_id' => $qtn->id,
-              'qtn_number' => $qtn->qtn_number,
-              'current_status' => $qtn->status,
-              'new_status' => 'evaluating',
-              'triggered_by' => 'first_quotation_evaluated'
-            ]);
-
-            $qtn->update([
-              'status' => 'evaluating'
-            ]);
-
-            Log::info('[QuotationService] evaluateSupplierQuotation - QTN moved to evaluating', [
-              'qtn_id' => $qtn->id,
-              'qtn_number' => $qtn->qtn_number,
-              'updated_status' => $qtn->refresh()->status
-            ]);
-
-            $this->logHistory(
-              $qtn->requisition_id,
-              'qtn_status_changed',
-              'quotation_request',
-              $qtn->id,
-              ['status' => 'responded'],
-              ['status' => 'evaluating'],
-              "QTN {$qtn->qtn_number} moved to evaluating"
-            );
-
-            Log::info('[QuotationService] evaluateSupplierQuotation - history logged for status change', [
-              'qtn_id' => $qtn->id,
-              'action' => 'qtn_status_changed'
-            ]);
-          } else {
-            Log::info('[QuotationService] evaluateSupplierQuotation - QTN status unchanged', [
-              'qtn_id' => $qtn->id,
-              'current_status' => $qtn->status,
-              'reason' => 'status is not "responded"'
-            ]);
-          }
-
-          // ✅ Check if ALL quotations are evaluated, then auto-close
-          $allQuotations = $qtn->supplierQuotations()
-            ->whereIn('status', ['submitted', 'evaluated'])
-            ->get();
-
-          Log::info('[QuotationService] evaluateSupplierQuotation - checking all quotations status', [
-            'qtn_id' => $qtn->id,
-            'total_quotations' => $allQuotations->count(),
-            'quotation_ids' => $allQuotations->pluck('id')->toArray(),
-            'statuses' => $allQuotations->pluck('status')->toArray()
-          ]);
-
-          $allEvaluated = $allQuotations->every(function ($q) {
-            return $q->status === 'evaluated';
-          });
-
-          Log::info('[QuotationService] evaluateSupplierQuotation - all evaluated check', [
-            'qtn_id' => $qtn->id,
-            'all_evaluated' => $allEvaluated,
-            'current_qtn_status' => $qtn->status
-          ]);
-
-          // If all submitted quotations are evaluated, close the QTN
-          if ($allEvaluated && $qtn->status === 'evaluating') {
-            Log::info('[QuotationService] evaluateSupplierQuotation - auto-closing QTN', [
-              'qtn_id' => $qtn->id,
-              'qtn_number' => $qtn->qtn_number,
-              'reason' => 'all_quotations_evaluated',
-              'total_evaluated' => $allQuotations->count()
-            ]);
-
-            $qtn->update([
-              'status' => 'closed'
-            ]);
-
-            Log::info('[QuotationService] evaluateSupplierQuotation - QTN auto-closed', [
-              'qtn_id' => $qtn->id,
-              'qtn_number' => $qtn->qtn_number,
-              'new_status' => $qtn->refresh()->status
-            ]);
-
-            $this->logHistory(
-              $qtn->requisition_id,
-              'qtn_auto_closed',
-              'quotation_request',
-              $qtn->id,
-              ['status' => 'evaluating'],
-              ['status' => 'closed'],
-              "All quotations evaluated. QTN {$qtn->qtn_number} auto-closed"
-            );
-
-            Log::info('[QuotationService] evaluateSupplierQuotation - history logged for auto-close', [
-              'qtn_id' => $qtn->id,
-              'action' => 'qtn_auto_closed'
-            ]);
-          } else {
-            Log::info('[QuotationService] evaluateSupplierQuotation - QTN not auto-closed', [
-              'qtn_id' => $qtn->id,
-              'all_evaluated' => $allEvaluated,
-              'qtn_status' => $qtn->status,
-              'reason' => $allEvaluated ? 'qtn_status_not_evaluating' : 'not_all_quotations_evaluated'
-            ]);
-          }
-        } else {
-          Log::warning('[QuotationService] evaluateSupplierQuotation - no QTN found', [
-            'quotation_id' => $quotation->id,
-            'quotation_request_id' => $quotation->quotation_request_id
-          ]);
+          $this->logHistory(
+            $qtn->requisition_id,
+            'qtn_status_changed',
+            'quotation_request',
+            $qtn->id,
+            ['status' => 'responded'],
+            ['status' => 'evaluating'],
+            "QTN {$qtn->qtn_number} moved to evaluating"
+          );
         }
 
-        // 4. Log the evaluation
-        Log::info('[QuotationService] evaluateSupplierQuotation - logging evaluation history', [
-          'quotation_id' => $quotation->id,
-          'quotation_number' => $quotation->quotation_number,
-          'score' => $score
-        ]);
+        $allQuotations = $qtn->supplierQuotations()
+          ->whereIn('status', ['submitted', 'evaluated'])
+          ->get();
 
-        $this->logHistory(
-          $quotation->quotationRequest->requisition_id,
-          'quotation_evaluated',
-          'supplier_quotation',
-          $quotation->id,
-          null,
-          ['evaluation_score' => $score, 'status' => 'evaluated'],
-          "Quotation {$quotation->quotation_number} evaluated with score {$score}%"
-        );
+        $allEvaluated = $allQuotations->every(function ($q) {
+          return $q->status === 'evaluated';
+        });
 
-        Log::info('[QuotationService] evaluateSupplierQuotation - COMPLETED SUCCESSFULLY', [
-          'quotation_id' => $quotation->id,
-          'quotation_number' => $quotation->quotation_number,
-          'final_status' => $quotation->status,
-          'evaluation_score' => $score,
-          'qtn_status' => $qtn ? $qtn->refresh()->status : null,
-          'timestamp' => now()->toDateTimeString()
-        ]);
+        if ($allEvaluated && $qtn->status === 'evaluating') {
+          $qtn->update(['status' => 'closed']);
 
-        return $quotation;
-      });
-    } catch (QuotationException $e) {
-      Log::error('[QuotationService] evaluateSupplierQuotation - QuotationException caught', [
-        'quotation_id' => $quotationId,
-        'error_message' => $e->getMessage(),
-        'error_code' => $e->getCode(),
-        'trace' => $e->getTraceAsString()
+          $this->logHistory(
+            $qtn->requisition_id,
+            'qtn_auto_closed',
+            'quotation_request',
+            $qtn->id,
+            ['status' => 'evaluating'],
+            ['status' => 'closed'],
+            "All quotations evaluated. QTN {$qtn->qtn_number} auto-closed"
+          );
+        }
+      }
+
+      $this->logHistory(
+        $quotation->quotationRequest->requisition_id,
+        'quotation_evaluated',
+        'supplier_quotation',
+        $quotation->id,
+        null,
+        ['evaluation_score' => $score, 'status' => 'evaluated'],
+        "Quotation {$quotation->quotation_number} evaluated with score {$score}%"
+      );
+
+      Log::info('[QuotationService] evaluateSupplierQuotation - COMPLETED', [
+        'quotation_id' => $quotation->id,
+        'evaluation_score' => $score,
       ]);
-      throw $e;
-    } catch (\Exception $e) {
-      Log::error('[QuotationService] evaluateSupplierQuotation - UNEXPECTED ERROR', [
-        'quotation_id' => $quotationId,
-        'error_message' => $e->getMessage(),
-        'error_file' => $e->getFile(),
-        'error_line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
-      ]);
-      throw $e;
-    }
+
+      return $quotation;
+    });
   }
 
-public function selectSupplier(int $requisitionId, int $supplierId, int $quotationId): Requisition
-{
+  public function selectSupplier(int $requisitionId, int $supplierId, int $quotationId): Requisition
+  {
+    Log::info('[QuotationService] selectSupplier - START', [
+      'requisition_id' => $requisitionId,
+      'supplier_id' => $supplierId,
+      'quotation_id' => $quotationId,
+    ]);
+
     $requisition = Requisition::find($requisitionId);
     if (!$requisition) {
-        throw QuotationException::requisitionNotFound($requisitionId);
+      throw QuotationException::requisitionNotFound($requisitionId);
     }
 
     $quotation = $this->getSupplierQuotation($quotationId);
 
     if ($quotation->supplier_id !== $supplierId) {
-        throw QuotationException::supplierQuotationMismatch();
+      throw QuotationException::supplierQuotationMismatch();
     }
 
     $qtn = $quotation->quotationRequest;
     if ($qtn && !in_array($qtn->status, ['evaluating', 'closed'])) {
-        throw new \Exception(
-            'RFQ must be in "evaluating" or "closed" status to select a supplier.'
-        );
+      throw new \Exception(
+        'RFQ must be in "evaluating" or "closed" status to select a supplier.'
+      );
     }
 
     return $this->transaction(function () use ($requisition, $supplierId, $quotation) {
-        // ✅ FIX: Decode metadata if it's a string
-        $metadata = $requisition->metadata;
-        if (is_string($metadata)) {
-            $metadata = json_decode($metadata, true) ?? [];
-        } elseif (!is_array($metadata)) {
-            $metadata = [];
-        }
+      $metadata = $requisition->metadata;
+      if (is_string($metadata)) {
+        $metadata = json_decode($metadata, true) ?? [];
+      } elseif (!is_array($metadata)) {
+        $metadata = [];
+      }
 
-        // ✅ Build procurement data
-        $metadata['procurement'] = array_merge(
-            $metadata['procurement'] ?? [],
-            [
-                'selected_supplier_id' => $supplierId,
-                'selected_quotation_id' => $quotation->id,
-                'selected_at' => now()->toDateTimeString(),
-                'selected_by' => $this->getCurrentUserId(),
-            ]
-        );
+      $metadata['procurement'] = array_merge(
+        $metadata['procurement'] ?? [],
+        [
+          'selected_supplier_id' => $supplierId,
+          'selected_quotation_id' => $quotation->id,
+          'selected_at' => now()->toDateTimeString(),
+          'selected_by' => $this->getCurrentUserId(),
+        ]
+      );
 
-        $requisition->update([
-            'supplier_id' => $supplierId,
-            'metadata' => $metadata,
+      $requisition->update([
+        'supplier_id' => $supplierId,
+        'metadata' => $metadata,
+      ]);
+
+      $quotation->markAsAccepted();
+
+      $quotation->quotationRequest->supplierQuotations()
+        ->where('id', '!=', $quotation->id)
+        ->whereIn('status', ['submitted', 'evaluated'])
+        ->update(['status' => 'rejected']);
+
+      $quotation->quotationRequest->update([
+        'status' => 'closed'
+      ]);
+
+      try {
+        $this->notificationDispatcher->notify('supplier_selected', [
+          'requisition_id' => (string) $requisition->id,
+          'supplier_id' => (string) $supplierId,
+          'quotation_id' => (string) $quotation->id,
+          'reference_number' => (string) ($requisition->reference_number ?? ''),
         ]);
+      } catch (\Exception $e) {
+        Log::error('Failed to send notification: ' . $e->getMessage());
+      }
 
-        $quotation->markAsAccepted();
+      $this->logHistory(
+        $requisition->id,
+        'supplier_selected',
+        'requisition',
+        $requisition->id,
+        null,
+        [
+          'supplier_id' => (string) $supplierId,
+          'quotation_id' => (string) $quotation->id,
+          'selected_at' => now()->toDateTimeString(),
+        ],
+        "Supplier selected for requisition #{$requisition->reference_number}"
+      );
 
-        $quotation->quotationRequest->supplierQuotations()
-            ->where('id', '!=', $quotation->id)
-            ->whereIn('status', ['submitted', 'evaluated'])
-            ->update(['status' => 'rejected']);
+      Log::info('[QuotationService] selectSupplier - COMPLETED', [
+        'requisition_id' => $requisition->id,
+        'supplier_id' => $supplierId,
+      ]);
 
-        $quotation->quotationRequest->update([
-            'status' => 'closed'
-        ]);
-
-        // ✅ FIX: Ensure all values are scalar (string/int)
-        try {
-            $this->notificationDispatcher->notify('supplier_selected', [
-                'requisition_id' => (string) $requisition->id,
-                'supplier_id' => (string) $supplierId,
-                'quotation_id' => (string) $quotation->id,
-                'reference_number' => (string) ($requisition->reference_number ?? ''),
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to send notification: ' . $e->getMessage());
-        }
-
-        // ✅ FIX: Ensure log data doesn't contain arrays in scalar fields
-        $this->logHistory(
-            $requisition->id,
-            'supplier_selected',
-            'requisition',
-            $requisition->id,
-            null,
-            [
-                'supplier_id' => (string) $supplierId,
-                'quotation_id' => (string) $quotation->id,
-                'selected_at' => now()->toDateTimeString(),
-            ],
-            "Supplier selected for requisition #{$requisition->reference_number}"
-        );
-
-        return $requisition;
+      return $requisition;
     });
-}
+  }
 
   public function closeQtn(int $qtnId, ?string $reason = null): QuotationRequest
   {
+    Log::info('[QuotationService] closeQtn - START', [
+      'qtn_id' => $qtnId,
+      'reason' => $reason,
+    ]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
-    // Check if already closed
     if ($qtn->status === 'closed') {
       throw QuotationException::qtnAlreadyClosed();
     }
 
-    // Check if already cancelled
     if ($qtn->status === 'cancelled') {
       throw new \Exception('Cannot close a cancelled QTN.');
     }
 
-    // ✅ Only allow closing from specific statuses
     $allowedStatuses = ['evaluating', 'expired'];
     if (!in_array($qtn->status, $allowedStatuses)) {
       $statusMap = [
@@ -693,12 +608,22 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
         "QTN {$qtn->qtn_number} closed" . ($reason ? " - Reason: {$reason}" : "")
       );
 
+      Log::info('[QuotationService] closeQtn - COMPLETED', [
+        'qtn_id' => $qtn->id,
+        'qtn_number' => $qtn->qtn_number,
+      ]);
+
       return $qtn;
     });
   }
 
   public function cancelQtn(int $qtnId, string $reason): QuotationRequest
   {
+    Log::info('[QuotationService] cancelQtn - START', [
+      'qtn_id' => $qtnId,
+      'reason' => $reason,
+    ]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
     if ($qtn->status === 'closed' || $qtn->status === 'cancelled') {
@@ -725,12 +650,19 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
         "QTN {$qtn->qtn_number} cancelled: {$reason}"
       );
 
+      Log::info('[QuotationService] cancelQtn - COMPLETED', [
+        'qtn_id' => $qtn->id,
+        'qtn_number' => $qtn->qtn_number,
+      ]);
+
       return $qtn;
     });
   }
 
   public function sendQtnReminder(int $qtnId): void
   {
+    Log::info('[QuotationService] sendQtnReminder - START', ['qtn_id' => $qtnId]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
     if ($qtn->status !== 'sent' && $qtn->status !== 'responded') {
@@ -761,10 +693,14 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
       ['reminded_suppliers' => $pendingSuppliers],
       "Reminder sent to " . count($pendingSuppliers) . " suppliers"
     );
+
+    Log::info('[QuotationService] sendQtnReminder - COMPLETED', ['qtn_id' => $qtnId]);
   }
 
   public function getQtnStatistics(int $qtnId): array
   {
+    Log::info('[QuotationService] getQtnStatistics - START', ['qtn_id' => $qtnId]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
     $statistics = [
@@ -797,6 +733,12 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
       $statistics['average_quotation'] = $average;
     }
 
+    Log::info('[QuotationService] getQtnStatistics - COMPLETED', [
+      'qtn_id' => $qtnId,
+      'total_sent' => $statistics['total_sent'],
+      'total_responded' => $statistics['total_responded'],
+    ]);
+
     return $statistics;
   }
 
@@ -812,22 +754,37 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
 
   public function getSupplierQuotation(int $quotationId): SupplierQuotation
   {
+    Log::info('[QuotationService] getSupplierQuotation - START', ['quotation_id' => $quotationId]);
+
     $quotation = $this->repository->findSupplierQuotation($quotationId);
 
     if (!$quotation) {
       throw QuotationException::quotationNotFound($quotationId);
     }
 
+    Log::info('[QuotationService] getSupplierQuotation - FOUND', [
+      'quotation_id' => $quotation->id,
+      'quotation_number' => $quotation->quotation_number,
+      'status' => $quotation->status,
+    ]);
+
     return $quotation;
   }
 
   public function updateQuotationRequest(int $qtnId, array $data): QuotationRequest
   {
+    Log::info('[QuotationService] updateQuotationRequest - START', [
+      'qtn_id' => $qtnId,
+      'data_keys' => array_keys($data),
+    ]);
+
     $qtn = $this->getQuotationRequest($qtnId);
 
     if ($qtn->status !== 'draft') {
       throw new \Exception('QTN can only be updated in draft status.');
     }
+
+    Log::info('[QuotationService] updateQuotationRequest - COMPLETED', ['qtn_id' => $qtnId]);
 
     return $this->repository->updateQuotationRequest($qtnId, $data);
   }
@@ -862,11 +819,13 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
     return $this->repository->getAllSupplierQuotations($filters);
   }
 
-  /**
-   * Check and mark the lowest quotation.
-   */
   protected function checkAndMarkLowest(SupplierQuotation $quotation): void
   {
+    Log::info('[QuotationService] checkAndMarkLowest - START', [
+      'quotation_id' => $quotation->id,
+      'quotation_number' => $quotation->quotation_number,
+    ]);
+
     $qtn = $quotation->quotationRequest;
     $allQuotations = $qtn->supplierQuotations()
       ->where('status', 'submitted')
@@ -874,17 +833,20 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
       ->get();
 
     if ($allQuotations->isEmpty()) {
+      Log::info('[QuotationService] checkAndMarkLowest - No verified quotations to check');
       return;
     }
 
     $lowest = $allQuotations->sortBy('net_amount')->first();
     $qtn->supplierQuotations()->update(['is_lowest' => false]);
     $lowest->update(['is_lowest' => true]);
+
+    Log::info('[QuotationService] checkAndMarkLowest - COMPLETED', [
+      'lowest_quotation_id' => $lowest->id,
+      'lowest_net_amount' => $lowest->net_amount,
+    ]);
   }
 
-  /**
-   * Log history.
-   */
   protected function logHistory(
     int $requisitionId,
     string $action,
@@ -919,9 +881,6 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
     ]);
   }
 
-  /**
-   * Get a system user ID as fallback.
-   */
   protected function getSystemUserId(): int
   {
     $admin = \App\Models\User::where('is_admin', true)->first();
@@ -943,7 +902,7 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
   }
 
   // ============================================================
-  // PDF GENERATION METHODS
+  // RFQ PDF METHODS - NO STORAGE, FRESH GENERATION ONLY
   // ============================================================
 
   protected function generateQtnFilename(QuotationRequest $qtn, string $suffix = ''): string
@@ -953,59 +912,209 @@ public function selectSupplier(int $requisitionId, int $supplierId, int $quotati
     return $rfqNumber . ($suffix ? '-' . $suffix : '') . '.pdf';
   }
 
-  public function downloadQTNPDF(int $qtnId, string $suffix = ''): \Illuminate\Http\Response
+  /**
+   * Download RFQ PDF - Generates fresh PDF each time
+   */
+  public function downloadQTNPDF(int $qtnId, string $suffix = ''): Response
   {
+    Log::info('[QuotationService] downloadQTNPDF - START', [
+      'qtn_id' => $qtnId,
+      'suffix' => $suffix,
+    ]);
+
     $qtn = $this->getQuotationRequest($qtnId);
     $pdfGenerator = app(PdfGenerator::class);
     $pdfContent = $pdfGenerator->generateQuotation($qtn);
     $filename = $this->generateQtnFilename($qtn, $suffix);
+
+    Log::info('[QuotationService] downloadQTNPDF - COMPLETED', [
+      'qtn_id' => $qtnId,
+      'filename' => $filename,
+    ]);
 
     return response($pdfContent, 200, [
       'Content-Type' => 'application/pdf',
       'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-      'Cache-Control' => 'private, max-age=0, must-revalidate',
-      'Pragma' => 'public',
+      'Cache-Control' => 'no-cache, no-store, must-revalidate',
+      'Pragma' => 'no-cache',
+      'Expires' => '0',
     ]);
   }
 
-  public function streamQTNPDF(int $qtnId, string $suffix = ''): \Illuminate\Http\Response
+  /**
+   * Stream RFQ PDF - Generates fresh PDF each time
+   */
+  public function streamQTNPDF(int $qtnId, string $suffix = ''): Response
   {
+    Log::info('[QuotationService] streamQTNPDF - START', ['qtn_id' => $qtnId]);
+
     $qtn = $this->getQuotationRequest($qtnId);
     $pdfGenerator = app(PdfGenerator::class);
     $pdfContent = $pdfGenerator->generateQuotation($qtn);
     $filename = $this->generateQtnFilename($qtn, $suffix);
+
+    Log::info('[QuotationService] streamQTNPDF - COMPLETED', ['qtn_id' => $qtnId]);
 
     return response($pdfContent, 200, [
       'Content-Type' => 'application/pdf',
       'Content-Disposition' => 'inline; filename="' . $filename . '"',
+      'Cache-Control' => 'no-cache, no-store, must-revalidate',
+      'Pragma' => 'no-cache',
+      'Expires' => '0',
     ]);
-  }
-
-  public function saveQTNPDF(int $qtnId, string $suffix = ''): string
-  {
-    $qtn = $this->getQuotationRequest($qtnId);
-    $pdfGenerator = app(PdfGenerator::class);
-    $pdfContent = $pdfGenerator->generateQuotation($qtn);
-    $filename = $this->generateQtnFilename($qtn, $suffix);
-    $path = "procurement/qtns/" . date('Y/m/d/');
-
-    return $pdfGenerator->savePdf($pdfContent, $filename, $path);
   }
 
   public function generateQTNPDFContent(int $qtnId): string
   {
+    Log::info('[QuotationService] generateQTNPDFContent - START', ['qtn_id' => $qtnId]);
+
     $qtn = $this->getQuotationRequest($qtnId);
     $pdfGenerator = app(PdfGenerator::class);
-    return $pdfGenerator->generateQuotation($qtn);
+    $pdfContent = $pdfGenerator->generateQuotation($qtn);
+
+    Log::info('[QuotationService] generateQTNPDFContent - COMPLETED');
+
+    return $pdfContent;
   }
 
-  public function downloadVerifiedQTNPDF(int $qtnId): \Illuminate\Http\Response
+  public function downloadVerifiedQTNPDF(int $qtnId): Response
   {
     return $this->downloadQTNPDF($qtnId, 'verified');
   }
 
-  public function downloadDraftQTNPDF(int $qtnId): \Illuminate\Http\Response
+  public function downloadDraftQTNPDF(int $qtnId): Response
   {
     return $this->downloadQTNPDF($qtnId, 'draft');
+  }
+
+  // ============================================================
+  // SUPPLIER QUOTATION PDF METHODS - NO STORAGE
+  // ============================================================
+
+  protected function generateSupplierQuotationFilename(SupplierQuotation $quotation, string $suffix = ''): string
+  {
+    $qtnNumber = $quotation->quotation_number ?? 'QTN-' . str_pad($quotation->id, 5, '0', STR_PAD_LEFT);
+    $qtnNumber = str_replace(' ', '-', trim($qtnNumber));
+    return $qtnNumber . ($suffix ? '-' . $suffix : '') . '.pdf';
+  }
+
+  /**
+   * Download supplier quotation PDF - Generates fresh PDF each time
+   */
+  public function downloadSupplierQuotationPDF(int $quotationId, string $suffix = ''): Response
+  {
+    Log::info('[QuotationService] downloadSupplierQuotationPDF - START', [
+      'quotation_id' => $quotationId,
+      'suffix' => $suffix,
+    ]);
+
+    $quotation = $this->getSupplierQuotation($quotationId);
+    $pdfGenerator = app(PdfGenerator::class);
+    $pdfContent = $pdfGenerator->generateSupplierQuotationWithData($quotation);
+    $filename = $this->generateSupplierQuotationFilename($quotation, $suffix);
+
+    Log::info('[QuotationService] downloadSupplierQuotationPDF - COMPLETED', [
+      'quotation_id' => $quotationId,
+      'filename' => $filename,
+    ]);
+
+    return response($pdfContent, 200, [
+      'Content-Type' => 'application/pdf',
+      'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+      'Cache-Control' => 'no-cache, no-store, must-revalidate',
+      'Pragma' => 'no-cache',
+      'Expires' => '0',
+    ]);
+  }
+
+  /**
+   * Stream supplier quotation PDF - Generates fresh PDF each time
+   */
+  public function streamSupplierQuotationPDF(int $quotationId, string $suffix = ''): Response
+  {
+    Log::info('[QuotationService] streamSupplierQuotationPDF - START', ['quotation_id' => $quotationId]);
+
+    $quotation = $this->getSupplierQuotation($quotationId);
+    $pdfGenerator = app(PdfGenerator::class);
+    $pdfContent = $pdfGenerator->generateSupplierQuotationWithData($quotation);
+    $filename = $this->generateSupplierQuotationFilename($quotation, $suffix);
+
+    Log::info('[QuotationService] streamSupplierQuotationPDF - COMPLETED', ['quotation_id' => $quotationId]);
+
+    return response($pdfContent, 200, [
+      'Content-Type' => 'application/pdf',
+      'Content-Disposition' => 'inline; filename="' . $filename . '"',
+      'Cache-Control' => 'no-cache, no-store, must-revalidate',
+      'Pragma' => 'no-cache',
+      'Expires' => '0',
+    ]);
+  }
+
+  public function generateSupplierQuotationPDFContent(int $quotationId): string
+  {
+    Log::info('[QuotationService] generateSupplierQuotationPDFContent - START', ['quotation_id' => $quotationId]);
+
+    $quotation = $this->getSupplierQuotation($quotationId);
+    $pdfGenerator = app(PdfGenerator::class);
+    $pdfContent = $pdfGenerator->generateSupplierQuotationWithData($quotation);
+
+    Log::info('[QuotationService] generateSupplierQuotationPDFContent - COMPLETED');
+
+    return $pdfContent;
+  }
+
+  /**
+   * Download supplier quotation PDF with pre-loaded data - Generates fresh each time
+   */
+  public function downloadSupplierQuotationPDFWithData(SupplierQuotation $quotation): Response
+  {
+    Log::info('[QuotationService] downloadSupplierQuotationPDFWithData - START', [
+      'quotation_id' => $quotation->id,
+      'quotation_number' => $quotation->quotation_number,
+    ]);
+
+    $pdfGenerator = app(PdfGenerator::class);
+    $pdfContent = $pdfGenerator->generateSupplierQuotationWithData($quotation);
+    $filename = $this->generateSupplierQuotationFilename($quotation);
+
+    Log::info('[QuotationService] downloadSupplierQuotationPDFWithData - COMPLETED', [
+      'quotation_id' => $quotation->id,
+      'filename' => $filename,
+    ]);
+
+    return response($pdfContent, 200, [
+      'Content-Type' => 'application/pdf',
+      'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+      'Cache-Control' => 'no-cache, no-store, must-revalidate',
+      'Pragma' => 'no-cache',
+      'Expires' => '0',
+    ]);
+  }
+
+  public function getSupplierQuotationBase64PDF(int $quotationId): array
+  {
+    Log::info('[QuotationService] getSupplierQuotationBase64PDF - START', ['quotation_id' => $quotationId]);
+
+    $quotation = $this->getSupplierQuotation($quotationId);
+    $pdfGenerator = app(PdfGenerator::class);
+    $pdfContent = $pdfGenerator->generateSupplierQuotationWithData($quotation);
+    $base64 = base64_encode($pdfContent);
+    $filename = $this->generateSupplierQuotationFilename($quotation);
+
+    return [
+      'base64' => $base64,
+      'filename' => $filename,
+      'size' => strlen($pdfContent),
+    ];
+  }
+
+  public function downloadVerifiedSupplierQuotationPDF(int $quotationId): Response
+  {
+    return $this->downloadSupplierQuotationPDF($quotationId, 'verified');
+  }
+
+  public function downloadDraftSupplierQuotationPDF(int $quotationId): Response
+  {
+    return $this->downloadSupplierQuotationPDF($quotationId, 'draft');
   }
 }

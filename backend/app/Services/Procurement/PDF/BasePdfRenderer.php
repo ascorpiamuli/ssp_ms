@@ -5,12 +5,12 @@ declare(strict_types=1);
 
 namespace App\Services\Procurement\PDF;
 
-use TCPDF;
+use setasign\Fpdi\Tcpdf\Fpdi; // Fpdi extends TCPDF, so we get both
 use App\Models\CompanyProfile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-abstract class BasePdfRenderer
+abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
 {
   protected array $primary = [26, 35, 126];
   protected array $secondary = [63, 81, 181];
@@ -35,6 +35,8 @@ abstract class BasePdfRenderer
 
   public function __construct()
   {
+    parent::__construct(); // Call Fpdi constructor (which calls TCPDF constructor)
+
     $this->config = [
       'paper_size' => 'A4',
       'orientation' => 'P',
@@ -51,9 +53,9 @@ abstract class BasePdfRenderer
     ];
   }
 
-  protected function initPdf(string $title): TCPDF
+  protected function initPdf(string $title): Fpdi // Return Fpdi instead of TCPDF
   {
-    $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+    $pdf = new Fpdi('P', 'mm', 'A4', true, 'UTF-8', false);
     $pdf->SetCreator('SSPMS');
     $pdf->SetAuthor('SSPMS');
     $pdf->SetTitle($title);
@@ -75,8 +77,7 @@ abstract class BasePdfRenderer
   {
     $this->watermarkText = $text;
   }
-
-  protected function addLogoWatermark(TCPDF $pdf): void
+  protected function addLogoWatermark(Fpdi $pdf): void // Changed from TCPDF to Fpdi
   {
     if (!$this->logoData) {
       return;
@@ -88,38 +89,113 @@ abstract class BasePdfRenderer
 
       file_put_contents($tempFile, $this->logoData);
 
-      $watermarkWidth = 160;
-      $watermarkHeight = 160;
+      // ============================================
+      // ADJUST THESE SETTINGS FOR WATERMARK VISIBILITY
+      // ============================================
 
+      // Size of the watermark (in mm)
+      // Increase for larger watermark, decrease for smaller
+      $watermarkWidth = 170;   // Default: 120 (was 160)
+      $watermarkHeight = 160;  // Default: 120 (was 160)
+
+      // Opacity level (0.0 = invisible, 0.5 = half visible, 1.0 = fully visible)
+      // RECOMMENDED: 0.10 - 0.20 for subtle, 0.25 - 0.35 for visible, 0.40+ for strong
+      $opacity = 0.10;         // Default: 0.15 (subtle but visible)
+
+      // Position offsets (in mm)
+      // Adjust these to move the watermark position
+      $xOffset = 0;            // Positive = right, Negative = left
+      $yOffset = 0;            // Positive = down, Negative = up
+
+      // Color of the watermark (if you want to tint the logo)
+      // Set to null to use original colors, or use RGB array
+      $tintColor = null;       // e.g., [200, 200, 200] for gray tint
+
+      // ============================================
+      // END OF SETTINGS
+      // ============================================
+
+      // Calculate ratio if both dimensions are provided
       if ($this->logoWidth && $this->logoHeight) {
         $ratio = $this->logoWidth / $this->logoHeight;
         $watermarkHeight = $watermarkWidth / $ratio;
-        if ($watermarkHeight > 160) {
-          $watermarkHeight = 160;
+        if ($watermarkHeight > 200) {
+          $watermarkHeight = 200;
           $watermarkWidth = $watermarkHeight * $ratio;
+        }
+        if ($watermarkWidth > 200) {
+          $watermarkWidth = 200;
+          $watermarkHeight = $watermarkWidth / $ratio;
         }
       }
 
-      $x = (210 - $watermarkWidth) / 2;
-      $y = (297 - $watermarkHeight) / 2;
+      // Center position with optional offset
+      $x = (210 - $watermarkWidth) / 2 + $xOffset;
+      $y = (297 - $watermarkHeight) / 2 + $yOffset;
 
-      $pdf->SetAlpha($this->config['watermark_opacity']);
-      $pdf->Image(
-        $tempFile,
-        $x,
-        $y,
-        $watermarkWidth,
-        $watermarkHeight,
-        '',
-        '',
-        '',
-        false,
-        300,
-        '',
-        false,
-        false,
-        0
-      );
+      // Set opacity (alpha blending)
+      $pdf->SetAlpha($opacity);
+
+      // Image with optional tint
+      if ($tintColor) {
+        // Apply tint to the image (requires GD or Imagick)
+        $tintedFile = $this->applyTintToImage($tempFile, $tintColor);
+        if ($tintedFile) {
+          $pdf->Image(
+            $tintedFile,
+            $x,
+            $y,
+            $watermarkWidth,
+            $watermarkHeight,
+            '',
+            '',
+            '',
+            false,
+            300,
+            '',
+            false,
+            false,
+            0
+          );
+          @unlink($tintedFile);
+        } else {
+          $pdf->Image(
+            $tempFile,
+            $x,
+            $y,
+            $watermarkWidth,
+            $watermarkHeight,
+            '',
+            '',
+            '',
+            false,
+            300,
+            '',
+            false,
+            false,
+            0
+          );
+        }
+      } else {
+        $pdf->Image(
+          $tempFile,
+          $x,
+          $y,
+          $watermarkWidth,
+          $watermarkHeight,
+          '',
+          '',
+          '',
+          false,
+          300,
+          '',
+          false,
+          false,
+          0
+        );
+      }
+
+      // Reset opacity to full
       $pdf->SetAlpha(1);
 
       @unlink($tempFile);
@@ -128,7 +204,44 @@ abstract class BasePdfRenderer
     }
   }
 
-  protected function addWatermarkText(TCPDF $pdf, string $text): void
+  /**
+   * Apply tint to image (optional helper method)
+   */
+  private function applyTintToImage(string $imagePath, array $tintColor): ?string
+  {
+    if (!function_exists('imagecreatefromstring') || !function_exists('imagecopymerge')) {
+      return null;
+    }
+
+    try {
+      $im = imagecreatefromstring(file_get_contents($imagePath));
+      if (!$im) return null;
+
+      // Get image dimensions
+      $width = imagesx($im);
+      $height = imagesy($im);
+
+      // Create tint overlay
+      $tint = imagecreatetruecolor($width, $height);
+      $color = imagecolorallocate($tint, $tintColor[0], $tintColor[1], $tintColor[2]);
+      imagefill($tint, 0, 0, $color);
+
+      // Merge tint with original image
+      imagecopymerge($im, $tint, 0, 0, 0, 0, $width, $height, 50);
+
+      // Save tinted image
+      $tempFile = tempnam(sys_get_temp_dir(), 'tint_') . '.png';
+      imagepng($im, $tempFile);
+      imagedestroy($im);
+      imagedestroy($tint);
+
+      return $tempFile;
+    } catch (\Exception $e) {
+      return null;
+    }
+  }
+
+  protected function addWatermarkText(Fpdi $pdf, string $text): void // Changed from TCPDF to Fpdi
   {
     try {
       $pdf->SetAlpha(0.10);
@@ -408,7 +521,7 @@ abstract class BasePdfRenderer
     }
   }
 
-  protected function addHeaderLine(TCPDF $pdf, float $yPosition): void
+  protected function addHeaderLine(Fpdi $pdf, float $yPosition): void // Changed from TCPDF to Fpdi
   {
     $pdf->SetY($yPosition);
     $pdf->SetDrawColor($this->primary[0], $this->primary[1], $this->primary[2]);
@@ -419,7 +532,7 @@ abstract class BasePdfRenderer
     $pdf->Line(15, $yPosition + 1.8, 195, $yPosition + 1.8);
   }
 
-  protected function addSectionHeader(TCPDF $pdf, string $title): void
+  protected function addSectionHeader(Fpdi $pdf, string $title): void // Changed from TCPDF to Fpdi
   {
     $pdf->SetFont('helvetica', 'B', 14);
     $pdf->SetTextColor($this->primary[0], $this->primary[1], $this->primary[2]);
@@ -432,7 +545,7 @@ abstract class BasePdfRenderer
   }
 
   protected function addFieldPair(
-    TCPDF $pdf,
+    Fpdi $pdf, // Changed from TCPDF to Fpdi
     string $label,
     string $value,
     float $x,

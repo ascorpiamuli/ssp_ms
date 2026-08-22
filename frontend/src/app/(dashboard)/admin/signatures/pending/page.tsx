@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileSignature,
   CheckCircle,
@@ -36,9 +36,9 @@ import {
   LayoutGrid,
   Copy,
   ExternalLink,
-  Fingerprint, // For IP address
-  Smartphone,  // For User Agent
-  History,     // For timeline
+  Fingerprint,
+  Smartphone,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -90,6 +90,11 @@ import {
 import { useAdminSignature } from '@/hooks/useSignature';
 import { useQueryClient } from '@tanstack/react-query';
 
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
+
 export default function AdminSignatureVerificationPage() {
   console.log('🔍 [AdminSignatureVerification] Component rendering');
 
@@ -104,7 +109,7 @@ export default function AdminSignatureVerificationPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState('all');
 
   const {
     pending,
@@ -120,8 +125,17 @@ export default function AdminSignatureVerificationPage() {
     getPercentageVerified,
   } = useAdminSignature();
 
+  // Get all signatures (pending + verified)
+  const allSignatures = useMemo(() => {
+    const pendingList = pending || [];
+    const verifiedList = verified || [];
+    return [...pendingList, ...verifiedList];
+  }, [pending, verified]);
+
   const getCurrentList = () => {
-    if (activeTab === 'pending') {
+    if (activeTab === 'all') {
+      return allSignatures;
+    } else if (activeTab === 'pending') {
       return pending || [];
     } else if (activeTab === 'verified') {
       return verified || [];
@@ -133,7 +147,8 @@ export default function AdminSignatureVerificationPage() {
 
   const filteredSignatures = Array.isArray(currentList) ? currentList.filter((sig: any) => {
     const matchesSearch = sig.user?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sig.user?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+      sig.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sig.user?.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || sig.status === statusFilter;
     return matchesSearch && matchesStatus;
   }) : [];
@@ -164,6 +179,49 @@ export default function AdminSignatureVerificationPage() {
     return configs[status] || configs.pending;
   };
 
+  // Compute stats for StatsCards
+  const statsItems: StatCardItem[] = useMemo(() => {
+    const total = getTotalCount();
+    const pendingCount = getPendingCount();
+    const verifiedCount = getVerifiedCount();
+    const rejectedCount = stats?.rejected || 0;
+
+    return [
+      {
+        label: "Total Signatures",
+        value: total,
+        icon: FileSignature,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: `${getPercentageVerified()}% verified`,
+      },
+      {
+        label: "Pending Verification",
+        value: pendingCount,
+        icon: Hourglass,
+        tagLabel: "PENDING",
+        tagColor: "amber",
+        subtitle: `${pendingCount} awaiting review`,
+      },
+      {
+        label: "Verified",
+        value: verifiedCount,
+        icon: ShieldCheck,
+        tagLabel: "VERIFIED",
+        tagColor: "emerald",
+        subtitle: `${verifiedCount} approved signatures`,
+      },
+      {
+        label: "Rejected",
+        value: rejectedCount,
+        icon: XCircle,
+        tagLabel: "REJECTED",
+        tagColor: "rose",
+        subtitle: `${rejectedCount} rejected signatures`,
+      },
+    ];
+  }, [stats, getTotalCount, getPendingCount, getVerifiedCount, getPercentageVerified]);
+
   const handleVerify = (signature: any) => {
     setSelectedSignature(signature);
     setShowVerifyDialog(true);
@@ -186,9 +244,10 @@ export default function AdminSignatureVerificationPage() {
         queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
-
+        success('Signature verified successfully');
       } catch (err) {
         console.error('❌ [AdminSignatureVerification] Verify failed:', err);
+        error('Failed to verify signature');
       }
     }
   };
@@ -206,16 +265,17 @@ export default function AdminSignatureVerificationPage() {
         queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
-
+        success('Signature rejected successfully');
       } catch (err) {
         console.error('❌ [AdminSignatureVerification] Reject failed:', err);
-  
+        error('Failed to reject signature');
       }
     }
   };
 
   const handleRefetch = () => {
     refetch();
+    success('Data refreshed');
   };
 
   const handleDownloadQR = (qrImage: string, signatureId: number) => {
@@ -226,6 +286,7 @@ export default function AdminSignatureVerificationPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    success('QR Code downloaded');
   };
 
   const handleCopyQR = (qrImage: string) => {
@@ -237,37 +298,11 @@ export default function AdminSignatureVerificationPage() {
     });
   };
 
-  // Safe truncate function
   const truncateUserAgent = (ua: string | null | undefined) => {
     if (!ua) return null;
     if (ua.length > 50) return ua.substring(0, 50) + '...';
     return ua;
   };
-
-  const StatsCard = ({ icon: Icon, label, value, color, subtitle }: any) => (
-    <Card className="border-0 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold mt-1 dark:text-white">{value}</p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-            )}
-          </div>
-          <div className={cn(
-            "p-3 rounded-xl",
-            color === 'blue' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
-            color === 'amber' && "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400",
-            color === 'emerald' && "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400",
-            color === 'rose' && "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400",
-          )}>
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   const renderSignatureTable = (signatures: any[], showActions: boolean = true) => {
     if (signatures.length === 0) {
@@ -277,17 +312,21 @@ export default function AdminSignatureVerificationPage() {
             <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800">
               {activeTab === 'pending' ? (
                 <Clock className="h-12 w-12 text-gray-400" />
-              ) : (
+              ) : activeTab === 'verified' ? (
                 <ShieldCheck className="h-12 w-12 text-gray-400" />
+              ) : (
+                <FileSignature className="h-12 w-12 text-gray-400" />
               )}
             </div>
           </div>
           <h3 className="text-lg font-semibold dark:text-white">
-            {activeTab === 'pending' ? 'No Pending Signatures' : 'No Verified Signatures'}
+            {activeTab === 'all' ? 'No Signatures Found' :
+              activeTab === 'pending' ? 'No Pending Signatures' : 'No Verified Signatures'}
           </h3>
           <p className="text-sm text-muted-foreground mt-2">
             {searchQuery ? 'Try adjusting your search or filter.' :
-              activeTab === 'pending' ? 'All signatures have been verified.' : 'No signatures have been verified yet.'}
+              activeTab === 'all' ? 'No signatures have been submitted yet.' :
+                activeTab === 'pending' ? 'All signatures have been verified.' : 'No signatures have been verified yet.'}
           </p>
         </div>
       );
@@ -297,15 +336,16 @@ export default function AdminSignatureVerificationPage() {
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">User</TableHead>
-              <TableHead className="w-[100px]">Signature</TableHead>
-              <TableHead className="w-[120px]">Status</TableHead>
-              <TableHead className="w-[120px]">Submitted</TableHead>
-              {activeTab === 'verified' && <TableHead className="w-[120px]">Verified At</TableHead>}
-              <TableHead className="w-[180px]">Forensic Details</TableHead>
-              {activeTab === 'verified' && <TableHead className="w-[80px]">QR</TableHead>}
-              <TableHead className="w-[140px] text-right">Actions</TableHead>
+            <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+              <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">User</TableHead>
+              <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Signature</TableHead>
+              <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
+              <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Submitted</TableHead>
+              {activeTab === 'verified' && <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Verified At</TableHead>}
+              {activeTab === 'all' && <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Verified At</TableHead>}
+              <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Forensic Details</TableHead>
+              {(activeTab === 'verified' || activeTab === 'all') && <TableHead className="min-w-[80px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">QR</TableHead>}
+              <TableHead className="min-w-[140px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -313,7 +353,7 @@ export default function AdminSignatureVerificationPage() {
               const statusConfig = getStatusBadge(signature.status);
               const StatusIcon = statusConfig.icon;
               const hasQR = signature.qr_code?.image;
-
+              const isPending = signature.status === 'pending';
               const hasIp = signature?.ip_address && signature.ip_address !== null;
               const hasUa = signature?.user_agent && signature.user_agent !== null;
 
@@ -323,12 +363,15 @@ export default function AdminSignatureVerificationPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="hover:bg-muted/30 transition-colors"
+                  className={cn(
+                    "hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group",
+                    isPending && "bg-amber-50/30 dark:bg-amber-900/5"
+                  )}
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9 ring-2 ring-background">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white text-xs font-bold">
+                      <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-gray-700">
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-bold">
                           {signature.user?.full_name?.charAt(0) || 'U'}
                         </AvatarFallback>
                       </Avatar>
@@ -348,7 +391,7 @@ export default function AdminSignatureVerificationPage() {
                       }}
                       className="relative group"
                     >
-                      <div className="w-16 h-10 rounded-lg border border-border overflow-hidden bg-white dark:bg-gray-800 flex items-center justify-center hover:shadow-lg transition-all duration-200">
+                      <div className="w-16 h-10 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 flex items-center justify-center hover:shadow-lg transition-all duration-200">
                         {signature.signature_image_url ? (
                           <img
                             src={signature.signature_image_url}
@@ -377,22 +420,31 @@ export default function AdminSignatureVerificationPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {format(new Date(signature.created_at), 'PP')}
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {format(new Date(signature.created_at), 'PP')}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {format(new Date(signature.created_at), 'p')}
+                      </span>
                     </div>
                   </TableCell>
-                  {activeTab === 'verified' && (
+                  {(activeTab === 'verified' || activeTab === 'all') && (
                     <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        {signature.verified_at ? format(new Date(signature.verified_at), 'PP') : 'N/A'}
-                      </div>
+                      {signature.verified_at ? (
+                        <div className="flex flex-col">
+                          <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                            {format(new Date(signature.verified_at), 'PP')}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {format(new Date(signature.verified_at), 'p')}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </TableCell>
                   )}
-                  {/* ========================================== */}
-                  {/* ✅ FORENSIC COLUMN - CONDITIONALLY RENDERED */}
-                  {/* ========================================== */}
                   <TableCell>
                     {(hasIp || hasUa) ? (
                       <div className="flex flex-col gap-1 max-w-[180px]">
@@ -417,7 +469,7 @@ export default function AdminSignatureVerificationPage() {
                       <span className="text-xs text-muted-foreground">No forensic data</span>
                     )}
                   </TableCell>
-                  {activeTab === 'verified' && (
+                  {(activeTab === 'verified' || activeTab === 'all') && (
                     <TableCell>
                       {hasQR ? (
                         <button
@@ -437,7 +489,7 @@ export default function AdminSignatureVerificationPage() {
                   )}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {showActions && signature.status === 'pending' && (
+                      {isPending && (
                         <>
                           <TooltipProvider>
                             <Tooltip>
@@ -456,7 +508,7 @@ export default function AdminSignatureVerificationPage() {
                                   Verify
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Approve this signature</TooltipContent>
+                              <TooltipContent className="rounded-xl">Approve this signature</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                           <TooltipProvider>
@@ -477,7 +529,7 @@ export default function AdminSignatureVerificationPage() {
                                   Reject
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Reject this signature</TooltipContent>
+                              <TooltipContent className="rounded-xl">Reject this signature</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </>
@@ -497,7 +549,7 @@ export default function AdminSignatureVerificationPage() {
                               <Eye className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>View full details</TooltipContent>
+                          <TooltipContent className="rounded-xl">View full details</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     </div>
@@ -537,13 +589,17 @@ export default function AdminSignatureVerificationPage() {
       icon={<FileSignature className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Signatures' },
+      ]}
       actions={
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefetch}
-            className="gap-2 rounded-xl shadow-sm"
+            className="gap-2 rounded-xl shadow-sm dark:border-gray-700 dark:hover:bg-gray-800"
             disabled={isLoading}
           >
             <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
@@ -553,66 +609,77 @@ export default function AdminSignatureVerificationPage() {
       }
     >
       <div className="space-y-6">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard
-            icon={FileSignature}
-            label="Total Signatures"
-            value={getTotalCount()}
-            color="blue"
-            subtitle={`${getPercentageVerified()}% verified`}
-          />
-          <StatsCard
-            icon={Hourglass}
-            label="Pending Verification"
-            value={getPendingCount()}
-            color="amber"
-          />
-          <StatsCard
-            icon={ShieldCheck}
-            label="Verified"
-            value={getVerifiedCount()}
-            color="emerald"
-          />
-          <StatsCard
-            icon={XCircle}
-            label="Rejected"
-            value={stats?.rejected || 0}
-            color="rose"
-          />
-        </div>
+        {/* Stats Cards */}
+        <StatsCards
+          stats={statsItems}
+          isLoading={isLoading}
+          columns={4}
+          variant="default"
+          formatCompact={true}
+          tagOrientation="none"
+          tagPosition="top-left"
+        />
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-xl shadow-sm"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[180px] rounded-xl shadow-sm">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="expired">Expired</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
+          <CardContent className="p-4 pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[180px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+                className="gap-2 h-11 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                <Filter className="h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 rounded-xl bg-muted/50 p-1">
+          <TabsList className="grid w-full max-w-md grid-cols-3 rounded-xl bg-gray-100 dark:bg-gray-800/50 p-1">
+            <TabsTrigger
+              value="all"
+              className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
+            >
+              <FileSignature className="h-4 w-4 mr-2" />
+              All
+              {getTotalCount() > 0 && (
+                <Badge className="ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">
+                  {getTotalCount()}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger
               value="pending"
-              className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm"
+              className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
             >
               <Clock className="h-4 w-4 mr-2" />
               Pending
@@ -624,7 +691,7 @@ export default function AdminSignatureVerificationPage() {
             </TabsTrigger>
             <TabsTrigger
               value="verified"
-              className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm"
+              className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm"
             >
               <ShieldCheck className="h-4 w-4 mr-2" />
               Verified
@@ -636,9 +703,35 @@ export default function AdminSignatureVerificationPage() {
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="all" className="mt-4">
+            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30 relative">
+              <WrappedCornerTag label="SIGNATURES" color="blue" position="top-left" size="lg" />
+              <CardHeader className="border-b border-border/50 bg-muted/20 pt-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileSignature className="h-5 w-5 text-blue-600" />
+                      All Signatures
+                      <Badge className="ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {filteredSignatures.length} total
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Complete view of all signature submissions with forensic data
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderSignatureTable(filteredSignatures, true)}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="pending" className="mt-4">
-            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30">
-              <CardHeader className="border-b border-border/50 bg-muted/20">
+            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30 relative">
+              <WrappedCornerTag label="PENDING" color="amber" position="top-left" size="lg" />
+              <CardHeader className="border-b border-border/50 bg-muted/20 pt-8">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -663,8 +756,9 @@ export default function AdminSignatureVerificationPage() {
           </TabsContent>
 
           <TabsContent value="verified" className="mt-4">
-            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30">
-              <CardHeader className="border-b border-border/50 bg-muted/20">
+            <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30 relative">
+              <WrappedCornerTag label="VERIFIED" color="emerald" position="top-left" size="lg" />
+              <CardHeader className="border-b border-border/50 bg-muted/20 pt-8">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -690,9 +784,9 @@ export default function AdminSignatureVerificationPage() {
         </Tabs>
       </div>
 
-      {/* Verify Dialog */}
+      {/* Verify Dialog - No Tags */}
       <Dialog open={showVerifyDialog} onOpenChange={setShowVerifyDialog}>
-        <DialogContent className="rounded-2xl shadow-2xl border-0">
+        <DialogContent className="rounded-2xl shadow-2xl border-0 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
               <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
@@ -721,7 +815,6 @@ export default function AdminSignatureVerificationPage() {
                     </p>
                   </div>
                 </div>
-                {/* Conditional IP/Agent rendering here */}
                 {(selectedSignature?.ip_address || selectedSignature?.user_agent) && (
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     {selectedSignature.ip_address && (
@@ -771,9 +864,9 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog */}
+      {/* Reject Dialog - No Tags */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent className="rounded-2xl shadow-2xl border-0">
+        <DialogContent className="rounded-2xl shadow-2xl border-0 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-rose-600">
               <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/30">
@@ -847,9 +940,9 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Image Preview & Forensic Details Dialog */}
+      {/* Image Preview Dialog - No Tags */}
       <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
-        <DialogContent className="rounded-2xl shadow-2xl border-0 max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-2xl shadow-2xl border-0 max-w-md max-h-[90vh] overflow-y-auto dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5 text-blue-600" />
@@ -877,7 +970,6 @@ export default function AdminSignatureVerificationPage() {
                   )}
                 </div>
 
-                {/* Forensic Details Section */}
                 <div className="w-full space-y-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-border">
                   <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                     <History className="h-3 w-3" /> Signature Timeline
@@ -914,7 +1006,6 @@ export default function AdminSignatureVerificationPage() {
                         </span>
                       </div>
                     )}
-                    {/* Conditional rendering for IP Address */}
                     {selectedSignature.ip_address && (
                       <div className="flex justify-between items-center text-xs border-b border-border/50 pb-1">
                         <span className="text-muted-foreground">IP Address</span>
@@ -923,7 +1014,6 @@ export default function AdminSignatureVerificationPage() {
                         </span>
                       </div>
                     )}
-                    {/* Conditional rendering for User Agent */}
                     {selectedSignature.user_agent && (
                       <div className="flex justify-between items-start text-xs">
                         <span className="text-muted-foreground shrink-0">Device</span>
@@ -957,10 +1047,9 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Code Dialog - Sleek & Compact */}
+      {/* QR Code Dialog - No Tags */}
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
-        <DialogContent className="rounded-2xl shadow-xl border-0 max-w-md overflow-hidden p-0">
-          {/* Header */}
+        <DialogContent className="rounded-2xl shadow-xl border-0 max-w-md overflow-hidden p-0 dark:bg-gray-900">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 text-white">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-white text-base">
@@ -973,7 +1062,6 @@ export default function AdminSignatureVerificationPage() {
             </DialogHeader>
           </div>
 
-          {/* Body */}
           <div className="flex flex-col items-center p-6 bg-gray-50/30 dark:bg-gray-800/30">
             {selectedSignature?.qr_code?.image ? (
               <motion.div
@@ -982,7 +1070,6 @@ export default function AdminSignatureVerificationPage() {
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="relative group"
               >
-                {/* QR Image - Reduced to 192px */}
                 <div className="w-48 h-48 bg-white dark:bg-gray-900 rounded-xl p-3 shadow-md border border-gray-200 dark:border-gray-700 flex items-center justify-center">
                   <img
                     src={selectedSignature.qr_code.image}
@@ -993,7 +1080,6 @@ export default function AdminSignatureVerificationPage() {
                     }}
                   />
                 </div>
-                {/* Verified Badge */}
                 <div className="absolute -top-2 -right-2 bg-emerald-500 rounded-full p-1.5 shadow-md shadow-emerald-500/30">
                   <ShieldCheck className="h-4 w-4 text-white" />
                 </div>
@@ -1004,7 +1090,6 @@ export default function AdminSignatureVerificationPage() {
               </div>
             )}
 
-            {/* Info & Actions */}
             <div className="mt-4 text-center space-y-3 w-full max-w-xs">
               <div>
                 <p className="text-sm font-medium dark:text-white">Scan to Verify</p>

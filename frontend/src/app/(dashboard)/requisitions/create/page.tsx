@@ -48,6 +48,8 @@ import {
   Users,
   Briefcase as BriefcaseIcon,
   Calendar as CalendarIcon2,
+  ShoppingCart,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +82,10 @@ import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import type { Department } from '@/types/common.types';
 import type { CreateRequisitionData } from '@/types/requisition.types';
 
+// UI Components
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -91,60 +97,57 @@ const DEBOUNCE_DELAY = 500;
 // HOD role identifiers
 const HOD_ROLES = ['hod', 'head_of_department'];
 
-// Priority options with icons and colors
+// Priority options with colors
 const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low', icon: Star, color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
-  { value: 'medium', label: 'Medium', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-  { value: 'high', label: 'High', icon: Zap, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  { value: 'emergency', label: 'Emergency', icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
+  { value: 'low', label: 'Low', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
+  { value: 'medium', label: 'Medium', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+  { value: 'high', label: 'High', color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+  { value: 'emergency', label: 'Emergency', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
 ];
 
 const TYPE_OPTIONS = [
-  { value: 'normal', label: 'Normal', icon: FileText, color: 'text-blue-500' },
-  { value: 'emergency', label: 'Emergency', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'normal', label: 'Normal', color: 'text-blue-500' },
+  { value: 'emergency', label: 'Emergency', color: 'text-red-500' },
 ];
 
 const URGENCY_OPTIONS = [
-  { value: 'routine', label: 'Routine', icon: Clock, color: 'text-gray-400' },
-  { value: 'urgent', label: 'Urgent', icon: Zap, color: 'text-amber-500' },
-  { value: 'critical', label: 'Critical', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'routine', label: 'Routine', color: 'text-gray-400' },
+  { value: 'urgent', label: 'Urgent', color: 'text-amber-500' },
+  { value: 'critical', label: 'Critical', color: 'text-red-500' },
 ];
 
 const BUDGET_SOURCE_OPTIONS = [
-  { value: 'recurrent', label: 'Recurrent', icon: RefreshCw, color: 'text-blue-500' },
-  { value: 'development', label: 'Development', icon: TrendingUp, color: 'text-emerald-500' },
-  { value: 'donor', label: 'Donor Funded', icon: Globe, color: 'text-purple-500' },
-  { value: 'internal', label: 'Internal', icon: Home, color: 'text-amber-500' },
+  { value: 'recurrent', label: 'Recurrent', color: 'text-blue-500' },
+  { value: 'development', label: 'Development', color: 'text-emerald-500' },
+  { value: 'donor', label: 'Donor Funded', color: 'text-purple-500' },
+  { value: 'internal', label: 'Internal', color: 'text-amber-500' },
 ];
 
 const FUNDING_SOURCE_OPTIONS = [
-  { value: 'government', label: 'Government', icon: Building2, color: 'text-blue-500' },
-  { value: 'donor', label: 'Donor', icon: Heart, color: 'text-red-500' },
-  { value: 'internal', label: 'Internal', icon: Home, color: 'text-emerald-500' },
-  { value: 'private', label: 'Private Sector', icon: BriefcaseIcon, color: 'text-purple-500' },
+  { value: 'government', label: 'Government', color: 'text-blue-500' },
+  { value: 'donor', label: 'Donor', color: 'text-red-500' },
+  { value: 'internal', label: 'Internal', color: 'text-emerald-500' },
+  { value: 'private', label: 'Private Sector', color: 'text-purple-500' },
 ];
 
 const PROCUREMENT_METHOD_OPTIONS = [
-  { value: 'direct_purchase', label: 'Direct Purchase', icon: ShoppingCart, color: 'text-blue-500' },
-  { value: 'request_for_quotation', label: 'Request for Quotation', icon: FileText, color: 'text-amber-500' },
-  { value: 'tender', label: 'Tender', icon: Target, color: 'text-emerald-500' },
-  { value: 'framework_agreement', label: 'Framework Agreement', icon: Award, color: 'text-purple-500' },
-  { value: 'emergency_procurement', label: 'Emergency Procurement', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'direct_purchase', label: 'Direct Purchase', color: 'text-blue-500' },
+  { value: 'request_for_quotation', label: 'Request for Quotation', color: 'text-amber-500' },
+  { value: 'tender', label: 'Tender', color: 'text-emerald-500' },
+  { value: 'framework_agreement', label: 'Framework Agreement', color: 'text-purple-500' },
+  { value: 'emergency_procurement', label: 'Emergency Procurement', color: 'text-red-500' },
 ];
 
 const RISK_LEVEL_OPTIONS = [
-  { value: 'low', label: 'Low', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-  { value: 'medium', label: 'Medium', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  { value: 'high', label: 'High', icon: Shield, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
-  { value: 'critical', label: 'Critical', icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-200 dark:bg-red-900/50' },
+  { value: 'low', label: 'Low', color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+  { value: 'medium', label: 'Medium', color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+  { value: 'high', label: 'High', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
+  { value: 'critical', label: 'Critical', color: 'text-red-600', bg: 'bg-red-200 dark:bg-red-900/50' },
 ];
 
 // ============================================
 // HELPERS
 // ============================================
-
-// Import missing icons
-import { ShoppingCart, RefreshCw } from 'lucide-react';
 
 const generateRequisitionNumber = (): string => {
   const now = new Date();
@@ -253,46 +256,47 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
   }, [index, onRemove]);
 
   return (
-    <div className="border rounded-xl p-5 bg-white dark:bg-gray-900 hover:shadow-md transition-all duration-200 relative group">
+    <div className="relative group border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 rounded-xl p-4 bg-white dark:bg-gray-900 hover:shadow-lg transition-all duration-300">
       <Button
         type="button"
         variant="ghost"
         size="sm"
         onClick={handleRemove}
         disabled={!canRemove}
-        className="absolute top-3 right-3 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 rounded-lg"
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-3.5 w-3.5" />
       </Button>
 
-      <div className="grid grid-cols-12 gap-4 items-end">
-        <div className="col-span-12 md:col-span-3 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3">
+        <div className="col-span-12 md:col-span-3 space-y-1">
+          <Label className="text-xs text-muted-foreground">
             Item Name <span className="text-red-500">*</span>
           </Label>
-          <div className="relative">
-            <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Enter item name"
-              value={item.item_name || ''}
-              onChange={(e) => handleChange('item_name', e.target.value)}
-              className="pl-9 h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
-          </div>
+          <Input
+            placeholder="Enter item name"
+            value={item.item_name || ''}
+            onChange={(e) => handleChange('item_name', e.target.value)}
+            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+          />
         </div>
 
-        <div className="col-span-12 md:col-span-3 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Description</Label>
+        <div className="col-span-12 md:col-span-3 space-y-1">
+          <Label className="text-xs text-muted-foreground">Description</Label>
           <Input
             placeholder="Item description"
             value={item.description || ''}
             onChange={(e) => handleChange('description', e.target.value)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <div className="col-span-3 md:col-span-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">
             Qty <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -302,28 +306,28 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
             placeholder="0"
             value={item.quantity || ''}
             onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl text-center"
+            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg text-center"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <div className="col-span-3 md:col-span-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">
             Unit <span className="text-red-500">*</span>
           </Label>
           <Input
             placeholder="e.g., Each"
             value={item.unit_of_measure || ''}
             onChange={(e) => handleChange('unit_of_measure', e.target.value)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <div className="col-span-3 md:col-span-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">
             Unit Cost <span className="text-red-500">*</span>
           </Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">KES</span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">KES</span>
             <Input
               type="number"
               step="0.01"
@@ -331,97 +335,68 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
               placeholder="0.00"
               value={item.estimated_unit_cost || ''}
               onChange={(e) => handleChange('estimated_unit_cost', parseFloat(e.target.value) || 0)}
-              className="pl-12 h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+              className="pl-11 h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Tax %</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="0"
-            value={item.tax_rate || 0}
-            onChange={(e) => handleChange('tax_rate', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Discount %</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="0"
-            value={item.discount_percentage || 0}
-            onChange={(e) => handleChange('discount_percentage', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Total</Label>
-          <div className="h-11 flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3">
+        <div className="col-span-3 md:col-span-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">Total</Label>
+          <div className="h-9 flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3">
             KES {total.toFixed(2)}
           </div>
         </div>
       </div>
 
       {/* Expandable details */}
-      <details className="mt-4">
-        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 transition-colors flex items-center gap-1">
-          <ChevronDown className="h-3 w-3" />
+      <details className="mt-2">
+        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           More options
         </summary>
-        <div className="mt-4 grid grid-cols-12 gap-4 pt-4 border-t border-dashed border-gray-200 dark:border-gray-700">
-          <div className="col-span-12 md:col-span-4 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Specifications</Label>
+        <div className="mt-2 grid grid-cols-12 gap-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
+          <div className="col-span-12 md:col-span-3 space-y-1">
+            <Label className="text-xs text-muted-foreground">Specifications</Label>
             <Input
               placeholder="Specifications"
               value={item.specifications || ''}
               onChange={(e) => handleChange('specifications', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Catalog #</Label>
+          <div className="col-span-4 md:col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Catalog #</Label>
             <Input
               placeholder="Catalog"
               value={item.catalog_number || ''}
               onChange={(e) => handleChange('catalog_number', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Manufacturer</Label>
+          <div className="col-span-4 md:col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Manufacturer</Label>
             <Input
               placeholder="Manufacturer"
               value={item.manufacturer || ''}
               onChange={(e) => handleChange('manufacturer', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Model</Label>
+          <div className="col-span-4 md:col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Model</Label>
             <Input
               placeholder="Model"
               value={item.model_number || ''}
               onChange={(e) => handleChange('model_number', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
+              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
-          <div className="col-span-12 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Supplier</Label>
+          <div className="col-span-12 md:col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Supplier</Label>
             <Select
               value={item.supplier_id?.toString() || undefined}
               onValueChange={(value) => handleChange('supplier_id', value && value !== 'none' ? parseInt(value) : null)}
             >
-              <SelectTrigger className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl">
+              <SelectTrigger className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg">
                 <SelectValue placeholder="Supplier" />
               </SelectTrigger>
               <SelectContent>
@@ -434,15 +409,15 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-12 md:col-span-2 space-y-1.5 flex items-center gap-3 pt-2">
+          <div className="col-span-12 md:col-span-1 space-y-1 flex items-center gap-2 pt-1">
             <input
               type="checkbox"
               id={`item-${index}-inventory`}
               checked={item.is_inventory_item || false}
               onChange={(e) => handleChange('is_inventory_item', e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            <Label htmlFor={`item-${index}-inventory`} className="text-xs font-medium cursor-pointer">
+            <Label htmlFor={`item-${index}-inventory`} className="text-xs cursor-pointer">
               Inventory
             </Label>
             {item.is_inventory_item && (
@@ -450,7 +425,7 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
                 placeholder="Inv code"
                 value={item.inventory_code || ''}
                 onChange={(e) => handleChange('inventory_code', e.target.value)}
-                className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl flex-1"
+                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg flex-1"
               />
             )}
           </div>
@@ -482,22 +457,22 @@ const DraftRestoreAlert = memo(({
   const timeString = timestamp ? new Date(timestamp).toLocaleString() : '';
 
   return (
-    <Alert className="mb-6 border-amber-500/50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20">
+    <Alert className="mb-6 border-amber-500/50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-xl">
       <div className="flex items-start gap-3">
-        <div className="p-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 mt-0.5">
-          <RotateCcw className="h-4 w-4 text-amber-600" />
-        </div>
+        <RotateCcw className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
         <div className="flex-1">
-          <AlertDescription className="text-amber-800 dark:text-amber-300">
-            <span className="font-semibold">💾 Draft found!</span> You have an unsaved requisition draft from{' '}
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            💾 Draft found!
+          </p>
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            You have an unsaved requisition draft from{' '}
             <span className="font-medium">{timeString}</span>.
-          </AlertDescription>
-          <div className="flex gap-3 mt-2">
+          </p>
+          <div className="flex gap-3 mt-3">
             <Button
               size="sm"
-              variant="default"
               onClick={onRestore}
-              className="gap-1.5 h-8 bg-amber-600 hover:bg-amber-700 text-white"
+              className="gap-1.5 h-8 bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Restore Draft
@@ -509,7 +484,7 @@ const DraftRestoreAlert = memo(({
                 onDiscard();
                 setIsVisible(false);
               }}
-              className="h-8"
+              className="h-8 rounded-lg"
             >
               Discard Draft
             </Button>
@@ -519,7 +494,7 @@ const DraftRestoreAlert = memo(({
           variant="ghost"
           size="sm"
           onClick={() => setIsVisible(false)}
-          className="h-8 w-8 p-0"
+          className="h-7 w-7 p-0 rounded-lg"
         >
           <X className="h-4 w-4" />
         </Button>
@@ -531,55 +506,46 @@ const DraftRestoreAlert = memo(({
 DraftRestoreAlert.displayName = 'DraftRestoreAlert';
 
 // ============================================
-// SELECT COMPONENT WITH ICON
+// SELECT COMPONENT
 // ============================================
 
-interface IconSelectProps {
+interface SimpleSelectProps {
   value: string;
   onValueChange: (value: string) => void;
   placeholder: string;
-  options: { value: string; label: string; icon: any; color?: string; bg?: string }[];
+  options: { value: string; label: string; color?: string; bg?: string }[];
   disabled?: boolean;
   className?: string;
 }
 
-const IconSelect = memo(({ value, onValueChange, placeholder, options, disabled, className }: IconSelectProps) => {
+const SimpleSelect = memo(({ value, onValueChange, placeholder, options, disabled, className }: SimpleSelectProps) => {
   const selectedOption = options.find(opt => opt.value === value);
-  const SelectedIcon = selectedOption?.icon;
 
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger className={cn("h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl", className)}>
-        <div className="flex items-center gap-2 truncate">
-          {SelectedIcon && (
-            <SelectedIcon className={cn("h-4 w-4 flex-shrink-0", selectedOption?.color)} />
-          )}
-          <SelectValue placeholder={placeholder} />
-        </div>
+      <SelectTrigger className={cn("h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg", className)}>
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-        {options.map((option) => {
-          const Icon = option.icon;
-          return (
-            <SelectItem key={option.value} value={option.value} className="py-2.5">
-              <div className="flex items-center gap-2.5">
-                <Icon className={cn("h-4 w-4 flex-shrink-0", option.color)} />
-                <span>{option.label}</span>
-                {option.bg && (
-                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", option.bg)}>
-                    {option.value}
-                  </Badge>
-                )}
-              </div>
-            </SelectItem>
-          );
-        })}
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} className="py-2">
+            <div className="flex items-center gap-2">
+              {option.color && <span className={cn("h-2 w-2 rounded-full", option.color.replace('text-', 'bg-'))} />}
+              <span>{option.label}</span>
+              {option.bg && (
+                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", option.bg)}>
+                  {option.value}
+                </Badge>
+              )}
+            </div>
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
 });
 
-IconSelect.displayName = 'IconSelect';
+SimpleSelect.displayName = 'SimpleSelect';
 
 // ============================================
 // MAIN COMPONENT
@@ -974,16 +940,17 @@ export default function CreateRequisitionPage() {
         icon={<List className="h-5 w-5 text-blue-600" />}
         background="gradient"
       >
-        <Card className="shadow-sm">
-          <CardContent className="pt-6">
-            <Alert variant="destructive" className="rounded-xl">
+        <Card className="shadow-sm border-0 bg-white dark:bg-gray-900 rounded-xl relative">
+          <WrappedCornerTag label="ERROR" color="red" position="top-left" size="lg" />
+          <CardContent className="pt-8">
+            <Alert variant="destructive" className="rounded-lg border-red-200 dark:border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 You are not assigned as HOD to any department. Please contact your administrator to set up your department.
               </AlertDescription>
             </Alert>
             <div className="flex justify-center mt-6">
-              <Button onClick={() => router.push('/dashboard')} className="gap-2 rounded-xl">
+              <Button onClick={() => router.push('/dashboard')} className="gap-2 rounded-lg bg-blue-600 hover:bg-blue-700">
                 <ArrowLeft className="h-4 w-4" />
                 Return to Dashboard
               </Button>
@@ -1008,7 +975,7 @@ export default function CreateRequisitionPage() {
       actions={
         <div className="flex items-center gap-2">
           {hasDraft && (
-            <Badge variant="warning" className="gap-1.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800">
+            <Badge className="gap-1.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 rounded-full px-3 py-1">
               <RotateCcw className="h-3 w-3" />
               Draft Available
             </Badge>
@@ -1017,7 +984,7 @@ export default function CreateRequisitionPage() {
             variant="outline"
             size="sm"
             onClick={() => router.push('/requisitions/manage')}
-            className="gap-2 h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+            className="gap-2 h-9 rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
@@ -1025,28 +992,42 @@ export default function CreateRequisitionPage() {
         </div>
       }
     >
-      <Card className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950">
-        <CardHeader className="pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
-          <CardTitle className="flex items-center gap-2.5 text-xl">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20">
+      <Card className="shadow-lg border-0 bg-white dark:bg-gray-900 rounded-xl overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+        <WrappedCornerTag label="NEW" color="blue" position="top-left" size="lg" />
+
+        <CardHeader className="pb-4 pt-8 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20">
               <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Requisition Details
-          </CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Enter all required information for your requisition request
-          </CardDescription>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-white">
+                Requisition Details
+              </CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
+                Enter all required information for your requisition request
+              </CardDescription>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] rounded-full px-3 py-1 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+                <Clock className="h-3 w-3 mr-1" />
+                Auto-save
+              </Badge>
+            </div>
+          </div>
         </CardHeader>
+
         <CardContent className="pt-6">
           {error && (
-            <Alert variant="destructive" className="mb-6 rounded-xl border-red-200 dark:border-red-800">
+            <Alert variant="destructive" className="mb-6 rounded-lg border-red-200 dark:border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {success && (
-            <Alert className="mb-6 rounded-xl border-green-500/50 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
+            <Alert className="mb-6 rounded-lg border-green-500/50 bg-green-50 dark:bg-green-950/20">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
                 ✅ Requisition created successfully! Redirecting...
@@ -1062,162 +1043,148 @@ export default function CreateRequisitionPage() {
             />
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Requester Information */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-gradient-to-r from-gray-50/80 to-blue-50/30 dark:from-gray-800/50 dark:to-blue-900/20 rounded-2xl border border-gray-200/50 dark:border-gray-700/50">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Hash className="h-3.5 w-3.5" />
                   Requisition Number
                 </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                   <span className="text-sm font-mono font-medium text-gray-700 dark:text-gray-300">{formData.requisition_number}</span>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <User className="h-3.5 w-3.5" />
                   Requester Name
                 </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{formData.requester_name}</span>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Mail className="h-3.5 w-3.5" />
                   Requester Email
                 </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                   <span className="text-sm text-gray-600 dark:text-gray-400">{formData.requester_email}</span>
                 </div>
               </div>
             </div>
 
-            <Separator className="dark:border-gray-700/50" />
+            <Separator className="dark:border-gray-700" />
 
             {/* Basic Information */}
-            <div className="space-y-5">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                  <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <h3 className="text-sm font-semibold">Basic Information</h3>
-              </div>
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Basic Information
+              </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="md:col-span-2 space-y-1.5">
-                  <Label htmlFor="title" className="text-sm font-medium flex items-center gap-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2 space-y-1">
+                  <Label htmlFor="title" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Requisition Title <span className="text-red-500">*</span>
                   </Label>
-                  <div className="relative">
-                    <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="title"
-                      placeholder="Enter a clear and descriptive requisition title"
-                      value={formData.title}
-                      onChange={(e) => handleChange('title', e.target.value)}
-                      disabled={isSubmitting || success || isCreating}
-                      className={cn(
-                        "pl-10 h-12 text-base rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                        formErrors.title && "border-red-500 focus-visible:ring-red-500"
-                      )}
-                    />
-                  </div>
+                  <Input
+                    id="title"
+                    placeholder="Enter a clear and descriptive requisition title"
+                    value={formData.title}
+                    onChange={(e) => handleChange('title', e.target.value)}
+                    disabled={isSubmitting || success || isCreating}
+                    className={cn(
+                      "h-11 text-base rounded-lg dark:bg-gray-900 dark:border-gray-700",
+                      formErrors.title && "border-red-500"
+                    )}
+                  />
                   {formErrors.title && <p className="text-sm text-red-500 mt-1">{formErrors.title}</p>}
                 </div>
 
-                {/* Department */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     Department <span className="text-red-500">*</span>
                   </Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Select
-                      value={formData.department_id || undefined}
-                      onValueChange={(value) => {
-                        if (isHOD) return;
-                        handleChange('department_id', value);
-                      }}
-                      disabled={isHOD || isSubmitting || success || isCreating}
-                    >
-                      <SelectTrigger className={cn(
-                        "pl-10 h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                        isHOD && "bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-80",
-                        formErrors.department_id && "border-red-500"
-                      )}>
-                        <SelectValue placeholder={isHOD ? `${userDepartmentName} (locked)` : "Select department"} />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                        {isHOD && userDepartmentId && departments.find(d => d.id.toString() === userDepartmentId) && (
-                          <SelectItem value={userDepartmentId}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-blue-500" />
-                              {departments.find(d => d.id.toString() === userDepartmentId)?.name}
-                              <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">HOD</Badge>
-                            </div>
-                          </SelectItem>
-                        )}
-                        {!isHOD && departments.length > 0 && departments.map((dept: Department) => (
-                          <SelectItem key={dept.id} value={dept.id.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              {dept.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Select
+                    value={formData.department_id || undefined}
+                    onValueChange={(value) => {
+                      if (isHOD) return;
+                      handleChange('department_id', value);
+                    }}
+                    disabled={isHOD || isSubmitting || success || isCreating}
+                  >
+                    <SelectTrigger className={cn(
+                      "h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700",
+                      isHOD && "bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-80",
+                      formErrors.department_id && "border-red-500"
+                    )}>
+                      <SelectValue placeholder={isHOD ? `${userDepartmentName} (locked)` : "Select department"} />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                      {isHOD && userDepartmentId && departments.find(d => d.id.toString() === userDepartmentId) && (
+                        <SelectItem value={userDepartmentId}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-blue-500" />
+                            {departments.find(d => d.id.toString() === userDepartmentId)?.name}
+                            <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">HOD</Badge>
+                          </div>
+                        </SelectItem>
+                      )}
+                      {!isHOD && departments.length > 0 && departments.map((dept: Department) => (
+                        <SelectItem key={dept.id} value={dept.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            {dept.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {isHOD && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
                       <Shield className="h-3 w-3 text-blue-500" />
-                      As HOD, you can only create requisitions for <strong>{userDepartmentName}</strong>
+                      As HOD, you can only create requisitions for <strong className="text-gray-700 dark:text-gray-300">{userDepartmentName}</strong>
                     </p>
                   )}
                   {formErrors.department_id && <p className="text-sm text-red-500 mt-1">{formErrors.department_id}</p>}
                 </div>
 
-                {/* Preferred Supplier */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     Preferred Supplier
                   </Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Select
-                      value={formData.supplier_id || undefined}
-                      onValueChange={(value) => handleChange('supplier_id', value)}
-                      disabled={isSubmitting || success || isCreating}
-                    >
-                      <SelectTrigger className="pl-10 h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700">
-                        <SelectValue placeholder="Select supplier (optional)" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                        <SelectItem value="none">None</SelectItem>
-                        {suppliers.length > 0 && suppliers.map((supplier: any) => (
-                          <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              {supplier.company_name || supplier.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Select
+                    value={formData.supplier_id || undefined}
+                    onValueChange={(value) => handleChange('supplier_id', value)}
+                    disabled={isSubmitting || success || isCreating}
+                  >
+                    <SelectTrigger className="h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700">
+                      <SelectValue placeholder="Select supplier (optional)" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                      <SelectItem value="none">None</SelectItem>
+                      {suppliers.length > 0 && suppliers.map((supplier: any) => (
+                        <SelectItem key={supplier.id} value={supplier.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            {supplier.company_name || supplier.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {/* Priority */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4 text-muted-foreground" />
                     Priority
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.priority}
                     onValueChange={(value) => handleChange('priority', value)}
                     placeholder="Select priority"
@@ -1226,13 +1193,12 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Type */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Tag className="h-4 w-4 text-muted-foreground" />
                     Type
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.type}
                     onValueChange={(value) => handleChange('type', value)}
                     placeholder="Select type"
@@ -1241,13 +1207,12 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Urgency */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
                     Urgency
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.urgency}
                     onValueChange={(value) => handleChange('urgency', value)}
                     placeholder="Select urgency"
@@ -1256,9 +1221,8 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Required By Date */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                     Required By Date
                   </Label>
@@ -1267,16 +1231,16 @@ export default function CreateRequisitionPage() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                          "w-full justify-start text-left font-normal h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700",
                           !formData.required_by_date && "text-muted-foreground"
                         )}
                         disabled={isSubmitting || success || isCreating}
                       >
-                        <CalendarIcon className="mr-2.5 h-4 w-4" />
+                        <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.required_by_date ? format(new Date(formData.required_by_date), "PPP") : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
+                    <PopoverContent className="w-auto p-0 rounded-lg">
                       <CalendarComponent
                         mode="single"
                         selected={formData.required_by_date ? new Date(formData.required_by_date) : undefined}
@@ -1286,9 +1250,8 @@ export default function CreateRequisitionPage() {
                   </Popover>
                 </div>
 
-                {/* Required Delivery Date */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                     Required Delivery Date
                   </Label>
@@ -1297,16 +1260,16 @@ export default function CreateRequisitionPage() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                          "w-full justify-start text-left font-normal h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700",
                           !formData.required_delivery_date && "text-muted-foreground"
                         )}
                         disabled={isSubmitting || success || isCreating}
                       >
-                        <CalendarIcon className="mr-2.5 h-4 w-4" />
+                        <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.required_delivery_date ? format(new Date(formData.required_delivery_date), "PPP") : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
+                    <PopoverContent className="w-auto p-0 rounded-lg">
                       <CalendarComponent
                         mode="single"
                         selected={formData.required_delivery_date ? new Date(formData.required_delivery_date) : undefined}
@@ -1317,9 +1280,8 @@ export default function CreateRequisitionPage() {
                 </div>
               </div>
 
-              {/* Description */}
-              <div className="space-y-1.5">
-                <Label htmlFor="description" className="text-sm font-medium flex items-center gap-1.5">
+              <div className="space-y-1">
+                <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <Info className="h-4 w-4 text-muted-foreground" />
                   Description
                 </Label>
@@ -1329,14 +1291,13 @@ export default function CreateRequisitionPage() {
                   value={formData.description}
                   onChange={(e) => handleChange('description', e.target.value)}
                   disabled={isSubmitting || success || isCreating}
-                  className="min-h-[100px] resize-none text-base rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  rows={4}
+                  className="min-h-[80px] resize-none text-base rounded-lg dark:bg-gray-900 dark:border-gray-700"
+                  rows={3}
                 />
               </div>
 
-              {/* Justification */}
-              <div className="space-y-1.5">
-                <Label htmlFor="justification" className="text-sm font-medium flex items-center gap-1.5">
+              <div className="space-y-1">
+                <Label htmlFor="justification" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   Justification
                 </Label>
@@ -1346,22 +1307,20 @@ export default function CreateRequisitionPage() {
                   value={formData.justification}
                   onChange={(e) => handleChange('justification', e.target.value)}
                   disabled={isSubmitting || success || isCreating}
-                  className="min-h-[80px] resize-none text-base rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  rows={3}
+                  className="min-h-[60px] resize-none text-base rounded-lg dark:bg-gray-900 dark:border-gray-700"
+                  rows={2}
                 />
               </div>
             </div>
 
-            <Separator className="dark:border-gray-700/50" />
+            <Separator className="dark:border-gray-700" />
 
             {/* Items Section */}
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20">
-                    <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold">Requisition Items</h3>
+                  <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Requisition Items</h3>
                   <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5">
                     {formData.items.filter(i => i.item_name.trim()).length}
                   </Badge>
@@ -1372,7 +1331,7 @@ export default function CreateRequisitionPage() {
                   size="sm"
                   onClick={addItem}
                   disabled={isSubmitting || success || isCreating}
-                  className="gap-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  className="gap-2 rounded-lg"
                 >
                   <Plus className="h-4 w-4" />
                   Add Item
@@ -1401,7 +1360,7 @@ export default function CreateRequisitionPage() {
               <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    Total Items: <span className="font-medium">{formData.items.filter(i => i.item_name.trim()).length}</span>
+                    Total Items: <span className="font-medium text-gray-700 dark:text-gray-300">{formData.items.filter(i => i.item_name.trim()).length}</span>
                   </p>
                 </div>
                 <div className="text-right">
@@ -1413,17 +1372,17 @@ export default function CreateRequisitionPage() {
               </div>
             </div>
 
-            <Separator className="dark:border-gray-700/50" />
+            <Separator className="dark:border-gray-700" />
 
             {/* Advanced Options Toggle */}
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full h-12 text-base rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+              className="w-full h-10 text-sm rounded-lg dark:border-gray-700 dark:hover:bg-gray-800 border-dashed hover:border-solid transition-all"
               disabled={isSubmitting || success || isCreating}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Layers className="h-4 w-4" />
                 {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
                 {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -1431,10 +1390,9 @@ export default function CreateRequisitionPage() {
             </Button>
 
             {showAdvanced && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
-                {/* Budget Code */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 p-4 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Hash className="h-4 w-4 text-muted-foreground" />
                     Budget Code
                   </Label>
@@ -1443,17 +1401,16 @@ export default function CreateRequisitionPage() {
                     value={formData.budget_code}
                     onChange={(e) => handleChange('budget_code', e.target.value)}
                     disabled={isSubmitting || success || isCreating}
-                    className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                    className="h-10 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700"
                   />
                 </div>
 
-                {/* Budget Source */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     Budget Source
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.budget_source || ''}
                     onValueChange={(value) => handleChange('budget_source', value)}
                     placeholder="Select budget source"
@@ -1462,13 +1419,12 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Funding Source */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     Funding Source
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.funding_source || ''}
                     onValueChange={(value) => handleChange('funding_source', value)}
                     placeholder="Select funding source"
@@ -1477,9 +1433,8 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Project Code */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Hash className="h-4 w-4 text-muted-foreground" />
                     Project Code
                   </Label>
@@ -1488,17 +1443,16 @@ export default function CreateRequisitionPage() {
                     value={formData.project_code}
                     onChange={(e) => handleChange('project_code', e.target.value)}
                     disabled={isSubmitting || success || isCreating}
-                    className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                    className="h-10 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700"
                   />
                 </div>
 
-                {/* Procurement Method */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
                     Procurement Method
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.procurement_method || ''}
                     onValueChange={(value) => handleChange('procurement_method', value)}
                     placeholder="Select procurement method"
@@ -1507,9 +1461,8 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Framework Agreement */}
-                <div className="space-y-1.5 flex items-end gap-3 pt-2">
-                  <div className="flex items-center gap-2.5">
+                <div className="space-y-1 flex items-end gap-3 pt-1">
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="framework_agreement"
@@ -1518,7 +1471,7 @@ export default function CreateRequisitionPage() {
                       disabled={isSubmitting || success || isCreating}
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <Label htmlFor="framework_agreement" className="text-sm font-medium cursor-pointer">
+                    <Label htmlFor="framework_agreement" className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300">
                       Framework Agreement
                     </Label>
                   </div>
@@ -1529,19 +1482,18 @@ export default function CreateRequisitionPage() {
                         value={formData.framework_agreement_id}
                         onChange={(e) => handleChange('framework_agreement_id', e.target.value)}
                         disabled={isSubmitting || success || isCreating}
-                        className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                        className="h-10 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700"
                       />
                     </div>
                   )}
                 </div>
 
-                {/* Risk Level */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4 text-muted-foreground" />
                     Risk Level
                   </Label>
-                  <IconSelect
+                  <SimpleSelect
                     value={formData.risk_level}
                     onValueChange={(value) => handleChange('risk_level', value)}
                     placeholder="Select risk level"
@@ -1550,9 +1502,8 @@ export default function CreateRequisitionPage() {
                   />
                 </div>
 
-                {/* Risk Mitigation */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <Shield className="h-4 w-4 text-muted-foreground" />
                     Risk Mitigation
                   </Label>
@@ -1561,14 +1512,13 @@ export default function CreateRequisitionPage() {
                     value={formData.risk_mitigation}
                     onChange={(e) => handleChange('risk_mitigation', e.target.value)}
                     disabled={isSubmitting || success || isCreating}
-                    className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                    className="min-h-[50px] resize-none text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700"
                     rows={2}
                   />
                 </div>
 
-                {/* Compliance Notes */}
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                <div className="space-y-1 md:col-span-2">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
                     Compliance Notes
                   </Label>
@@ -1577,20 +1527,20 @@ export default function CreateRequisitionPage() {
                     value={formData.compliance_notes}
                     onChange={(e) => handleChange('compliance_notes', e.target.value)}
                     disabled={isSubmitting || success || isCreating}
-                    className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+                    className="min-h-[50px] resize-none text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700"
                     rows={2}
                   />
                 </div>
               </div>
             )}
 
-            <Separator className="dark:border-gray-700/50" />
+            <Separator className="dark:border-gray-700" />
 
             {/* Submit Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 type="submit"
-                className="gap-2 px-8 min-w-[180px] h-12 text-base rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+                className="gap-2 px-8 min-w-[160px] h-11 text-base rounded-lg bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20"
                 disabled={isSubmitting || success || isCreating}
               >
                 {isSubmitting || isCreating ? (
@@ -1610,7 +1560,7 @@ export default function CreateRequisitionPage() {
                 variant="outline"
                 onClick={() => router.push('/requisitions')}
                 disabled={isSubmitting || success || isCreating}
-                className="gap-2 h-12 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+                className="gap-2 h-11 rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <X className="h-4 w-4" />
                 Cancel
@@ -1621,7 +1571,7 @@ export default function CreateRequisitionPage() {
                   variant="ghost"
                   size="sm"
                   onClick={discardDraft}
-                  className="text-xs text-muted-foreground h-8 px-3 rounded-xl"
+                  className="text-xs text-muted-foreground h-8 px-3 rounded-lg hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   Clear Draft
                 </Button>
@@ -1629,18 +1579,16 @@ export default function CreateRequisitionPage() {
             </div>
           </form>
         </CardContent>
-        <CardFooter className="border-t border-gray-200/50 dark:border-gray-700/50 py-4 px-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-b-2xl">
+
+        <CardFooter className="border-t border-gray-200 dark:border-gray-700 py-3 px-6 bg-gray-50 dark:bg-gray-800/30 rounded-b-xl">
           <div className="flex justify-between items-center w-full">
             <p className="text-xs text-muted-foreground">
               <span className="text-red-500">*</span> Required fields. All requisitions go through an approval workflow.
             </p>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Badge variant="outline" className="text-[10px] rounded-full px-2.5 py-0">
-                  Auto-save
-                </Badge>
-              </span>
-            </div>
+            <Badge variant="outline" className="text-[10px] rounded-full px-2.5 py-0 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+              <Shield className="h-3 w-3 mr-1" />
+              Secure
+            </Badge>
           </div>
         </CardFooter>
       </Card>

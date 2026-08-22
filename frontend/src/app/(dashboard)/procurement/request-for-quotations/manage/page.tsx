@@ -159,6 +159,11 @@ import { useProcurementStatistics } from '@/hooks/useProcurement';
 // Types
 import type { QuotationRequest, QuotationStatus } from '@/types/quotations.types';
 
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -193,6 +198,17 @@ const STATUS_ICONS: Record<string, any> = {
   closed: CheckCircle,
   cancelled: XCircle,
   expired: AlertCircle,
+};
+
+// Status color map for WrappedCornerTag
+const statusColorMap: Record<string, 'emerald' | 'blue' | 'purple' | 'amber' | 'red' | 'teal' | 'indigo' | 'gray' | 'slate'> = {
+  draft: 'gray',
+  sent: 'blue',
+  responded: 'indigo',
+  evaluating: 'purple',
+  closed: 'emerald',
+  cancelled: 'red',
+  expired: 'amber',
 };
 
 // ============================================
@@ -265,125 +281,6 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 // ============================================
-// STATS CARDS - Premium Design
-// ============================================
-
-interface StatsCardsProps {
-  stats: any;
-  isLoading: boolean;
-  activeCount: number;
-  closingSoonCount: number;
-  totalQtns: number;
-  avgResponseRate: number;
-}
-
-const StatsCards = ({
-  stats,
-  isLoading,
-  activeCount,
-  closingSoonCount,
-  totalQtns,
-  avgResponseRate,
-}: StatsCardsProps) => {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Card key={i} className="animate-pulse border-0 shadow-sm rounded-xl bg-gray-100 dark:bg-gray-800">
-            <CardContent className="p-4">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2" />
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  const total = stats?.total || 0;
-  const approved = stats?.approved || 0;
-
-  const cards = [
-    {
-      label: 'Total RFQs',
-      value: totalQtns,
-      icon: FileText,
-      bgColor: 'bg-blue-50 dark:bg-blue-900/30',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-    },
-    {
-      label: 'Active',
-      value: activeCount,
-      icon: Activity,
-      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-    },
-    {
-      label: 'Closing Soon',
-      value: closingSoonCount,
-      icon: AlertCircle,
-      bgColor: 'bg-amber-50 dark:bg-amber-900/30',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-    },
-    {
-      label: 'Avg Response',
-      value: `${Math.round(avgResponseRate)}%`,
-      icon: TrendingUp,
-      bgColor: 'bg-purple-50 dark:bg-purple-900/30',
-      iconColor: 'text-purple-600 dark:text-purple-400',
-    },
-    {
-      label: 'Total Requisitions',
-      value: total,
-      icon: ShoppingCart,
-      bgColor: 'bg-red-50 dark:bg-red-900/30',
-      iconColor: 'text-red-600 dark:text-red-400',
-    },
-    {
-      label: 'Approved',
-      value: approved,
-      icon: Award,
-      bgColor: 'bg-indigo-50 dark:bg-indigo-900/30',
-      iconColor: 'text-indigo-600 dark:text-indigo-400',
-    },
-    {
-      label: 'Draft',
-      value: stats?.draft || 0,
-      icon: FileText,
-      bgColor: 'bg-gray-50 dark:bg-gray-800/30',
-      iconColor: 'text-gray-600 dark:text-gray-400',
-    },
-    {
-      label: 'Returned',
-      value: stats?.returned || 0,
-      icon: RotateCcw,
-      bgColor: 'bg-orange-50 dark:bg-orange-900/30',
-      iconColor: 'text-orange-600 dark:text-orange-400',
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-      {cards.map((card) => (
-        <Card key={card.label} className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">
-                {card.label}
-              </p>
-              <div className={cn("p-2 rounded-xl", card.bgColor, card.iconColor)}>
-                <card.icon className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold mt-2 text-gray-900 dark:text-gray-100">{card.value}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-};
-
-// ============================================
 // FILTERS COMPONENT
 // ============================================
 
@@ -409,8 +306,8 @@ const Filters = ({ filters, onFilterChange, onReset }: FiltersProps) => {
   ];
 
   return (
-    <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900">
-      <CardContent className="p-4">
+    <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
+      <CardContent className="p-4 pt-6">
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -498,319 +395,227 @@ const RFQTable = ({
 
   if (data.length === 0) {
     return (
-      <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/30 rounded-2xl border border-gray-200 dark:border-gray-700">
-        <div className="inline-flex p-4 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
-          <FileText className="h-12 w-12 text-muted-foreground" />
+      <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/30 rounded-2xl border border-gray-200 dark:border-gray-700 relative mt-6">
+        <WrappedCornerTag label="EMPTY" color="gray" position="top-left" size="lg" />
+        <div className="pt-4 ml-15">
+
+          <h3 className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">No RFQs Found</h3>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            No request for quotations have been created yet. Create your first RFQ from an approved requisition.
+          </p>
+          <Button
+            className="mt-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+            onClick={() => window.location.href = '/procurement/request-for-quotations/create'}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Your First RFQ
+          </Button>
         </div>
-        <h3 className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">No RFQs Found</h3>
-        <p className="text-muted-foreground max-w-md mx-auto">
-          No request for quotations have been created yet. Create your first RFQ from an approved requisition.
-        </p>
-        <Button
-          className="mt-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
-          onClick={() => window.location.href = '/procurement/request-for-quotations/create'}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Your First RFQ
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm">
-      <ScrollArea className="w-full">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
-              <TableHead className="w-[50px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">#</TableHead>
-              <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-3.5 w-3.5" />
-                  RFQ Number
-                </div>
-              </TableHead>
-              <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Title</TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-3.5 w-3.5" />
-                  Requisition
-                </div>
-              </TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">
-                <div className="flex items-center justify-center gap-2">
-                  <Users className="h-3.5 w-3.5" />
-                  Responses
-                </div>
-              </TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Closing
-                </div>
-              </TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <User className="h-3.5 w-3.5" />
-                  Created By
-                </div>
-              </TableHead>
-              <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((rfq, index) => {
-              const isExpired = rfq.is_expired;
-              const isClosingSoon = rfq.is_closing_soon && !isExpired && rfq.status !== 'closed' && rfq.status !== 'cancelled';
-              const generatedByName = getUserName(rfq.generated_by);
-              const hasResponses = (rfq.response_count || 0) > 0;
+    <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm relative">
+      <div className="pt-2">
+        <ScrollArea className="w-full">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+                <TableHead className="w-[80px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">#</TableHead>
+                <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-3.5 w-3.5" />
+                    RFQ Number
+                  </div>
+                </TableHead>
+                <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Title</TableHead>
+                <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    Requisition
+                  </div>
+                </TableHead>
+                <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Users className="h-3.5 w-3.5" />
+                    Responses
+                  </div>
+                </TableHead>
+                <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Closing
+                  </div>
+                </TableHead>
+                <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <User className="h-3.5 w-3.5" />
+                    Created By
+                  </div>
+                </TableHead>
 
-              return (
-                <TableRow
-                  key={rfq.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer group"
-                  onClick={() => onRowClick(rfq.id)}
-                  data-status={rfq.status}
-                >
-                  <TableCell className="font-mono text-xs text-muted-foreground py-4">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors text-gray-700 dark:text-gray-300">
-                      {((currentPage - 1) * ITEMS_PER_PAGE) + index + 1}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {rfq.qtn_number}
-                      </p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(rfq.issue_date)}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {rfq.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                        {rfq.description || 'No description'}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex flex-col gap-1">
-                      <StatusBadge status={rfq.status} />
-                      {isExpired && (
-                        <Badge variant="destructive" className="text-[10px] rounded-full">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Expired
-                        </Badge>
-                      )}
-                      {isClosingSoon && (
-                        <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] rounded-full animate-pulse">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Closing Soon
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {rfq.requisition?.reference_number || 'N/A'}
-                        </span>
-                      </div>
-                      {rfq.requisition && (
-                        <p className="text-xs text-muted-foreground truncate max-w-[150px]">
-                          {rfq.requisition.title}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
-                          {rfq.response_count || 0}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          / {rfq.sent_suppliers_count || 0}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 w-full min-w-[60px]">
-                        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${Math.min(rfq.response_rate || 0, 100)}%`,
-                              backgroundColor: (rfq.response_rate || 0) >= 80 ? '#10b981' : (rfq.response_rate || 0) >= 50 ? '#f59e0b' : '#ef4444'
-                            }}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((rfq, index) => {
+                const isExpired = rfq.is_expired;
+                const isClosingSoon = rfq.is_closing_soon && !isExpired && rfq.status !== 'closed' && rfq.status !== 'cancelled';
+                const generatedByName = getUserName(rfq.generated_by);
+                const hasResponses = (rfq.response_count || 0) > 0;
+                const status = rfq.status || 'draft';
+                const statusColor = statusColorMap[status] || 'gray';
+                const statusLabel = getStatusLabel(status);
+
+                return (
+                  <TableRow
+                    key={rfq.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer group relative"
+                    onClick={() => onRowClick(rfq.id)}
+                  >
+                    {/* # Column with Status Tag as overlay */}
+                    <TableCell className="py-4 relative text-center">
+                      <div className="relative inline-flex items-center justify-center">
+                        {/* Status Tag */}
+                        <div className="absolute -top-3 -left-3 z-20">
+                          <HorizontalCornerTag
+                            label={statusLabel}
+                            color={statusColor}
+                            position="top-left"
+                            size="sm"
+                            width="w-[70px]"
+                            height="h-[14px]"
+                            fontSize="text-[7px]"
+                            tracking="tracking-[0.06em]"
+                            offsetX="8px"
+                            offsetY="18px"
+                            animated={true}
+                            variant="sharp"
                           />
                         </div>
-                        <span className="text-xs font-medium min-w-[35px] text-right text-gray-700 dark:text-gray-300">
-                          {rfq.response_rate || 0}%
-                        </span>
+                        {/* Number */}
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors text-gray-700 dark:text-gray-300">
+                          {((currentPage - 1) * ITEMS_PER_PAGE) + index + 1}
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {rfq.closing_date ? formatDate(rfq.closing_date) : 'N/A'}
-                      </p>
-                      {rfq.closing_time && (
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(rfq.closing_time), 'HH:mm')}
-                        </p>
-                      )}
-                      {isClosingSoon && (
-                        <p className="text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="h-3 w-3" />
-                          {formatDistanceToNow(rfq.closing_date)}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500">
-                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-medium">
-                          {getInitials(generatedByName)}
-                        </AvatarFallback>
-                      </Avatar>
+                    </TableCell>
+                    <TableCell className="py-4">
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[80px]">
-                          {generatedByName}
+                        <p className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {rfq.qtn_number}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {formatDate(rfq.created_at)}
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(rfq.issue_date)}
                         </p>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-center gap-1">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onView(rfq.id)}
-                              className="h-8 w-8 p-0 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              <Eye className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="rounded-xl">View Details</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {rfq.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {rfq.description || 'No description'}
+                        </p>
+                        {isExpired && (
+                          <Badge variant="destructive" className="text-[10px] rounded-full mt-1">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Expired
+                          </Badge>
+                        )}
+                        {isClosingSoon && (
+                          <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] rounded-full mt-1 animate-pulse">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Closing Soon
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {rfq.requisition?.reference_number || 'N/A'}
+                          </span>
+                        </div>
+                        {rfq.requisition && (
+                          <p className="text-xs text-muted-foreground truncate max-w-[150px]">
+                            {rfq.requisition.title}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                            {rfq.response_count || 0}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            / {rfq.sent_suppliers_count || 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 w-full min-w-[60px]">
+                          <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${Math.min(rfq.response_rate || 0, 100)}%`,
+                                backgroundColor: (rfq.response_rate || 0) >= 80 ? '#10b981' : (rfq.response_rate || 0) >= 50 ? '#f59e0b' : '#ef4444'
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium min-w-[35px] text-right text-gray-700 dark:text-gray-300">
+                            {rfq.response_rate || 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {rfq.closing_date ? formatDate(rfq.closing_date) : 'N/A'}
+                        </p>
+                        {rfq.closing_time && (
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(rfq.closing_time), 'HH:mm')}
+                          </p>
+                        )}
+                        {isClosingSoon && (
+                          <p className="text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                            <Clock className="h-3 w-3" />
+                            {formatDistanceToNow(rfq.closing_date)}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500">
+                          <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-medium">
+                            {getInitials(generatedByName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[80px]">
+                            {generatedByName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {formatDate(rfq.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
 
-                      {rfq.status === 'draft' && (
-                        <>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onEdit(rfq.id)}
-                                  className="h-8 w-8 p-0 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <Edit className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="rounded-xl">Edit</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onSend(rfq.id)}
-                                  className="h-8 px-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                                >
-                                  <Send className="h-3.5 w-3.5 mr-1" />
-                                  Send
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="rounded-xl">Send to Suppliers</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </>
-                      )}
-
-                      {(rfq.status === 'sent' || rfq.status === 'responded') && (
-                        <>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onReminder(rfq.id)}
-                                  className="h-8 px-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                                >
-                                  <Mail className="h-3.5 w-3.5 mr-1" />
-                                  Remind
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="rounded-xl">Send Reminder</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onClose(rfq.id)}
-                                  className="h-8 px-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30"
-                                >
-                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                  Close
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent className="rounded-xl">Close RFQ</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </>
-                      )}
-
-                      {(rfq.status === 'draft' || rfq.status === 'sent' || rfq.status === 'responded') && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => onCancel(rfq.id)}
-                                className="h-8 px-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
-                              >
-                                <Ban className="h-3.5 w-3.5 mr-1" />
-                                Cancel
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="rounded-xl">Cancel RFQ</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </ScrollArea>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </ScrollArea>
+      </div>
 
       {totalItems > ITEMS_PER_PAGE && (
         <div className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
@@ -902,6 +707,100 @@ export default function RequestForQuotationsPage() {
     return total / quotations.length;
   }, [quotations]);
 
+  // ============================================
+  // MAIN PAGE - Updated stats building
+  // ============================================
+
+  // Build stats for StatsCards component
+  const statsItems: StatCardItem[] = useMemo(() => {
+    // Safely access stats properties with fallbacks
+    const stats = procurementStats as any || {};
+    const total = stats.total || 0;
+    const withQtns = stats.with_qtns || 0;
+    const active = stats.active || 0;
+    const closingSoon = stats.closing_soon || 0;
+    const avgResponseRate = stats.avg_response_rate || 0;
+
+    // Calculate derived values
+    const draftCount = quotations.filter(q => q.status === 'draft').length;
+    const respondedCount = quotations.filter(q => q.status === 'responded').length;
+    const evaluatingCount = quotations.filter(q => q.status === 'evaluating').length;
+    const closedCount = quotations.filter(q => q.status === 'closed').length;
+    const cancelledCount = quotations.filter(q => q.status === 'cancelled').length;
+    const expiredCount = quotations.filter(q => q.status === 'expired').length;
+
+    // Count total responses across all RFQs
+    const totalResponses = quotations.reduce((sum, q) => sum + (q.response_count || 0), 0);
+
+    return [
+      {
+        label: "Total RFQs",
+        value: withQtns || quotations.length,
+        icon: FileText,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All RFQs",
+      },
+      {
+        label: "Active",
+        value: active || quotations.filter(q => q.status === 'sent' || q.status === 'responded').length,
+        icon: Activity,
+        tagLabel: "ACTIVE",
+        tagColor: "emerald",
+        subtitle: "Active RFQs",
+      },
+      {
+        label: "Closing Soon",
+        value: closingSoon || quotations.filter(q => q.is_closing_soon && !q.is_expired).length,
+        icon: AlertCircle,
+        tagLabel: "CLOSING",
+        tagColor: "amber",
+        subtitle: "Within 48 hours",
+      },
+      {
+        label: "Avg Response",
+        value: Math.round(avgResponseRate || (quotations.length > 0 ? quotations.reduce((acc, q) => acc + (q.response_rate || 0), 0) / quotations.length : 0)),
+        icon: TrendingUp,
+        tagLabel: "RATE",
+        tagColor: "purple",
+        subtitle: `${Math.round(avgResponseRate || 0)}% average`,
+        suffix: '%',
+        compact: false,
+      },
+      {
+        label: "Total Responses",
+        value: totalResponses,
+        icon: Users,
+        tagLabel: "RESPONSES",
+        tagColor: "indigo",
+        subtitle: "All submissions",
+      },
+      {
+        label: "Draft",
+        value: draftCount,
+        icon: FileText,
+        tagLabel: "DRAFT",
+        tagColor: "gray",
+        subtitle: "In draft",
+      },
+      {
+        label: "Evaluating",
+        value: evaluatingCount,
+        icon: Clock,
+        tagLabel: "EVALUATING",
+        tagColor: "purple",
+        subtitle: "In evaluation",
+      },
+      {
+        label: "Closed",
+        value: closedCount,
+        icon: CheckCircle,
+        tagLabel: "CLOSED",
+        tagColor: "teal",
+        subtitle: "Completed RFQs",
+      },
+    ];
+  }, [procurementStats, quotations]);
   const handleFilterChange = useCallback((key: string, value: any) => {
     setFilters(prev => ({
       ...prev,
@@ -1087,25 +986,24 @@ export default function RequestForQuotationsPage() {
         </div>
       }
     >
-      {/* Stats Cards */}
+      {/* Stats Cards - Using the flexible component */}
       <StatsCards
-        stats={procurementStats}
-        isLoading={!procurementStats}
-        activeCount={activeCount}
-        closingSoonCount={closingSoonCount}
-        totalQtns={totalQtns}
-        avgResponseRate={avgResponseRate}
+        stats={statsItems}
+        isLoading={isLoading || !procurementStats}
+        columns={8}
+        variant="default"
+        formatCompact={true}
+        tagOrientation="wrapped"
+        tagPosition="top-left"
       />
 
       {/* Info Banner - Closing Soon */}
       {closingSoonList.length > 0 && (
-        <Card className="mb-6 border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 rounded-xl shadow-sm">
-          <CardContent className="p-4">
+        <Card className="mb-6 border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 rounded-xl mt-7 shadow-sm relative">
+          <WrappedCornerTag label="CLOSING" color="amber" position="top-left" size="lg" />
+          <CardContent className="p-4 pt-6">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="flex-1">
+              <div className="flex-1 ml-15">
                 <p className="font-medium text-amber-800 dark:text-amber-300">
                   {closingSoonList.length} RFQ{closingSoonList.length > 1 ? 's' : ''} Closing Soon
                 </p>
@@ -1163,8 +1061,9 @@ export default function RequestForQuotationsPage() {
 
       {/* Dialogs */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="rounded-xl dark:bg-gray-900">
-          <AlertDialogHeader>
+        <AlertDialogContent className="rounded-xl dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="DELETE" color="red" position="top-left" size="sm" variant="rounded" />
+          <AlertDialogHeader className="pt-6">
             <AlertDialogTitle className="text-gray-900 dark:text-gray-100">Delete RFQ</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-600 dark:text-gray-400">
               Are you sure you want to delete RFQ "{selectedRFQ?.qtn_number}"?
@@ -1181,8 +1080,9 @@ export default function RequestForQuotationsPage() {
       </AlertDialog>
 
       <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
-        <DialogContent className="rounded-xl dark:bg-gray-900">
-          <DialogHeader>
+        <DialogContent className="rounded-xl dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="SEND" color="blue" position="top-left" size="sm" variant="rounded" />
+          <DialogHeader className="pt-6">
             <DialogTitle className="text-gray-900 dark:text-gray-100">Send RFQ to Suppliers</DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400">
               Send "{selectedRFQ?.qtn_number}" to selected suppliers.
@@ -1214,8 +1114,9 @@ export default function RequestForQuotationsPage() {
       </Dialog>
 
       <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
-        <DialogContent className="rounded-xl dark:bg-gray-900">
-          <DialogHeader>
+        <DialogContent className="rounded-xl dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="CLOSE" color="purple" position="top-left" size="sm" variant="rounded" />
+          <DialogHeader className="pt-6">
             <DialogTitle className="text-gray-900 dark:text-gray-100">Close RFQ</DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400">
               Close "{selectedRFQ?.qtn_number}" for further responses.
@@ -1247,8 +1148,9 @@ export default function RequestForQuotationsPage() {
       </Dialog>
 
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <DialogContent className="rounded-xl dark:bg-gray-900">
-          <DialogHeader>
+        <DialogContent className="rounded-xl dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="CANCEL" color="red" position="top-left" size="sm" variant="rounded" />
+          <DialogHeader className="pt-6">
             <DialogTitle className="text-gray-900 dark:text-gray-100">Cancel RFQ</DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400">
               Cancel "{selectedRFQ?.qtn_number}".
@@ -1281,8 +1183,9 @@ export default function RequestForQuotationsPage() {
       </Dialog>
 
       <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
-        <DialogContent className="rounded-xl dark:bg-gray-900">
-          <DialogHeader>
+        <DialogContent className="rounded-xl dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="REMIND" color="amber" position="top-left" size="sm" variant="rounded" />
+          <DialogHeader className="pt-6">
             <DialogTitle className="text-gray-900 dark:text-gray-100">Send Reminder</DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400">
               Send a reminder to suppliers for "{selectedRFQ?.qtn_number}".

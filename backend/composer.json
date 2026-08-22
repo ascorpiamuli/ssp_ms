@@ -16,6 +16,7 @@
         "laravel/tinker": "^3.0",
         "phpoffice/phpword": "^1.1",
         "predis/predis": "^3.4",
+        "setasign/fpdi-tcpdf": "^2.3",
         "smalot/pdfparser": "^2.12",
         "spatie/laravel-csp": "^3.23",
         "spatie/laravel-permission": "^8.3",

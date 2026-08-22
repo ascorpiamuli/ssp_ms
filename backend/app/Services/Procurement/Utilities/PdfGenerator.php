@@ -5,10 +5,13 @@ declare(strict_types=1);
 
 namespace App\Services\Procurement\Utilities;
 
+use App\Models\SupplierQuotation;
 use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
-use App\Services\Procurement\PDF\QuotationPdfRenderer;
+use App\Services\Procurement\PDF\PurchaseOrderPdfRenderer;
 use App\Services\Procurement\PDF\RequestForQuotationPdfRenderer;
+use App\Services\Procurement\PDF\SupplierQuotationPdfRenderer;
 use App\Services\Signatures\Contracts\Services\QRCodeServiceInterface;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -48,12 +51,25 @@ class PdfGenerator implements PdfGeneratorInterface
   }
 
   /**
+   * Generate Supplier Quotation PDF
+   *
+   * @param \App\Models\SupplierQuotation $supplierQuotation
+   * @return string PDF content
+   */
+  public function generateSupplierQuotation($supplierQuotation): string
+  {
+    // Use the QuotationPdfRenderer for supplier quotations
+    $renderer = new SupplierQuotationPdfRenderer($this->qrCodeService);
+    return $renderer->renderWithData($supplierQuotation);
+  }
+
+  /**
    * Generate Purchase Order PDF
    */
   public function generatePurchaseOrder($purchaseOrder): string
   {
-    // TODO: Implement PurchaseOrderPdfRenderer
-    return $this->generatePlaceholderPDF('Purchase Order', $purchaseOrder->po_number ?? 'N/A');
+    $renderer = new PurchaseOrderPdfRenderer($this->qrCodeService);
+    return $renderer->renderWithData($purchaseOrder);
   }
 
   /**
@@ -265,5 +281,41 @@ class PdfGenerator implements PdfGeneratorInterface
     $pdf->Cell(0, 10, 'PDF generation for this document type is being implemented.', 0, 1, 'C');
     $pdf->Cell(0, 10, 'Please check back later.', 0, 1, 'C');
     return $pdf->Output('', 'S');
+  }
+
+  /**
+   * Generate Supplier Quotation PDF with pre-loaded data.
+   */
+  public function generateSupplierQuotationWithData(SupplierQuotation $quotation): string
+  {
+    Log::info('[PDF] generateSupplierQuotationWithData - START', [
+      'quotation_id' => $quotation->id,
+      'supplier_loaded' => $quotation->relationLoaded('supplier'),
+    ]);
+
+    // ✅ If supplier is not loaded, load it now
+    if (!$quotation->relationLoaded('supplier')) {
+      $quotation->load('supplier');
+      Log::info('[PDF] Supplier loaded manually');
+    }
+
+    // ✅ Load RFQ if not loaded
+    if (!$quotation->relationLoaded('quotationRequest')) {
+      $quotation->load(['quotationRequest', 'quotationRequest.requisition']);
+      Log::info('[PDF] RFQ loaded manually');
+    }
+
+    // ✅ Check if supplier exists after loading
+    if ($quotation->supplier) {
+      Log::info('[PDF] Supplier found after loading', [
+        'id' => $quotation->supplier->id,
+        'name' => $quotation->supplier->company_name ?? $quotation->supplier->name,
+      ]);
+    } else {
+      Log::warning('[PDF] Supplier still not found after loading');
+    }
+
+    $renderer = new SupplierQuotationPdfRenderer($this->qrCodeService);
+    return $renderer->renderWithData($quotation);
   }
 }

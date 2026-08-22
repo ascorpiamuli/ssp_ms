@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Activity,
   CheckCircle,
@@ -24,6 +24,28 @@ import {
   XCircle as XCircleIcon,
   Sparkles,
   Loader2,
+  Users,
+  FileText,
+  Award,
+  Target,
+  Rocket,
+  Gem,
+  Flame,
+  Leaf,
+  MinusCircle,
+  CircleDashed,
+  Fingerprint,
+  Smartphone,
+  History,
+  Calendar,
+  Cpu,
+  Cloud,
+  Wifi,
+  Bluetooth,
+  Battery,
+  Lightbulb,
+  HeartPulse,
+  Brain,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,6 +73,11 @@ import {
 import { format } from 'date-fns'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards'
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -107,8 +134,23 @@ const getStatusBadgeVariant = (status: string): string => {
   return getStatusColor(status)
 }
 
+const getStatusColorForStat = (status: string): 'emerald' | 'amber' | 'blue' | 'rose' | 'gray' => {
+  switch (status) {
+    case 'operational':
+      return 'emerald'
+    case 'degraded':
+      return 'amber'
+    case 'maintenance':
+      return 'blue'
+    case 'down':
+      return 'rose'
+    default:
+      return 'gray'
+  }
+}
+
 // ============================================
-// STATUS HISTORY MODAL (Portal Ready)
+// STATUS HISTORY MODAL (Portal Ready - No Tags)
 // ============================================
 
 const StatusHistoryModal = ({
@@ -136,13 +178,15 @@ const StatusHistoryModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                <History className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               System Status History
             </h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -165,34 +209,40 @@ const StatusHistoryModal = ({
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Component</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Message</TableHead>
-                    <TableHead>Checked At</TableHead>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+                    <TableHead className="py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Component</TableHead>
+                    <TableHead className="py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Message</TableHead>
+                    <TableHead className="py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Checked At</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {history.map((item) => {
+                  {history.map((item, index) => {
                     const StatusIcon = getStatusIcon(item.status)
                     const statusColor = getStatusBadgeVariant(item.status)
                     const statusLabel = getStatusLabel(item.status)
                     const componentLabel = getComponentLabel(item.component)
 
                     return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{componentLabel}</TableCell>
+                      <TableRow key={item.id} className={cn(
+                        "hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors",
+                        index % 2 === 0 ? "bg-white dark:bg-transparent" : "bg-gray-50/30 dark:bg-gray-800/20"
+                      )}>
+                        <TableCell className="font-medium text-gray-900 dark:text-white">{componentLabel}</TableCell>
                         <TableCell>
-                          <Badge variant={statusColor as any} className="flex items-center gap-1.5">
+                          <Badge variant={statusColor as any} className="flex items-center gap-1.5 rounded-full">
                             <StatusIcon className="h-3 w-3" />
                             {statusLabel}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-xs truncate">
+                        <TableCell className="max-w-xs truncate text-gray-600 dark:text-gray-400">
                           {item.message || '—'}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm">
-                          {formatRelativeTime(item.checked_at)}
+                        <TableCell className="whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex flex-col">
+                            <span>{formatRelativeTime(item.checked_at)}</span>
+                            <span className="text-xs text-gray-400">{formatDate(item.checked_at)}</span>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -204,7 +254,7 @@ const StatusHistoryModal = ({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg shadow-blue-600/20"
+            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
@@ -244,24 +294,31 @@ const ComponentStatusCard = ({
   const statusColor = getStatusBadgeVariant(status)
   const statusLabel = getStatusLabel(status)
   const displayName = getComponentLabel(name)
+  const isHealthy = status === 'operational'
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={cn(
+      "hover:shadow-lg transition-all duration-200 border",
+      isHealthy ? "border-gray-200 dark:border-gray-700" : "border-amber-200 dark:border-amber-800"
+    )}>
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={cn(
-              "p-2 rounded-lg",
-              `bg-${color}-50 dark:bg-${color}-900/20`
+              "p-2.5 rounded-xl",
+              isHealthy ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-amber-50 dark:bg-amber-900/20"
             )}>
-              <Icon className={cn("h-5 w-5", `text-${color}-600 dark:text-${color}-400`)} />
+              <Icon className={cn(
+                "h-5 w-5",
+                isHealthy ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+              )} />
             </div>
             <div>
-              <h4 className="font-medium text-gray-900 dark:text-white">{displayName}</h4>
+              <h4 className="font-semibold text-gray-900 dark:text-white">{displayName}</h4>
               <p className="text-xs text-gray-500 dark:text-gray-400">{name}</p>
             </div>
           </div>
-          <Badge variant={statusColor as any} className="flex items-center gap-1.5">
+          <Badge variant={statusColor as any} className="flex items-center gap-1.5 rounded-full">
             <StatusIcon className="h-3 w-3" />
             {statusLabel}
           </Badge>
@@ -272,7 +329,7 @@ const ComponentStatusCard = ({
           {component.response_time && (
             <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
               <Clock className="h-3 w-3" />
-              <span>Response: {component.response_time}ms</span>
+              <span>Response: <span className="font-medium">{component.response_time}ms</span></span>
             </div>
           )}
         </div>
@@ -281,7 +338,7 @@ const ComponentStatusCard = ({
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
             <div className="flex flex-wrap gap-2">
               {Object.entries(component.details).map(([key, value]) => (
-                <div key={key} className="text-xs">
+                <div key={key} className="px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-xs">
                   <span className="text-gray-500 dark:text-gray-400">{key}:</span>
                   <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">
                     {typeof value === 'object' ? JSON.stringify(value) : String(value)}
@@ -302,7 +359,7 @@ const ComponentStatusCard = ({
 
 export default function SystemStatusPage() {
   const { hasPermission, isAdmin } = useAuthContext()
-  const { error: toastError } = useToast()
+  const { success, error: toastError } = useToast()
   const {
     useCurrentStatus,
     useSummary,
@@ -315,6 +372,7 @@ export default function SystemStatusPage() {
 
   // State
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [historyFilters, setHistoryFilters] = useState({
     component: '',
     status: '',
@@ -343,10 +401,71 @@ export default function SystemStatusPage() {
     refetch: refetchHistory
   } = useHistory(historyFilters)
 
+  // Compute stats for StatsCards
+  const statsItems: StatCardItem[] = useMemo(() => {
+    if (!summary) {
+      return [
+        { label: "Uptime", value: 0, icon: Activity, tagLabel: "UPTIME", tagColor: "blue", subtitle: "Loading..." },
+        { label: "Total Checks", value: 0, icon: Activity, tagLabel: "CHECKS", tagColor: "purple", subtitle: "Loading..." },
+        { label: "Components", value: 0, icon: Server, tagLabel: "COMPS", tagColor: "emerald", subtitle: "Loading..." },
+        { label: "Status", value: "N/A", icon: Shield, tagLabel: "STATUS", tagColor: "gray", subtitle: "Loading..." },
+      ]
+    }
+
+    const totalChecks = summary.total_checks || 0
+    const componentsCount = summary.components_count || 0
+    const uptime = summary.uptime_percentage || 0
+    const statusLabel = status?.status ? getStatusDisplayLabel(status.status) : 'Unknown'
+    const statusColor = status?.status ? getStatusColorForStat(status.status) : 'gray'
+
+    return [
+      {
+        label: "Uptime",
+        value: `${uptime}%`,
+        icon: TrendingUp,
+        tagLabel: "UPTIME",
+        tagColor: uptime >= 99 ? "emerald" : uptime >= 95 ? "amber" : "rose",
+        subtitle: `${uptime}% availability`,
+      },
+      {
+        label: "Total Checks",
+        value: totalChecks,
+        icon: Activity,
+        tagLabel: "CHECKS",
+        tagColor: "blue",
+        subtitle: `${totalChecks} health checks`,
+      },
+      {
+        label: "Components",
+        value: componentsCount,
+        icon: Server,
+        tagLabel: "COMPS",
+        tagColor: "purple",
+        subtitle: `${componentsCount} monitored`,
+      },
+      {
+        label: "Current Status",
+        value: statusLabel,
+        icon: Shield,
+        tagLabel: "STATUS",
+        tagColor: statusColor,
+        subtitle: status?.status || 'Unknown',
+      },
+    ]
+  }, [summary, status])
+
   // Handlers
-  const handleRefresh = () => {
-    refreshStatus.mutate()
-    refetch()
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshStatus.mutateAsync()
+      await refetch()
+      success('System status refreshed successfully')
+    } catch (error) {
+      toastError('Failed to refresh system status')
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   const handleViewHistory = () => {
@@ -364,8 +483,9 @@ export default function SystemStatusPage() {
         background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <Card className="max-w-md">
-            <CardContent className="pt-6 text-center">
+          <Card className="max-w-md relative">
+            <WrappedCornerTag label="DENIED" color="red" position="top-left" size="lg" />
+            <CardContent className="pt-8 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
@@ -388,12 +508,12 @@ export default function SystemStatusPage() {
       <PageTemplate
         title="System Status"
         description="Monitor the health and performance of your system"
-        icon={<Activity className="h-5 w-5" />}
+        icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
         background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
             <span className="text-sm text-gray-500">Loading system status...</span>
           </div>
         </div>
@@ -407,11 +527,12 @@ export default function SystemStatusPage() {
       <PageTemplate
         title="System Status"
         description="Monitor the health and performance of your system"
-        icon={<Activity className="h-5 w-5" />}
+        icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
         background="gradient"
       >
-        <Card>
-          <CardContent className="pt-6 text-center">
+        <Card className="relative">
+          <WrappedCornerTag label="ERROR" color="red" position="top-left" size="lg" />
+          <CardContent className="pt-8 text-center">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Failed to Load System Status
@@ -419,8 +540,8 @@ export default function SystemStatusPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               {statusErrorObj?.message || 'Unable to fetch system status information. Please try again.'}
             </p>
-            <Button onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button onClick={handleRefresh} className="gap-2 rounded-xl">
+              <RefreshCw className="h-4 w-4" />
               Retry
             </Button>
           </CardContent>
@@ -430,7 +551,7 @@ export default function SystemStatusPage() {
   }
 
   const StatusIcon = getStatusIcon(status.status)
-  const statusColor = getStatusBadgeColor(status.status)
+  const statusColor = getStatusBadgeVariant(status.status)
   const statusLabel = getStatusDisplayLabel(status.status)
   const isHealthy = status.status === 'operational'
 
@@ -444,7 +565,7 @@ export default function SystemStatusPage() {
     <PageTemplate
       title="System Status"
       description="Monitor the health and performance of your system"
-      icon={<Activity className="h-5 w-5" />}
+      icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
       breadcrumbs={[
@@ -452,25 +573,29 @@ export default function SystemStatusPage() {
         { label: 'System Status' },
       ]}
       actions={
-        <div className="flex items-center gap-2">
-          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={cn(
+            "rounded-full",
+            isHealthy ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" :
+              "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+          )}>
             <Sparkles className="h-3 w-3 mr-1" />
             {statusLabel}
           </Badge>
           <Button
             variant="outline"
             onClick={handleViewHistory}
-            className="gap-2 h-9 text-sm dark:border-gray-700 dark:hover:bg-gray-800"
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <BarChart3 className="h-4 w-4" />
             History
           </Button>
           <Button
             onClick={handleRefresh}
-            disabled={refreshStatus.isPending}
-            className="gap-2 h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
+            disabled={isRefreshing || refreshStatus.isPending}
+            className="gap-2 h-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
           >
-            {refreshStatus.isPending ? (
+            {isRefreshing || refreshStatus.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
@@ -480,117 +605,120 @@ export default function SystemStatusPage() {
         </div>
       }
     >
-      {/* Overall Status */}
-      <Card className={cn(
-        "mb-6 border-l-4",
-        isHealthy ? "border-l-emerald-500" : "border-l-amber-500"
-      )}>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className={cn(
-                "p-2.5 rounded-full",
-                isHealthy ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"
-              )}>
-                <StatusIcon className={cn(
-                  "h-6 w-6",
-                  isHealthy ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-                )} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  System {isHealthy ? 'Operational' : 'Degraded'}
-                </h2>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <Badge variant={statusColor as any} className="text-xs">
-                    {statusLabel}
-                  </Badge>
-                  <span className="text-xs text-gray-500">
-                    Last checked: {formatRelativeTime(status.last_checked)}
-                  </span>
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <StatsCards
+          stats={statsItems}
+          isLoading={statusLoading || summaryLoading}
+          columns={4}
+          variant="default"
+          formatCompact={true}
+          tagOrientation="wrapped"
+          tagPosition="top-left"
+        />
+
+        {/* Overall Status */}
+        <Card className={cn(
+          "border-0 shadow-sm rounded-xl relative",
+          isHealthy ? "bg-gradient-to-br from-emerald-50/50 to-green-50/50 dark:from-emerald-950/20 dark:to-green-950/20" :
+            "bg-gradient-to-br from-amber-50/50 to-yellow-50/50 dark:from-amber-950/20 dark:to-yellow-950/20"
+        )}>
+          <CardContent className="pt-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-3 rounded-full",
+                  isHealthy ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                )}>
+                  <StatusIcon className={cn(
+                    "h-7 w-7",
+                    isHealthy ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                  )} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    System {isHealthy ? 'Operational' : 'Degraded'}
+                  </h2>
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <Badge variant={statusColor as any} className="text-xs rounded-full">
+                      {statusLabel}
+                    </Badge>
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Last checked: {formatRelativeTime(status.last_checked)}
+                    </span>
+                    {status.uptime_percentage && (
+                      <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" />
+                        Uptime: {status.uptime_percentage}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Summary Stats */}
-          {summary && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-              <div>
-                <p className="text-xs text-gray-500">Uptime</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {summary.uptime_percentage}%
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total Checks</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {summary.total_checks}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Components</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {summary.components_count}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Current Status</p>
-                <Badge variant={statusColor as any} className="mt-0.5 text-xs">
-                  {statusLabel}
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="rounded-full">
+                  v{'1.0.0'}
+                </Badge>
+                <Badge variant="outline" className="rounded-full">
+                  {'production'}
                 </Badge>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Response Times */}
-      {status.response_times && Object.keys(status.response_times).length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Response Times (ms)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {Object.entries(status.response_times).map(([component, time]) => (
-                <div key={component} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {getComponentDisplayName(component)}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {time}ms
-                  </span>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Components Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedComponents.length > 0 ? (
-          sortedComponents.map(([name, component]) => (
-            <ComponentStatusCard
-              key={name}
-              name={name}
-              status={component.status}
-              component={component}
-            />
-          ))
-        ) : (
-          <div className="col-span-3 text-center py-12">
-            <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No components data available</p>
-          </div>
+        {/* Response Times */}
+        {status.response_times && Object.keys(status.response_times).length > 0 && (
+          <Card className="border-0 shadow-sm rounded-xl relative">
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {Object.entries(status.response_times).map(([component, time]) => (
+                  <div key={component} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {getComponentDisplayName(component)}
+                    </span>
+                    <span className={cn(
+                      "text-sm font-semibold",
+                      time < 100 ? "text-emerald-600 dark:text-emerald-400" :
+                        time < 300 ? "text-amber-600 dark:text-amber-400" :
+                          "text-red-600 dark:text-red-400"
+                    )}>
+                      {time}ms
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
+
+        {/* Components Grid */}
+        <Card className="border-0 shadow-sm rounded-xl relative">
+          <WrappedCornerTag label="COMPONENTS" color="blue" position="top-left" size="lg" />
+          <CardContent className="pt-8">
+            {sortedComponents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sortedComponents.map(([name, component]) => (
+                  <ComponentStatusCard
+                    key={name}
+                    name={name}
+                    status={component.status}
+                    component={component}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No components data available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Status History Modal - Using Portal */}
+      {/* Status History Modal */}
       <StatusHistoryModal
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}

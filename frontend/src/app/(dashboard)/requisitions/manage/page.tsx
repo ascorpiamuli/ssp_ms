@@ -180,6 +180,11 @@ import {
 // Types
 import type { Requisition, RequisitionFilters, RequisitionStats, RequisitionHistory } from '@/types/requisition.types';
 
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -324,7 +329,6 @@ const isProcurementComplete = (requisition: Requisition): boolean => {
       requisition.metadata?.cheque_issued === true);
 };
 
-// Get procurement progress from summary - same logic as history page
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
 
@@ -334,11 +338,9 @@ const getProcurementProgress = (summary: any): number => {
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
 
-  // Use stage weights if status is known
   if (status && STAGE_WEIGHTS[status]) {
     let progress = STAGE_WEIGHTS[status];
 
-    // Add extra progress for completed steps within the stage
     const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
     if (status === 'evaluating_quotations' && String(sqStatus) === 'completed') {
       progress += 5;
@@ -352,10 +354,8 @@ const getProcurementProgress = (summary: any): number => {
     return Math.min(progress, 99);
   }
 
-  // Fallback: calculate from steps
   let progress = 0;
 
-  // Quotation step
   const qtnStatus = safeGet(steps, 'quotation.status', '');
   if (String(qtnStatus) === 'closed' || String(qtnStatus) === 'completed') {
     progress += 20;
@@ -363,7 +363,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 15;
   }
 
-  // Supplier quotations step
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const sqReceived = safeGet(steps, 'supplier_quotations.quotes_received', 0);
   if (String(sqStatus) === 'completed') {
@@ -372,7 +371,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 15;
   }
 
-  // Supplier selection step
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   if (String(ssStatus) === 'completed') {
     progress += 20;
@@ -380,7 +378,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // PO generation step
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   if (String(pgStatus) === 'completed') {
     progress += 15;
@@ -388,7 +385,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // Delivery step
   const delStatus = safeGet(steps, 'delivery.status', '');
   if (String(delStatus) === 'completed') {
     progress += 15;
@@ -396,7 +392,6 @@ const getProcurementProgress = (summary: any): number => {
     progress += 10;
   }
 
-  // Payment step
   const payStatus = safeGet(steps, 'payment.status', '');
   if (String(payStatus) === 'completed') {
     progress += 10;
@@ -430,7 +425,6 @@ const getProcurementStatusLabel = (summary: any): string => {
 
   if (statusMap[status]) return statusMap[status];
 
-  // Fallback based on steps
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   const pgStatus = safeGet(steps, 'po_generation.status', '');
@@ -602,7 +596,7 @@ const ApprovalFlowBadge = ({ approvals, status }: ApprovalFlowBadgeProps) => {
 };
 
 // ============================================
-// PROCUREMENT PROGRESS INDICATOR - Same as history page
+// PROCUREMENT PROGRESS INDICATOR
 // ============================================
 
 const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisition }) => {
@@ -668,7 +662,7 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
 };
 
 // ============================================
-// HISTORY DETAILS CARD - Same as history page
+// HISTORY DETAILS CARD
 // ============================================
 
 const HISTORY_ACTION_CONFIG: Record<string, { color: string; icon: any; label: string; description: string }> = {
@@ -806,8 +800,9 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
   }
 
   return (
-    <div className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20 rounded-xl overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 px-4 py-3 flex items-center justify-between">
+    <div className="mt-4 border-2 border-blue-100 dark:border-blue-900/50 shadow-lg bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20 rounded-xl overflow-hidden relative">
+      <WrappedCornerTag label="HISTORY" color="blue" position="top-left" size="lg" />
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 px-4 py-3 pt-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/50">
             <HistoryIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -988,123 +983,6 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
 };
 
 // ============================================
-// COMPREHENSIVE STATS CARDS
-// ============================================
-
-interface ComprehensiveStatsCardsProps {
-  stats: any;
-  isLoading: boolean;
-}
-
-const ComprehensiveStatsCards = ({ stats, isLoading }: ComprehensiveStatsCardsProps) => {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i} className="animate-pulse border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="h-4 bg-gray-200 rounded dark:bg-gray-700 w-2/3 mb-2" />
-              <div className="h-8 bg-gray-200 rounded dark:bg-gray-700 w-1/2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  const total = stats?.total || 0;
-  const approved = stats?.approved || 0;
-  const pending = stats?.pending || 0;
-  const declined = stats?.declined || 0;
-  const draft = stats?.draft || 0;
-  const returned = stats?.returned || 0;
-  const revised = stats?.revised || 0;
-  const cancelled = stats?.cancelled || 0;
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Total</p>
-            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-              <FileText className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{total}</p>
-          <p className="text-xs text-muted-foreground mt-1">All requisitions</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Pending</p>
-            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-              <Clock className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{pending}</p>
-          <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Approved</p>
-            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{approved}</p>
-          <p className="text-xs text-muted-foreground mt-1">Fully approved</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Declined</p>
-            <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
-              <XCircle className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{declined}</p>
-          <p className="text-xs text-muted-foreground mt-1">Rejected</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Draft</p>
-            <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700/30 text-gray-600 dark:text-gray-400">
-              <FileText className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{draft}</p>
-          <p className="text-xs text-muted-foreground mt-1">Not submitted</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Returned</p>
-            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-              <RotateCcw className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold mt-2">{returned}</p>
-          <p className="text-xs text-muted-foreground mt-1">Needs revision</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-// ============================================
 // FILTERS COMPONENT
 // ============================================
 
@@ -1119,8 +997,9 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl">
-      <CardContent className="p-4">
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl relative">
+      <HorizontalCornerTag label="FILTERS" color="blue" position="top-left" size="sm" variant="rounded" />
+      <CardContent className="p-4 pt-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
@@ -1378,6 +1257,14 @@ const RequisitionTable = ({
               const procurementStarted = hasProcurementStarted(req);
               const procurementComplete = isProcurementComplete(req);
               const isHistoryExpanded = expandedHistoryId === req.id;
+              const statusColor = isApproved ? 'emerald' :
+                isCancelledStatus ? 'gray' :
+                  isDeclined ? 'red' :
+                    req.status === 'returned' ? 'amber' :
+                      req.status === 'submitted' ? 'blue' :
+                        req.status === 'hod_approved' ? 'indigo' :
+                          req.status === 'accountant_approved' ? 'purple' :
+                            req.status === 'principal_approved' ? 'teal' : 'gray';
 
               return (
                 <React.Fragment key={req.id}>
@@ -1655,6 +1542,93 @@ export default function ManageRequisitionsPage() {
 
   const isLoading = myRequisitionsQuery.isLoading || departmentsLoading;
 
+  // Build stats for StatsCards component
+  const statsItems: StatCardItem[] = useMemo(() => {
+    const total = data.length;
+    const approved = data.filter(r => r.status === 'final_approved').length;
+    const pending = data.filter(r =>
+      r.status === 'submitted' ||
+      r.status === 'hod_approved' ||
+      r.status === 'accountant_approved' ||
+      r.status === 'principal_approved'
+    ).length;
+    const declined = data.filter(r =>
+      r.status === 'hod_declined' ||
+      r.status === 'accountant_declined' ||
+      r.status === 'principal_declined' ||
+      r.status === 'final_declined'
+    ).length;
+    const draft = data.filter(r => r.status === 'draft').length;
+    const returned = data.filter(r => r.status === 'returned').length;
+    const revised = data.filter(r => r.status === 'revised').length;
+    const cancelled = data.filter(r => r.status === 'cancelled').length;
+
+    const procurementReady = data.filter(r =>
+      r.status === 'final_approved' &&
+      !hasProcurementStarted(r)
+    ).length;
+    const procurementInProgress = data.filter(r =>
+      r.status === 'final_approved' &&
+      hasProcurementStarted(r) &&
+      !isProcurementComplete(r)
+    ).length;
+    const procurementComplete = data.filter(r =>
+      r.status === 'final_approved' &&
+      isProcurementComplete(r)
+    ).length;
+
+    return [
+      {
+        label: "Total",
+        value: total,
+        icon: FileText,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All requisitions",
+      },
+      {
+        label: "Pending",
+        value: pending,
+        icon: Clock,
+        tagLabel: "PENDING",
+        tagColor: "amber",
+        subtitle: "Awaiting approval",
+      },
+      {
+        label: "Approved",
+        value: approved,
+        icon: CheckCircle,
+        tagLabel: "APPROVED",
+        tagColor: "emerald",
+        subtitle: "Fully approved",
+      },
+      {
+        label: "Declined",
+        value: declined,
+        icon: XCircle,
+        tagLabel: "DECLINED",
+        tagColor: "red",
+        subtitle: "Rejected",
+      },
+      {
+        label: "Draft",
+        value: draft,
+        icon: FileText,
+        tagLabel: "DRAFT",
+        tagColor: "gray",
+        subtitle: "Not submitted",
+      },
+      {
+        label: "Returned",
+        value: returned,
+        icon: RotateCcw,
+        tagLabel: "RETURNED",
+        tagColor: "amber",
+        subtitle: "Needs revision",
+      },
+    ];
+  }, [data]);
+
   const approvedCount = data.filter(r => r.status === 'final_approved').length;
   const procurementReadyCount = data.filter(r => r.status === 'final_approved' && !hasProcurementStarted(r)).length;
   const procurementInProgressCount = data.filter(r => r.status === 'final_approved' && hasProcurementStarted(r) && !isProcurementComplete(r)).length;
@@ -1870,16 +1844,21 @@ export default function ManageRequisitionsPage() {
         </div>
       }
     >
-      {/* Comprehensive Stats Cards */}
-      <ComprehensiveStatsCards
-        stats={procurementStatsQuery.data}
-        isLoading={procurementStatsQuery.isLoading}
+      {/* Stats Cards - Using the component with no tags */}
+      <StatsCards
+        stats={statsItems}
+        isLoading={isLoading}
+        columns={6}
+        variant="default"
+        formatCompact={true}
+        tagOrientation="wrapped"
       />
 
       {/* Info Banner - Procurement Reminder */}
       {procurementReadyCount > 0 && (
-        <div className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm p-4">
-          <div className="flex items-start gap-3">
+        <div className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm p-4 relative">
+          <HorizontalCornerTag label="READY" color="blue" position="top-left" size="sm" variant="rounded" />
+          <div className="pt-6 flex items-start gap-3">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex-shrink-0">
               <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>

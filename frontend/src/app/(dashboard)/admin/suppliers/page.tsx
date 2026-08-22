@@ -33,6 +33,51 @@ import {
   ExternalLink,
   Building,
   Sparkles,
+  Crown,
+  Info,
+  Clock,
+  MapPin,
+  Briefcase,
+  DollarSign,
+  Package,
+  Layers,
+  Grid,
+  List,
+  Filter,
+  Heart,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Bookmark,
+  Flag,
+  Camera,
+  Video,
+  Music,
+  Code,
+  Cloud,
+  Database,
+  Server,
+  Wifi,
+  Bluetooth,
+  Battery,
+  Lightbulb,
+  HeartPulse,
+  Brain,
+  Cpu,
+  HardDrive,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Laptop,
+  Headphones,
+  Speaker,
+  Mic,
+  MailIcon,
+  GlobeIcon,
+  ClockIcon,
+  Settings,
+  Menu,
+  MoreHorizontal,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -79,8 +124,6 @@ import {
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import {
   Pagination,
@@ -99,6 +142,11 @@ import Image from 'next/image'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Checkbox } from '@/components/ui/checkbox'
+
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards'
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
 
 // ============================================
 // TYPES
@@ -194,7 +242,7 @@ const getCategoryColor = (category: string) => {
     'services': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
     'both': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800'
   }
-  return map[category] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+  return map[category] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
 }
 
 const getStatusColor = (status: string) => {
@@ -203,7 +251,7 @@ const getStatusColor = (status: string) => {
     'INACTIVE': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
     'BLACKLISTED': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
   }
-  return map[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+  return map[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
 }
 
 const getStatusBadge = (status: string) => {
@@ -250,80 +298,7 @@ const getUserInitials = (name: string) => {
 }
 
 // ============================================
-// STATS CARDS
-// ============================================
-
-const StatsCards = ({ suppliers }: { suppliers: ExtendedSupplier[] }) => {
-  const total = suppliers.length
-  const active = suppliers.filter(s => s.status === 'ACTIVE').length
-  const blacklisted = suppliers.filter(s => s.status === 'BLACKLISTED').length
-  const inactive = suppliers.filter(s => s.status === 'INACTIVE').length
-
-  const stats = [
-    {
-      label: 'Total Suppliers',
-      value: total,
-      icon: Building2,
-      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      borderColor: 'border-blue-200 dark:border-blue-800',
-    },
-    {
-      label: 'Active',
-      value: active,
-      icon: UserCheck,
-      bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      borderColor: 'border-emerald-200 dark:border-emerald-800',
-    },
-    {
-      label: 'Blacklisted',
-      value: blacklisted,
-      icon: Ban,
-      bgColor: 'bg-red-50 dark:bg-red-900/20',
-      iconColor: 'text-red-600 dark:text-red-400',
-      borderColor: 'border-red-200 dark:border-red-800',
-    },
-    {
-      label: 'Inactive',
-      value: inactive,
-      icon: XCircle,
-      bgColor: 'bg-gray-50 dark:bg-gray-800/50',
-      iconColor: 'text-gray-600 dark:text-gray-400',
-      borderColor: 'border-gray-200 dark:border-gray-700',
-    },
-  ]
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {stats.map((stat) => {
-        const Icon = stat.icon
-        return (
-          <Card key={stat.label} className={cn("border-l-4", stat.borderColor)}>
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {stat.label}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {stat.value}
-                  </p>
-                </div>
-                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", stat.bgColor)}>
-                  <Icon className={cn("h-5 w-5", stat.iconColor)} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
-  )
-}
-
-// ============================================
-// VIEW SUPPLIER MODAL (Portal Ready)
+// VIEW SUPPLIER MODAL
 // ============================================
 
 const ViewSupplierModal = ({
@@ -412,11 +387,13 @@ const ViewSupplierModal = ({
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
+        <WrappedCornerTag label="SUPPLIER" color="blue" position="top-left" size="lg" />
+
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl pt-8">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -436,7 +413,7 @@ const ViewSupplierModal = ({
                   </div>
                 )}
                 <div className="absolute -bottom-1 -right-1">
-                  <Badge className={cn("border", getStatusColor(supplier.status))}>
+                  <Badge className={cn("border font-medium", getStatusColor(supplier.status))}>
                     <StatusIcon className="h-3 w-3 mr-1" />
                     {supplier.status_label || supplier.status}
                   </Badge>
@@ -446,13 +423,19 @@ const ViewSupplierModal = ({
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {supplier.company_name}
                 </h2>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge className={cn("font-medium border", getCategoryColor(supplier.category))}>
                     {supplier.category_label || getCategoryLabel(supplier.category)}
                   </Badge>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
                     • Registered {formatTimeAgo(supplier.created_at)}
                   </span>
+                  {supplier.is_blacklisted && supplier.blacklist_reason && (
+                    <Badge variant="outline" className="border-red-400 text-red-600 dark:text-red-400">
+                      <Ban className="h-3 w-3 mr-1" />
+                      Blacklisted
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -493,21 +476,19 @@ const ViewSupplierModal = ({
               const Icon = card.icon
               return (
                 <Card key={idx} className="border border-gray-200 dark:border-gray-700">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <CardContent className="pt-6 space-y-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <Icon className="h-4 w-4 text-blue-500" />
-                      {card.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{card.title}</h3>
+                    </div>
                     {card.items.map((item, i) => (
-                      <div key={i} className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <div key={i} className="flex justify-between items-center py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <span className="text-sm text-gray-500 dark:text-gray-400">{item.label}</span>
                         {item.isBadge ? (
-                          <Badge className={cn("text-xs", getCategoryColor(supplier.category))}>
+                          <Badge className={cn("text-xs font-medium", getCategoryColor(supplier.category))}>
                             {item.value}
                           </Badge>
-                        ) : item.isLink && item.value !== 'Not set' ? (
+                        ) : item.isLink && item.value !== 'Not set' && item.value !== 'N/A' ? (
                           <a
                             href={item.value.includes('@') ? `mailto:${item.value}` : item.value}
                             target={!item.value.includes('@') ? '_blank' : undefined}
@@ -515,7 +496,7 @@ const ViewSupplierModal = ({
                             className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                           >
                             {item.value}
-                            {!item.value.includes('@') && <ExternalLink className="h-3 w-3" />}
+                            {!item.value.includes('@') && item.value !== 'Not set' && <ExternalLink className="h-3 w-3" />}
                           </a>
                         ) : (
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -533,13 +514,11 @@ const ViewSupplierModal = ({
           {/* Company Description */}
           {supplier.description && (
             <Card className="mt-6 border border-gray-200 dark:border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 mb-3">
                   <FileText className="h-4 w-4 text-blue-500" />
-                  Company Description
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Company Description</h3>
+                </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                   {supplier.description}
                 </p>
@@ -550,18 +529,37 @@ const ViewSupplierModal = ({
           {/* Certifications */}
           {supplier.certifications_array && supplier.certifications_array.length > 0 && (
             <Card className="mt-6 border border-gray-200 dark:border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 mb-3">
                   <Award className="h-4 w-4 text-blue-500" />
-                  Certifications
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {supplier.certifications_array.map((cert) => (
-                  <Badge key={cert} variant="secondary" className="px-3 py-1 text-xs">
-                    {cert}
-                  </Badge>
-                ))}
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Certifications</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {supplier.certifications_array.map((cert) => (
+                    <Badge key={cert} variant="secondary" className="px-3 py-1.5 text-xs rounded-full border border-gray-200 dark:border-gray-700">
+                      <Award className="h-3 w-3 mr-1 text-amber-500" />
+                      {cert}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Blacklist Info */}
+          {supplier.is_blacklisted && supplier.blacklist_reason && (
+            <Card className="mt-6 border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <Ban className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Reason for Blacklisting</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{supplier.blacklist_reason}</p>
+                    {supplier.blacklisted_at && (
+                      <p className="text-xs text-gray-500 mt-2">Blacklisted on {formatDate(supplier.blacklisted_at)}</p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -577,7 +575,6 @@ const ViewSupplierModal = ({
     </motion.div>
   )
 
-  // Use portal to render at root level
   if (typeof document !== 'undefined') {
     return createPortal(
       <AnimatePresence>
@@ -646,14 +643,70 @@ export default function AdminSuppliersPage() {
   })
 
   const [selectedSupplier, setSelectedSupplier] = useState<ExtendedSupplier | null>(null)
+  const [selectedSuppliers, setSelectedSuppliers] = useState<number[]>([])
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [showBlacklistDialog, setShowBlacklistDialog] = useState(false)
   const [showUnblacklistDialog, setShowUnblacklistDialog] = useState(false)
+  const [showBulkBlacklistDialog, setShowBulkBlacklistDialog] = useState(false)
   const [blacklistReason, setBlacklistReason] = useState('')
+  const [bulkBlacklistReason, setBulkBlacklistReason] = useState('')
   const [isMutating, setIsMutating] = useState(false)
 
   const canManageSuppliers = hasPermission('manage_suppliers') || currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('PROCUREMENT')
+  const isAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('SUPER_ADMIN')
+
+  // Computed stats for StatsCards
+  const statsItems: StatCardItem[] = useMemo(() => {
+    const total = safeSuppliersList.length
+    const active = safeSuppliersList.filter((s: ExtendedSupplier) => s.status === 'ACTIVE').length
+    const inactive = safeSuppliersList.filter((s: ExtendedSupplier) => s.status === 'INACTIVE').length
+    const blacklisted = safeSuppliersList.filter((s: ExtendedSupplier) => s.status === 'BLACKLISTED').length
+
+    return [
+      {
+        label: "Total Suppliers",
+        value: total,
+        icon: Building2,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All registered suppliers",
+      },
+      {
+        label: "Active",
+        value: active,
+        icon: UserCheck,
+        tagLabel: "ACTIVE",
+        tagColor: "emerald",
+        subtitle: `${active} active suppliers`,
+      },
+      {
+        label: "Inactive",
+        value: inactive,
+        icon: UserX,
+        tagLabel: "INACTIVE",
+        tagColor: "gray",
+        subtitle: `${inactive} inactive suppliers`,
+      },
+      {
+        label: "Blacklisted",
+        value: blacklisted,
+        icon: Ban,
+        tagLabel: "BLACKLISTED",
+        tagColor: "red",
+        subtitle: `${blacklisted} blacklisted suppliers`,
+      },
+      {
+        label: "Categories",
+        value: categories.length || 0,
+        icon: Layers,
+        tagLabel: "CATEGORIES",
+        tagColor: "purple",
+        subtitle: `${categories.length || 0} categories`,
+      },
+    ]
+  }, [safeSuppliersList, categories])
 
   const suppliers = useMemo(() => {
     if (!safeSuppliersList || safeSuppliersList.length === 0) {
@@ -697,6 +750,21 @@ export default function AdminSuppliersPage() {
     }
   }
 
+  const handleBulkDeleteSuppliers = async () => {
+    if (selectedSuppliers.length === 0) return
+    setIsMutating(true)
+    try {
+      await Promise.all(selectedSuppliers.map(id => deleteSupplier.mutateAsync(id)))
+      setSelectedSuppliers([])
+      setShowBulkDeleteDialog(false)
+      refetchSuppliers()
+    } catch (error) {
+      console.error('Bulk delete error:', error)
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
   const handleBlacklistSupplier = async () => {
     if (!selectedSupplier || !blacklistReason.trim()) return
     setIsMutating(true)
@@ -711,6 +779,24 @@ export default function AdminSuppliersPage() {
       refetchSuppliers()
     } catch (error) {
       console.error('Blacklist error:', error)
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
+  const handleBulkBlacklistSuppliers = async () => {
+    if (selectedSuppliers.length === 0 || !bulkBlacklistReason.trim()) return
+    setIsMutating(true)
+    try {
+      await Promise.all(selectedSuppliers.map(id =>
+        blacklistSupplier.mutateAsync({ id, reason: bulkBlacklistReason })
+      ))
+      setSelectedSuppliers([])
+      setShowBulkBlacklistDialog(false)
+      setBulkBlacklistReason('')
+      refetchSuppliers()
+    } catch (error) {
+      console.error('Bulk blacklist error:', error)
     } finally {
       setIsMutating(false)
     }
@@ -731,6 +817,22 @@ export default function AdminSuppliersPage() {
     }
   }
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSuppliers(suppliers.map((s: ExtendedSupplier) => s.id))
+    } else {
+      setSelectedSuppliers([])
+    }
+  }
+
+  const handleSelectSupplier = (id: number, checked: boolean) => {
+    if (checked) {
+      setSelectedSuppliers([...selectedSuppliers, id])
+    } else {
+      setSelectedSuppliers(selectedSuppliers.filter(sid => sid !== id))
+    }
+  }
+
   const isLoading = suppliersLoading || categoriesLoading
 
   if (!canManageSuppliers) {
@@ -742,8 +844,9 @@ export default function AdminSuppliersPage() {
         background="gradient"
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <Card className="max-w-md">
-            <CardContent className="pt-6 text-center">
+          <Card className="max-w-md relative">
+            <WrappedCornerTag label="DENIED" color="red" position="top-left" size="lg" />
+            <CardContent className="pt-8 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
@@ -751,7 +854,7 @@ export default function AdminSuppliersPage() {
                 Access Denied
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                You don't have permission to manage suppliers.
+                You don't have permission to manage suppliers. Please contact your administrator.
               </p>
             </CardContent>
           </Card>
@@ -764,7 +867,7 @@ export default function AdminSuppliersPage() {
     <PageTemplate
       title="Supplier Management"
       description="Manage suppliers, view profiles, and control supplier access"
-      icon={<Building2 className="h-5 w-5" />}
+      icon={<Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
       breadcrumbs={[
@@ -772,15 +875,34 @@ export default function AdminSuppliersPage() {
         { label: 'Suppliers' },
       ]}
       actions={
-        <div className="flex items-center gap-2">
-          <Badge className="bg-primary/10 dark:bg-primary/20 text-primary border-primary/20 dark:border-primary/30">
-            <Sparkles className="h-3 w-3 mr-1" />
-            {safeSuppliersList.length} Total
-          </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          {selectedSuppliers.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkBlacklistDialog(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20 rounded-xl"
+              >
+                <Ban className="h-4 w-4 mr-1" />
+                Blacklist ({selectedSuppliers.length})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkDeleteDialog(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20 rounded-xl"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete ({selectedSuppliers.length})
+              </Button>
+            </div>
+          )}
           <Button
             variant="outline"
+            size="sm"
             onClick={() => refetchSuppliers()}
-            className="gap-2"
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
             disabled={isLoading}
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
@@ -791,20 +913,28 @@ export default function AdminSuppliersPage() {
     >
       <div className="space-y-6">
         {/* Stats Cards */}
-        <StatsCards suppliers={safeSuppliersList} />
+        <StatsCards
+          stats={statsItems}
+          isLoading={isLoading}
+          columns={5}
+          variant="default"
+          formatCompact={true}
+          tagOrientation="wrapped"
+          tagPosition="top-left"
+        />
 
         {/* Filters */}
-        <Card className="border border-gray-200 dark:border-gray-700">
-          <CardContent className="pt-4">
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900">
+          <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <Input
-                    placeholder="Search suppliers..."
+                    placeholder="Search suppliers by name, email, or registration..."
                     value={filters.search}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                    className="pl-9"
+                    className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
                   />
                 </div>
               </div>
@@ -812,10 +942,10 @@ export default function AdminSuppliersPage() {
                 value={filters.category}
                 onValueChange={(value) => setFilters({ ...filters, category: value, page: 1 })}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="goods">Goods Supplier</SelectItem>
                   <SelectItem value="services">Services Provider</SelectItem>
@@ -826,10 +956,10 @@ export default function AdminSuppliersPage() {
                 value={filters.status}
                 onValueChange={(value) => setFilters({ ...filters, status: value as any, page: 1 })}
               >
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="ACTIVE">Active</SelectItem>
                   <SelectItem value="INACTIVE">Inactive</SelectItem>
@@ -849,63 +979,75 @@ export default function AdminSuppliersPage() {
                     page: 1
                   })
                 }}
-                className="gap-2"
+                className="gap-2 h-11 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <FilterX className="h-4 w-4" />
                 Clear
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => refetchSuppliers()}
-                className="gap-2"
-                disabled={isLoading}
-              >
-                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-                Refresh
               </Button>
             </div>
           </CardContent>
         </Card>
 
         {/* Suppliers Table */}
-        <Card className="border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <CardContent className="p-0">
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 overflow-hidden relative">
+          <WrappedCornerTag label="SUPPLIERS" color="blue" position="top-left" size="lg" />
+          <div className="pt-8">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                    <TableHead className="min-w-[250px] font-semibold text-gray-600 dark:text-gray-300">Supplier</TableHead>
-                    <TableHead className="min-w-[130px] font-semibold text-gray-600 dark:text-gray-300">Category</TableHead>
-                    <TableHead className="min-w-[150px] font-semibold text-gray-600 dark:text-gray-300">Registration</TableHead>
-                    <TableHead className="min-w-[120px] font-semibold text-gray-600 dark:text-gray-300">Status</TableHead>
-                    <TableHead className="min-w-[200px] font-semibold text-gray-600 dark:text-gray-300">User</TableHead>
-                    <TableHead className="min-w-[150px] font-semibold text-gray-600 dark:text-gray-300">Joined</TableHead>
-                    <TableHead className="text-right min-w-[130px] font-semibold text-gray-600 dark:text-gray-300">Actions</TableHead>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+                    <TableHead className="w-[40px] py-4">
+                      <Checkbox
+                        checked={selectedSuppliers.length === suppliers.length && suppliers.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead className="min-w-[250px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Supplier</TableHead>
+                    <TableHead className="min-w-[130px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Category</TableHead>
+                    <TableHead className="min-w-[150px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Registration</TableHead>
+                    <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">User</TableHead>
+                    <TableHead className="min-w-[150px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Joined</TableHead>
+                    <TableHead className="text-right min-w-[130px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-                        <span className="text-sm font-medium text-gray-500 mt-2 block">Loading suppliers...</span>
+                      <TableCell colSpan={8} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                          <span className="text-sm text-gray-500">Loading suppliers...</span>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : suppliers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
-                        <Building2 className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-gray-500">No suppliers found</p>
-                        <p className="text-xs text-gray-400">Try adjusting your filters</p>
+                      <TableCell colSpan={8} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <Building2 className="h-12 w-12 text-gray-300 dark:text-gray-600" />
+                          <p className="text-sm font-medium text-gray-500">No suppliers found</p>
+                          <p className="text-xs text-gray-400">Try adjusting your filters</p>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
                     suppliers.map((supplier: ExtendedSupplier) => {
                       const StatusBadge = getStatusBadge(supplier.status)
                       const StatusIcon = StatusBadge.icon
+                      const isBlacklisted = supplier.status === 'BLACKLISTED'
 
                       return (
-                        <TableRow key={supplier.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                        <TableRow key={supplier.id} className={cn(
+                          "hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group",
+                          isBlacklisted && "bg-red-50/30 dark:bg-red-900/5"
+                        )}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedSuppliers.includes(supplier.id)}
+                              onCheckedChange={(checked) => handleSelectSupplier(supplier.id, !!checked)}
+                            />
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               {supplier.company_logo ? (
@@ -923,17 +1065,32 @@ export default function AdminSuppliersPage() {
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                  {supplier.company_name}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                  {supplier.company_email}
-                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                    {supplier.company_name}
+                                  </p>
+                                  {isBlacklisted && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Ban className="h-3.5 w-3.5 text-red-500" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="rounded-xl">Blacklisted</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                    {supplier.company_email}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={cn("font-medium border text-xs", getCategoryColor(supplier.category))}>
+                            <Badge className={cn("font-medium border rounded-full text-xs", getCategoryColor(supplier.category))}>
                               {supplier.category_label || getCategoryLabel(supplier.category)}
                             </Badge>
                           </TableCell>
@@ -948,7 +1105,7 @@ export default function AdminSuppliersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={cn("font-medium border text-xs", getStatusColor(supplier.status))}>
+                            <Badge className={cn("font-medium border rounded-full text-xs", getStatusColor(supplier.status))}>
                               <StatusIcon className="h-3 w-3 mr-1" />
                               {supplier.status_label || supplier.status}
                             </Badge>
@@ -975,11 +1132,11 @@ export default function AdminSuppliersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
                                 {formatTimeAgo(supplier.created_at)}
                               </span>
                               <span className="text-xs text-gray-400">
-                                {formatDate(supplier.created_at)}
+                                {supplier.created_at ? formatDate(supplier.created_at) : 'Never'}
                               </span>
                             </div>
                           </TableCell>
@@ -991,7 +1148,7 @@ export default function AdminSuppliersPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                                      className="h-8 w-8 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                       onClick={() => {
                                         setSelectedSupplier(supplier)
                                         setShowViewDialog(true)
@@ -1000,29 +1157,27 @@ export default function AdminSuppliersPage() {
                                       <Eye className="h-4 w-4 text-gray-500" />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>View Details</TooltipContent>
+                                  <TooltipContent className="rounded-xl">View Details</TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
 
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                  </DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                                  <DropdownMenuLabel className="text-sm font-semibold px-3 py-2 text-gray-700 dark:text-gray-200">Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
 
-                                  {supplier.status === 'BLACKLISTED' ? (
+                                  {isBlacklisted ? (
                                     <DropdownMenuItem
                                       onClick={() => {
                                         setSelectedSupplier(supplier)
                                         setShowUnblacklistDialog(true)
                                       }}
-                                      className="text-emerald-600 cursor-pointer"
+                                      className="text-emerald-600 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 cursor-pointer"
                                     >
                                       <Check className="h-4 w-4 mr-2" />
                                       Remove from Blacklist
@@ -1034,20 +1189,20 @@ export default function AdminSuppliersPage() {
                                         setShowBlacklistDialog(true)
                                         setBlacklistReason('')
                                       }}
-                                      className="text-red-600 cursor-pointer"
+                                      className="text-red-600 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 cursor-pointer"
                                     >
                                       <Ban className="h-4 w-4 mr-2" />
                                       Blacklist Supplier
                                     </DropdownMenuItem>
                                   )}
 
-                                  <DropdownMenuSeparator />
+                                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setSelectedSupplier(supplier)
                                       setShowDeleteDialog(true)
                                     }}
-                                    className="text-red-600 cursor-pointer"
+                                    className="text-red-600 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 cursor-pointer"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Delete Supplier
@@ -1063,7 +1218,8 @@ export default function AdminSuppliersPage() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
+          </div>
+
           <div className="flex items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
             <div className="text-sm text-gray-500">
               Showing <span className="font-medium text-gray-700 dark:text-gray-300">{suppliers.length}</span> of{' '}
@@ -1074,10 +1230,10 @@ export default function AdminSuppliersPage() {
                 value={filters.per_page.toString()}
                 onValueChange={(value) => setFilters({ ...filters, per_page: parseInt(value), page: 1 })}
               >
-                <SelectTrigger className="w-[80px]">
+                <SelectTrigger className="w-[80px] h-9 rounded-xl dark:bg-gray-900 dark:border-gray-700">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
@@ -1112,7 +1268,7 @@ export default function AdminSuppliersPage() {
           MODALS - Rendered using Portal
           ============================================ */}
 
-      {/* View Supplier Modal - Using Portal */}
+      {/* View Supplier Modal */}
       <ViewSupplierModal
         isOpen={showViewDialog}
         onClose={() => {
@@ -1122,12 +1278,13 @@ export default function AdminSuppliersPage() {
         supplier={selectedSupplier}
       />
 
-      {/* Delete Modal - Using Portal */}
+      {/* Delete Modal */}
       {showDeleteDialog && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <DialogContent className="z-[9999]">
-              <DialogHeader>
+            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
+              <WrappedCornerTag label="DELETE" color="red" position="top-left" size="sm" />
+              <DialogHeader className="pt-6">
                 <DialogTitle className="flex items-center gap-2 text-red-600">
                   <AlertTriangle className="h-5 w-5" />
                   Delete Supplier
@@ -1138,8 +1295,8 @@ export default function AdminSuppliersPage() {
               </DialogHeader>
               {selectedSupplier && (
                 <div className="py-4">
-                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
                       {selectedSupplier.company_name?.[0] || 'S'}
                     </div>
                     <div>
@@ -1153,11 +1310,11 @@ export default function AdminSuppliersPage() {
                   </div>
                 </div>
               )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="rounded-xl">
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2" disabled={isMutating}>
+                <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2 rounded-xl" disabled={isMutating}>
                   {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   Delete
                 </Button>
@@ -1168,12 +1325,43 @@ export default function AdminSuppliersPage() {
         document.body
       )}
 
-      {/* Blacklist Modal - Using Portal */}
+      {/* Bulk Delete Modal */}
+      {showBulkDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
+              <WrappedCornerTag label="BULK DELETE" color="red" position="top-left" size="sm" />
+              <DialogHeader className="pt-6">
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Selected Suppliers
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete {selectedSuppliers.length} selected suppliers?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleBulkDeleteSuppliers} className="gap-2 rounded-xl" disabled={isMutating}>
+                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete All
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Blacklist Modal */}
       {showBlacklistDialog && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           <Dialog open={showBlacklistDialog} onOpenChange={setShowBlacklistDialog}>
-            <DialogContent className="z-[9999]">
-              <DialogHeader>
+            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
+              <WrappedCornerTag label="BLACKLIST" color="red" position="top-left" size="sm" />
+              <DialogHeader className="pt-6">
                 <DialogTitle className="flex items-center gap-2 text-red-600">
                   <Ban className="h-5 w-5" />
                   Blacklist Supplier
@@ -1184,8 +1372,8 @@ export default function AdminSuppliersPage() {
               </DialogHeader>
               {selectedSupplier && (
                 <div className="py-4 space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
                       {selectedSupplier.company_name?.[0] || 'S'}
                     </div>
                     <div>
@@ -1203,22 +1391,22 @@ export default function AdminSuppliersPage() {
                     </Label>
                     <Textarea
                       id="blacklist-reason"
-                      placeholder="Enter the reason..."
+                      placeholder="Enter the reason for blacklisting..."
                       value={blacklistReason}
                       onChange={(e) => setBlacklistReason(e.target.value)}
-                      className="min-h-[100px]"
+                      className="min-h-[100px] rounded-xl"
                     />
                   </div>
                 </div>
               )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setShowBlacklistDialog(false)}>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBlacklistDialog(false)} className="rounded-xl">
                   Cancel
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={handleBlacklistSupplier}
-                  className="gap-2"
+                  className="gap-2 rounded-xl"
                   disabled={isMutating || !blacklistReason.trim()}
                 >
                   {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
@@ -1231,12 +1419,62 @@ export default function AdminSuppliersPage() {
         document.body
       )}
 
-      {/* Unblacklist Modal - Using Portal */}
+      {/* Bulk Blacklist Modal */}
+      {showBulkBlacklistDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <Dialog open={showBulkBlacklistDialog} onOpenChange={setShowBulkBlacklistDialog}>
+            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
+              <WrappedCornerTag label="BULK BLACKLIST" color="red" position="top-left" size="sm" />
+              <DialogHeader className="pt-6">
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <Ban className="h-5 w-5" />
+                  Blacklist Selected Suppliers
+                </DialogTitle>
+                <DialogDescription>
+                  Please provide a reason for blacklisting {selectedSuppliers.length} selected suppliers.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bulk-blacklist-reason" className="text-sm font-medium">
+                    Reason <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="bulk-blacklist-reason"
+                    placeholder="Enter the reason for blacklisting..."
+                    value={bulkBlacklistReason}
+                    onChange={(e) => setBulkBlacklistReason(e.target.value)}
+                    className="min-h-[100px] rounded-xl"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkBlacklistDialog(false)} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleBulkBlacklistSuppliers}
+                  className="gap-2 rounded-xl"
+                  disabled={isMutating || !bulkBlacklistReason.trim()}
+                >
+                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                  Blacklist All
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Unblacklist Modal */}
       {showUnblacklistDialog && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           <Dialog open={showUnblacklistDialog} onOpenChange={setShowUnblacklistDialog}>
-            <DialogContent className="z-[9999]">
-              <DialogHeader>
+            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
+              <WrappedCornerTag label="REMOVE" color="emerald" position="top-left" size="sm" />
+              <DialogHeader className="pt-6">
                 <DialogTitle className="flex items-center gap-2 text-emerald-600">
                   <Check className="h-5 w-5" />
                   Remove from Blacklist
@@ -1247,8 +1485,8 @@ export default function AdminSuppliersPage() {
               </DialogHeader>
               {selectedSupplier && (
                 <div className="py-4">
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
                       {selectedSupplier.company_name?.[0] || 'S'}
                     </div>
                     <div>
@@ -1267,14 +1505,13 @@ export default function AdminSuppliersPage() {
                   </div>
                 </div>
               )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)}>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)} className="rounded-xl">
                   Cancel
                 </Button>
                 <Button
-                  variant="default"
                   onClick={handleUnblacklistSupplier}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                  className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700"
                   disabled={isMutating}
                 >
                   {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

@@ -57,6 +57,16 @@ class SupplierQuotation extends Model
     'evaluation_notes',
     'evaluation_score',
     'metadata',
+    // ✅ New tracking fields
+    'download_count',
+    'last_downloaded_at',
+    'pdf_storage_path',
+    'pdf_filename',
+    'pdf_upload_id',
+    'view_count',
+    'last_viewed_at',
+    'shared_count',
+    'last_shared_at',
   ];
 
   /**
@@ -81,6 +91,13 @@ class SupplierQuotation extends Model
     'evaluation_score' => 'integer',
     'metadata' => 'json',
     'deleted_at' => 'datetime',
+    // ✅ New tracking casts
+    'download_count' => 'integer',
+    'last_downloaded_at' => 'datetime',
+    'view_count' => 'integer',
+    'last_viewed_at' => 'datetime',
+    'shared_count' => 'integer',
+    'last_shared_at' => 'datetime',
   ];
 
   /**
@@ -136,6 +153,14 @@ class SupplierQuotation extends Model
   public function verifications(): HasMany
   {
     return $this->hasMany(QuotationVerification::class, 'supplier_quotation_id');
+  }
+
+  /**
+   * ✅ Relationship to the uploaded PDF file
+   */
+  public function pdfUpload(): BelongsTo
+  {
+    return $this->belongsTo(Upload::class, 'pdf_upload_id');
   }
 
   // ============================================
@@ -275,6 +300,39 @@ class SupplierQuotation extends Model
   }
 
   // ============================================
+  // TRACKING SCOPES
+  // ============================================
+
+  /**
+   * Scope to get most downloaded quotations
+   */
+  public function scopeMostDownloaded($query, int $limit = 10)
+  {
+    return $query->orderBy('download_count', 'desc')->limit($limit);
+  }
+
+  /**
+   * Scope to get recently downloaded quotations
+   */
+  public function scopeRecentlyDownloaded($query, int $limit = 10)
+  {
+    return $query->whereNotNull('last_downloaded_at')
+      ->orderBy('last_downloaded_at', 'desc')
+      ->limit($limit);
+  }
+
+  /**
+   * Scope to get quotations that have never been downloaded
+   */
+  public function scopeNeverDownloaded($query)
+  {
+    return $query->where(function ($q) {
+      $q->whereNull('download_count')
+        ->orWhere('download_count', 0);
+    });
+  }
+
+  // ============================================
   // HELPER METHODS
   // ============================================
 
@@ -326,6 +384,66 @@ class SupplierQuotation extends Model
   public function isManualSubmission(): bool
   {
     return $this->submission_method === 'manual';
+  }
+
+  /**
+   * ✅ Check if the quotation has a PDF uploaded
+   */
+  public function hasPDF(): bool
+  {
+    return !empty($this->pdf_storage_path) || !empty($this->pdf_upload_id);
+  }
+
+  /**
+   * ✅ Get the PDF URL
+   */
+  public function getPDFUrl(): ?string
+  {
+    if ($this->pdf_upload_id && $this->pdfUpload) {
+      return $this->pdfUpload->url ?? null;
+    }
+
+    if ($this->pdf_storage_path) {
+      return asset('storage/' . $this->pdf_storage_path);
+    }
+
+    return null;
+  }
+
+  /**
+   * ✅ Increment download count and update last_downloaded_at
+   */
+  public function incrementDownloadCount(): self
+  {
+    $this->increment('download_count');
+    $this->last_downloaded_at = now();
+    $this->save();
+
+    return $this;
+  }
+
+  /**
+   * ✅ Increment view count and update last_viewed_at
+   */
+  public function incrementViewCount(): self
+  {
+    $this->increment('view_count');
+    $this->last_viewed_at = now();
+    $this->save();
+
+    return $this;
+  }
+
+  /**
+   * ✅ Increment shared count and update last_shared_at
+   */
+  public function incrementSharedCount(): self
+  {
+    $this->increment('shared_count');
+    $this->last_shared_at = now();
+    $this->save();
+
+    return $this;
   }
 
   public function updateTotals(): self

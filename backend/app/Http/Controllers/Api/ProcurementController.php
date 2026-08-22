@@ -298,10 +298,49 @@ class ProcurementController extends Controller
       }
 
       $allRequisitions = $query->get();
+      $requisitionIds = $allRequisitions->pluck('id')->toArray();
 
       // Get requisition IDs that have QTNs
-      $userRequisitionIds = $allRequisitions->pluck('id')->toArray();
-      $requisitionIdsWithQtn = QuotationRequest::whereIn('requisition_id', $userRequisitionIds)
+      $requisitionIdsWithQtn = QuotationRequest::whereIn('requisition_id', $requisitionIds)
+        ->pluck('requisition_id')
+        ->toArray();
+
+      // ============================================
+      // GET ALL SUPPLIER QUOTATIONS FOR THESE REQUISITIONS
+      // ============================================
+
+      // Get all quotation requests for these requisitions
+      $quotationRequests = QuotationRequest::whereIn('requisition_id', $requisitionIds)
+        ->with(['supplierQuotations'])
+        ->get();
+
+      // Track accepted quotations
+      $acceptedQuotations = [];
+      $totalAcceptedAmount = 0;
+      $requisitionIdsWithAcceptedQuotations = [];
+
+      foreach ($quotationRequests as $qtnRequest) {
+        foreach ($qtnRequest->supplierQuotations as $supplierQuotation) {
+          // Check if quotation is accepted (status = 'accepted')
+          if ($supplierQuotation->status === 'accepted') {
+            $acceptedQuotations[] = $supplierQuotation;
+            $totalAcceptedAmount += floatval($supplierQuotation->total_amount ?? 0);
+            $requisitionIdsWithAcceptedQuotations[] = $qtnRequest->requisition_id;
+
+            // Also track which requisition has accepted quotations
+            if (!in_array($qtnRequest->requisition_id, $requisitionIdsWithAcceptedQuotations)) {
+              $requisitionIdsWithAcceptedQuotations[] = $qtnRequest->requisition_id;
+            }
+          }
+        }
+      }
+
+      // Count accepted quotations by requisition
+      $acceptedQuotationCount = count($acceptedQuotations);
+
+      // Get requisition IDs that have been sent to suppliers (have QTNs sent)
+      $requisitionIdsSentToSuppliers = QuotationRequest::whereIn('requisition_id', $requisitionIds)
+        ->whereNotNull('sent_at')
         ->pluck('requisition_id')
         ->toArray();
 
@@ -319,10 +358,19 @@ class ProcurementController extends Controller
         'cancelled' => 0,          // cancelled
 
         // Procurement stats
-        'ready_for_procurement' => 0,
-        'in_progress' => 0,
-        'with_qtns' => 0,
-        'completed' => 0,
+        'ready_for_procurement' => 0,      // final_approved but NOT sent to suppliers
+        'sent_to_suppliers' => 0,          // final_approved and sent to suppliers (has QTN sent)
+        'in_progress' => 0,                // final_approved and has accepted quotations
+        'with_qtns' => 0,                  // final_approved and has QTN (sent or not)
+        'completed' => 0,                  // final_approved and completed
+
+        // Quotation stats
+        'accepted_quotations' => $acceptedQuotationCount,
+        'total_accepted_amount' => $totalAcceptedAmount,
+        'formatted_total_accepted_amount' => number_format($totalAcceptedAmount, 2),
+
+        // Requisition IDs for reference
+        'requisition_ids_with_accepted_quotations' => array_unique($requisitionIdsWithAcceptedQuotations),
 
         // Detailed breakdown by status
         'by_status' => [],
@@ -337,10 +385,12 @@ class ProcurementController extends Controller
 
       $stats['by_status'] = $statusCounts;
 
-      // Map status to categories
+      // Map status to categories and calculate procurement stats
       foreach ($allRequisitions as $requisition) {
         $status = $requisition->status;
         $hasQtn = in_array($requisition->id, $requisitionIdsWithQtn);
+        $hasAcceptedQuotation = in_array($requisition->id, $requisitionIdsWithAcceptedQuotations);
+        $isSentToSuppliers = in_array($requisition->id, $requisitionIdsSentToSuppliers);
 
         // Approval stats
         switch ($status) {
@@ -401,14 +451,29 @@ class ProcurementController extends Controller
 
           if ($isCompleted) {
             $stats['completed']++;
-          } elseif ($hasQtn) {
+          } elseif ($hasAcceptedQuotation) {
+            // Has accepted quotation - IN PROGRESS
             $stats['in_progress']++;
             $stats['with_qtns']++;
+          } elseif ($isSentToSuppliers) {
+            // Sent to suppliers but no accepted quotation yet
+            $stats['sent_to_suppliers']++;
+            $stats['with_qtns']++;
+          } elseif ($hasQtn) {
+            // Has QTN but not sent (or no response yet)
+            $stats['with_qtns']++;
+            $stats['ready_for_procurement']++;
           } else {
+            // No QTN at all - READY FOR PROCUREMENT
             $stats['ready_for_procurement']++;
           }
         }
       }
+
+      // Calculate additional metrics
+      $stats['acceptance_rate'] = $stats['with_qtns'] > 0
+        ? round(($stats['accepted_quotations'] / $stats['with_qtns']) * 100, 2)
+        : 0;
 
       return response()->json([
         'success' => true,
@@ -416,8 +481,6 @@ class ProcurementController extends Controller
         'message' => 'Procurement statistics retrieved successfully.',
       ]);
     } catch (\Exception $e) {
-      \Log::error('Procurement statistics error: ' . $e->getMessage());
-      \Log::error('Trace: ' . $e->getTraceAsString());
 
       return response()->json([
         'success' => false,
@@ -431,10 +494,16 @@ class ProcurementController extends Controller
           'revised' => 0,
           'cancelled' => 0,
           'ready_for_procurement' => 0,
+          'sent_to_suppliers' => 0,
           'in_progress' => 0,
           'with_qtns' => 0,
           'completed' => 0,
+          'accepted_quotations' => 0,
+          'total_accepted_amount' => 0,
+          'formatted_total_accepted_amount' => '0.00',
+          'requisition_ids_with_accepted_quotations' => [],
           'by_status' => [],
+          'acceptance_rate' => 0,
         ],
         'message' => 'Failed to retrieve procurement statistics.',
       ], 500);

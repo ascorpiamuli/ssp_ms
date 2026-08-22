@@ -23,10 +23,10 @@ SSPMS is a comprehensive, production-ready web application designed to digitize 
 |------|-------------|---------------------|
 | **Admin** | System Administrator | Manage users, departments, system settings, reference formats, backup |
 | **Staff Member** | Any school employee | Create and submit requisitions |
-| **Head of Department (HOD)** | Department head | Approve/decline requisitions with comments |
-| **Accountant** | Finance department | Fund availability check, approve/decline, prepare payment vouchers, verify invoices |
-| **Head of Institution** | Principal/Headteacher | Approve/decline requisitions, endorse payment vouchers |
-| **Director/Finance Administrator** | Director/Financial Admin | Final approval authority for financial commitments |
+| **Head of Department (HOD)** | Department head | Approve/decline requisitions with comments, check LPO/LSO |
+| **Accountant** | Finance department | Fund availability check, approve/decline, prepare payment vouchers, verify invoices, generate LPO/LSO in absence of Procurement Officer |
+| **Head of Institution** | Principal/Headteacher | Approve/decline requisitions, endorse payment vouchers, approve LPO/LSO |
+| **Director/Finance Administrator** | Director/Financial Admin | Final approval authority for financial commitments, approve LPO/LSO |
 | **Procurement Officer** | Procurement department | Manage suppliers, quotations, generate LPO/LSO, recheck supplier selection |
 | **Supplier** | External vendor | Receive quotations, approve, list prices, submit invoices |
 | **Auditor** | Internal/External audit | View all transactions read-only |
@@ -35,7 +35,7 @@ SSPMS is a comprehensive, production-ready web application designed to digitize 
 
 ## 🔄 Complete Workflow
 
-### Requisition Lifecycle (14 Steps)
+### Requisition Lifecycle (15 Steps)
 
 1. **Create Requisition** - Staff/HOD/Accountant/Principal/Procurement logs in and fills requisition form
 2. **Submit for Approval** - Status changes to PENDING_HOD
@@ -46,11 +46,15 @@ SSPMS is a comprehensive, production-ready web application designed to digitize 
 7. **Quotation Generation** - System generates QTN and sends to selected suppliers
 8. **Supplier Response** - Suppliers approve/decline with pricing
 9. **Supplier Selection** - Lowest price suggested, Procurement/Headteacher confirms
-10. **LPO/LSO Generation** - Auto-determined based on Goods/Services type
-11. **GRN/SAN Generation** - Goods Received Note or Service Acknowledgment Note
-12. **Supplier Invoice** - Supplier submits invoice with three-way matching
-13. **Payment Voucher** - Accountant prepares, Head/Diocesan Accountant endorses
-14. **Payment & Cheque Tracking** - Physical cheque issued and tracked
+10. **LPO/LSO Generation** - User manually selects LPO (Goods) or LSO (Services); document generated as DRAFT
+11. **HOD Check** - Head of requesting department checks and verifies the order
+12. **Accountant Endorsement** - Accountant endorses after budget confirmation
+13. **Final Approval** - Director/Finance Administrator approves (Principal in absence)
+14. **Issue to Supplier** - Approved purchase order is sent to the selected supplier
+15. **GRN/SAN Generation** - Goods Received Note or Service Acknowledgment Note after delivery/service completion
+16. **Supplier Invoice** - Supplier submits invoice with three-way matching
+17. **Payment Voucher** - Accountant prepares, Head/Diocesan Accountant endorses
+18. **Payment & Cheque Tracking** - Physical cheque issued and tracked
 
 ### Requisition Statuses
 
@@ -65,6 +69,18 @@ SSPMS is a comprehensive, production-ready web application designed to digitize 
 | APPROVED | All approvals completed |
 | DECLINED | Declined with reason |
 | CANCELLED | Cancelled by user before approval |
+
+### Purchase Order Statuses
+
+| Status | Description |
+|--------|-------------|
+| DRAFT | Generated, awaiting HOD check |
+| CHECKED | Verified by HOD, awaiting Accountant endorsement |
+| ENDORSED | Endorsed by Accountant, awaiting final approval |
+| APPROVED | Final approval granted, ready to issue |
+| ISSUED | Sent to supplier |
+| CANCELLED | Cancelled before issue |
+| COMPLETED | Fully delivered/fulfilled |
 
 ---
 
@@ -109,12 +125,31 @@ All numbers are **system-generated** and **configurable** in Admin Settings:
 - Price comparison analysis
 
 ### 3. LPO/LSO Generation
-- Auto-determine LPO (Goods) or LSO (Services)
-- Professional PDF documents
-- Multi-signature workflow (Prepared, Checked, Endorsed, Approved)
-- Validity period configuration
-- Contract number linking
-- Delivery tracking
+- **Manual Selection** - User (Procurement Officer or Accountant) decides whether to generate:
+  - **LPO (Local Purchase Order)** - For goods/procurement of items
+  - **LSO (Local Service Order)** - For services/contracts
+- **DRAFT Status** - Generated documents start as DRAFT for review
+- **Generation Authority:**
+  - Primary: **Procurement Officer**
+  - Secondary: **Accountant** (in absence of Procurement Officer)
+- **4-Stage Approval Workflow:**
+  1. **HOD Check** - Head of requesting department verifies:
+     - Accuracy of items/services
+     - Quantities and specifications
+     - Delivery timelines
+     - Departmental budget alignment
+  2. **Accountant Endorsement** - Accountant confirms:
+     - Budget availability
+     - Fund allocation
+     - Financial compliance
+  3. **Final Approval** - Authorized by:
+     - **Director/Finance Administrator** (primary)
+     - **Principal/Head of Institution** (in absence of Director)
+  4. **Issue to Supplier** - Only after all approvals are complete
+- **Professional PDF Documents** - Company-branded, print-ready documents
+- **Validity Period Configuration** - Set order validity dates
+- **Contract Number Linking** - Connect to existing contracts
+- **Delivery Tracking** - Monitor delivery progress
 
 ### 4. GRN/SAN Management
 - Generate Goods Received Note or Service Acknowledgment Note
@@ -540,15 +575,18 @@ BCRYPT_ROUNDS=12
 | Method | Endpoint | Description | Permissions |
 |--------|----------|-------------|-------------|
 | GET | `/purchase-orders` | List purchase orders | All authenticated |
-| POST | `/purchase-orders` | Create purchase order | Procurement/Admin |
+| POST | `/purchase-orders` | Create purchase order (DRAFT) | Procurement/Accountant |
 | GET | `/purchase-orders/overdue` | Overdue orders | Procurement/Admin |
 | GET | `/purchase-orders/{id}` | Get order details | All authenticated |
 | GET | `/purchase-orders/{id}/summary` | Order summary | All authenticated |
 | GET | `/purchase-orders/{id}/delivery-progress` | Delivery progress | All authenticated |
 | GET | `/purchase-orders/{id}/pdf` | Download PDF | All authenticated |
-| POST | `/purchase-orders/{id}/approve` | Approve order | Approvers |
-| POST | `/purchase-orders/{id}/issue` | Issue order | Procurement/Admin |
-| POST | `/purchase-orders/{id}/send` | Send to supplier | Procurement/Admin |
+| POST | `/purchase-orders/{id}/submit-check` | Submit for HOD checking | Procurement/Accountant |
+| POST | `/purchase-orders/{id}/check` | HOD checks the order | HOD (requesting dept) |
+| POST | `/purchase-orders/{id}/endorse` | Accountant endorses | Accountant |
+| POST | `/purchase-orders/{id}/approve` | Final approval | Director/Principal |
+| POST | `/purchase-orders/{id}/issue` | Issue to supplier | Procurement/Accountant |
+| POST | `/purchase-orders/{id}/send` | Send to supplier (after approval) | Procurement/Accountant |
 | POST | `/purchase-orders/{id}/acknowledge` | Acknowledge order | Supplier |
 | POST | `/purchase-orders/{id}/deliver` | Mark delivered | Procurement/Admin |
 | POST | `/purchase-orders/{id}/complete` | Complete order | Procurement/Admin |
@@ -889,7 +927,7 @@ BCRYPT_ROUNDS=12
 ### Events Triggering Notifications
 - Requisition submitted/approved/declined/returned
 - Quotation request sent/responded
-- LPO/LSO generated
+- LPO/LSO generated/drafted/checked/endorsed/approved/issued
 - GRN/SAN generated/approved
 - Invoice submitted/verified/sent back
 - Payment voucher generated/endorsed
@@ -964,6 +1002,7 @@ php artisan test tests/Feature/Api/
 - `supplier_quotations` - Supplier responses
 - `purchase_orders` - LPO/LSO records
 - `purchase_order_items` - PO items
+- `purchase_order_approvals` - PO approval tracking
 - `goods_received_notes` - GRN records
 - `service_acknowledgment_notes` - SAN records
 - `invoices` - Supplier invoices
@@ -989,16 +1028,19 @@ php artisan test tests/Feature/Api/
 4. ✅ In-app + Email notifications for all events
 5. ✅ 4-level approval workflow: HOD → Accountant → Principal → Director/Finance Administrator
 6. ✅ System suggests lowest supplier price but requires recheck
-7. ✅ LPO (Goods) / LSO (Services) - auto-determined
-8. ✅ GRN/SAN approved by Head User (HOD/Principal)
-9. ✅ Three-way matching: LPO + GRN + Invoice
-10. ✅ Payment Voucher prepared by Accountant, endorsed by Head/Diocesan Accountant
-11. ✅ Cheque Number recorded after physical issuance
-12. ✅ Fast track/Emergency option available
-13. ✅ Supplier blacklist tracking
-14. ✅ Requisition amendments allowed after approval
-15. ✅ Acting HOD temporary permissions available
-16. ✅ All data retained forever unless explicitly removed
+7. ✅ **User manually selects LPO (Goods) or LSO (Services) - not auto-determined**
+8. ✅ **Purchase Order starts as DRAFT after generation**
+9. ✅ **4-stage LPO/LSO approval: HOD Check → Accountant Endorsement → Director/Principal Approval → Issue to Supplier**
+10. ✅ **Accountant can generate LPO/LSO in absence of Procurement Officer**
+11. ✅ GRN/SAN approved by Head User (HOD/Principal)
+12. ✅ Three-way matching: LPO + GRN + Invoice
+13. ✅ Payment Voucher prepared by Accountant, endorsed by Head/Diocesan Accountant
+14. ✅ Cheque Number recorded after physical issuance
+15. ✅ Fast track/Emergency option available
+16. ✅ Supplier blacklist tracking
+17. ✅ Requisition amendments allowed after approval
+18. ✅ Acting HOD temporary permissions available
+19. ✅ All data retained forever unless explicitly removed
 
 ---
 
@@ -1197,7 +1239,8 @@ This project is proprietary software. All rights reserved.
   - Complete requisition management
   - 4-level approval workflow
   - Quotation management
-  - LPO/LSO generation
+  - LPO/LSO generation with manual selection
+  - 4-stage LPO/LSO approval workflow (HOD Check → Accountant Endorsement → Director/Principal Approval → Issue)
   - GRN/SAN management
   - Payment processing
   - Full reporting suite

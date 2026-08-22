@@ -77,6 +77,40 @@ export const useQuotationStatistics = (
 };
 
 // ============================================
+// TRACKING QUERIES
+// ============================================
+
+/**
+ * Hook for getting download statistics for a quotation
+ *
+ * @param id - The quotation ID
+ * @param options - Optional query options
+ * @returns Query result with download statistics
+ *
+ * @example
+ * const { data: stats, isLoading } = useQuotationDownloadStats(123);
+ * console.log(stats.download_count, stats.last_downloaded_at);
+ */
+export const useQuotationDownloadStats = (
+  id: number,
+  options?: Omit<UseQueryOptions<{
+    download_count: number;
+    last_downloaded_at: string;
+    view_count: number;
+    last_viewed_at: string;
+    shared_count: number;
+    last_shared_at: string;
+  }>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['quotation-download-stats', id],
+    queryFn: () => quotationService.getDownloadStats(id),
+    enabled: !!id,
+    ...options,
+  });
+};
+
+// ============================================
 // MUTATIONS
 // ============================================
 
@@ -207,11 +241,11 @@ export const useSelectSupplier = () => {
 };
 
 // ============================================
-// PDF HOOKS
+// PDF HOOKS WITH TRACKING
 // ============================================
 
 /**
- * Hook for downloading QTN as PDF
+ * Hook for downloading QTN as PDF with automatic tracking
  *
  * @param options - Optional configuration for the mutation
  * @returns Mutation object with download function
@@ -219,20 +253,26 @@ export const useSelectSupplier = () => {
  * @example
  * const { mutate: downloadPDF, isPending } = useDownloadPDF();
  *
- * // Download PDF
+ * // Download PDF with automatic tracking
  * downloadPDF(123);
  *
  * // With custom filename
  * downloadPDF({ id: 123, filename: 'my-qtn.pdf' });
  */
 export const useDownloadPDF = () => {
+  const queryClient = useQueryClient();
   const { success, error } = useToast();
 
   return useMutation({
     mutationFn: async ({ id, filename }: { id: number; filename?: string }) => {
+      // ✅ Track the download first
+      await quotationService.trackDownload(id);
+      // Then download the PDF
       await quotationService.downloadPDFDirect(id, filename);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] });
       success('PDF downloaded successfully');
     },
     onError: (err: any) => {
@@ -242,7 +282,75 @@ export const useDownloadPDF = () => {
 };
 
 /**
- * Hook for previewing QTN as PDF
+ * Hook for downloading verified QTN as PDF with automatic tracking
+ *
+ * @param options - Optional configuration for the mutation
+ * @returns Mutation object with download function
+ *
+ * @example
+ * const { mutate: downloadVerifiedPDF, isPending } = useDownloadVerifiedPDF();
+ *
+ * // Download verified PDF with automatic tracking
+ * downloadVerifiedPDF(123);
+ */
+export const useDownloadVerifiedPDF = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, filename }: { id: number; filename?: string }) => {
+      // ✅ Track the download first
+      await quotationService.trackDownload(id);
+      // Then download the verified PDF
+      await quotationService.downloadVerifiedPDF(id, filename);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] });
+      success('Verified PDF downloaded successfully');
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to download verified PDF');
+    },
+  });
+};
+
+/**
+ * Hook for downloading draft QTN as PDF with automatic tracking
+ *
+ * @param options - Optional configuration for the mutation
+ * @returns Mutation object with download function
+ *
+ * @example
+ * const { mutate: downloadDraftPDF, isPending } = useDownloadDraftPDF();
+ *
+ * // Download draft PDF with automatic tracking
+ * downloadDraftPDF(123);
+ */
+export const useDownloadDraftPDF = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, filename }: { id: number; filename?: string }) => {
+      // ✅ Track the download first
+      await quotationService.trackDownload(id);
+      // Then download the draft PDF
+      await quotationService.downloadDraftPDF(id, filename);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] });
+      success('Draft PDF downloaded successfully');
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to download draft PDF');
+    },
+  });
+};
+
+/**
+ * Hook for previewing QTN as PDF (does NOT track downloads)
  *
  * @param options - Optional configuration
  * @returns Object with preview function
@@ -281,7 +389,7 @@ export const usePreviewPDF = () => {
 };
 
 /**
- * Hook for getting Base64 encoded PDF (for email attachments)
+ * Hook for getting Base64 encoded PDF (for email attachments) - does NOT track downloads
  *
  * @param options - Optional configuration
  * @returns Object with getBase64 function and loading state
@@ -305,7 +413,7 @@ export const useBase64PDF = () => {
 };
 
 /**
- * Hook for getting PDF for email attachment
+ * Hook for getting PDF for email attachment (does NOT track downloads)
  *
  * @param options - Optional configuration
  * @returns Object with getEmailPDF function and loading state
@@ -329,7 +437,7 @@ export const usePDFForEmail = () => {
 };
 
 /**
- * Hook for saving PDF to server storage
+ * Hook for saving PDF to server storage (does NOT track downloads)
  *
  * @param options - Optional configuration
  * @returns Mutation object with save function
@@ -356,7 +464,7 @@ export const useSavePDF = () => {
 };
 
 /**
- * Hook for printing QTN PDF
+ * Hook for printing QTN PDF (does NOT track downloads)
  *
  * @returns Object with print function
  *
@@ -381,7 +489,7 @@ export const usePrintPDF = () => {
 };
 
 /**
- * Hook for sharing PDF via email
+ * Hook for sharing PDF via email (does NOT track downloads)
  *
  * @returns Object with share function
  *
@@ -421,7 +529,7 @@ export const useSharePDFViaEmail = () => {
 };
 
 /**
- * Hook for downloading multiple QTNs as PDF
+ * Hook for downloading multiple QTNs as PDF with automatic tracking
  *
  * @param options - Optional configuration
  * @returns Mutation object with download function
@@ -429,16 +537,30 @@ export const useSharePDFViaEmail = () => {
  * @example
  * const { mutate: downloadMultiple, isPending } = useDownloadMultiplePDFs();
  *
- * // Download multiple PDFs
+ * // Download multiple PDFs with automatic tracking
  * downloadMultiple([1, 2, 3]);
+ *
+ * // With custom filename
+ * downloadMultiple({ ids: [1, 2, 3], filename: 'my-qtn.zip' });
  */
 export const useDownloadMultiplePDFs = () => {
+  const queryClient = useQueryClient();
   const { success, error } = useToast();
 
   return useMutation({
-    mutationFn: ({ ids, filename }: { ids: number[]; filename?: string }) =>
-      quotationService.downloadMultiplePDFs(ids, filename),
-    onSuccess: () => {
+    mutationFn: async ({ ids, filename }: { ids: number[]; filename?: string }) => {
+      // ✅ Track all downloads first
+      for (const id of ids) {
+        await quotationService.trackDownload(id);
+      }
+      // Then download all PDFs
+      await quotationService.downloadMultiplePDFs(ids, filename);
+    },
+    onSuccess: (_, variables) => {
+      for (const id of variables.ids) {
+        queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', id] });
+        queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      }
       success('Multiple PDFs downloaded successfully');
     },
     onError: (err: any) => {
@@ -470,6 +592,155 @@ export const usePDFUrl = () => {
 };
 
 // ============================================
+// TRACKING MUTATIONS
+// ============================================
+
+/**
+ * Hook for manually tracking a quotation download
+ *
+ * @returns Mutation object with track function
+ *
+ * @example
+ * const { mutate: trackDownload } = useTrackQuotationDownload();
+ *
+ * // Track download manually
+ * trackDownload(123);
+ */
+export const useTrackQuotationDownload = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: (id: number) => quotationService.trackDownload(id),
+    onSuccess: (data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      success(`Download tracked successfully (${data.download_count} total downloads)`);
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to track download');
+    },
+  });
+};
+
+/**
+ * Hook for manually tracking a quotation view
+ *
+ * @returns Mutation object with track function
+ *
+ * @example
+ * const { mutate: trackView } = useTrackQuotationView();
+ *
+ * // Track view manually
+ * trackView(123);
+ */
+export const useTrackQuotationView = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: (id: number) => quotationService.trackView(id),
+    onSuccess: (data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      success(`View tracked successfully (${data.view_count} total views)`);
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to track view');
+    },
+  });
+};
+
+/**
+ * Hook for manually tracking a quotation share
+ *
+ * @returns Mutation object with track function
+ *
+ * @example
+ * const { mutate: trackShare } = useTrackQuotationShare();
+ *
+ * // Track share manually
+ * trackShare({ id: 123, share_method: 'email', recipient: 'supplier@example.com' });
+ */
+export const useTrackQuotationShare = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: ({ id, shareData }: { id: number; shareData?: { share_method?: string; recipient?: string } }) =>
+      quotationService.trackShare(id, shareData),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] });
+      success(`Share tracked successfully (${data.shared_count} total shares)`);
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to track share');
+    },
+  });
+};
+
+/**
+ * Hook for bulk tracking multiple quotation downloads
+ *
+ * @returns Mutation object with bulk track function
+ *
+ * @example
+ * const { mutate: bulkTrackDownloads } = useBulkTrackQuotationDownloads();
+ *
+ * // Bulk track multiple downloads
+ * bulkTrackDownloads([1, 2, 3]);
+ */
+export const useBulkTrackQuotationDownloads = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: (ids: number[]) => quotationService.bulkTrackDownloads(ids),
+    onSuccess: (data) => {
+      for (const item of data) {
+        queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', item.id] });
+        queryClient.invalidateQueries({ queryKey: ['quotation', item.id] });
+      }
+      success(`Bulk download tracked successfully for ${data.length} quotations`);
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to bulk track downloads');
+    },
+  });
+};
+
+/**
+ * Hook for combined track and download (single call)
+ *
+ * @returns Mutation object with track and download function
+ *
+ * @example
+ * const { mutate: trackAndDownload, isPending } = useTrackAndDownloadPDF();
+ *
+ * // Track and download in one call
+ * trackAndDownload(123);
+ */
+export const useTrackAndDownloadPDF = () => {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, filename }: { id: number; filename?: string }) => {
+      await quotationService.trackAndDownloadPDF(id, filename);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation-download-stats', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] });
+      success('PDF downloaded and tracked successfully');
+    },
+    onError: (err: any) => {
+      error(err?.response?.data?.message || 'Failed to download and track PDF');
+    },
+  });
+};
+
+// ============================================
 // EXPORT ALL HOOKS
 // ============================================
 
@@ -481,6 +752,9 @@ export default {
   useQuotation,
   useQuotationStatistics,
 
+  // Tracking Queries
+  useQuotationDownloadStats,
+
   // Mutations
   useCreateQuotation,
   useUpdateQuotation,
@@ -490,8 +764,12 @@ export default {
   useSendQuotationReminder,
   useSelectSupplier,
 
-  // PDF Hooks
+  // PDF Hooks (with automatic tracking)
   useDownloadPDF,
+  useDownloadVerifiedPDF,
+  useDownloadDraftPDF,
+
+  // PDF Hooks (without tracking - preview/base64/email/save/print/share)
   usePreviewPDF,
   useBase64PDF,
   usePDFForEmail,
@@ -500,4 +778,11 @@ export default {
   useSharePDFViaEmail,
   useDownloadMultiplePDFs,
   usePDFUrl,
+
+  // Tracking Mutations
+  useTrackQuotationDownload,
+  useTrackQuotationView,
+  useTrackQuotationShare,
+  useBulkTrackQuotationDownloads,
+  useTrackAndDownloadPDF,
 };

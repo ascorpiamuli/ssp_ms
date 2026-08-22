@@ -163,11 +163,11 @@ export const navigationSections: NavigationSection[] = [
         roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
       },
       {
-        id: 'analytics',
-        name: 'Analytics',
-        href: '/dashboard/analytics',
+        id: 'procurement-dashboard',
+        name: 'Procurement Dashboard',
+        href: '/procurement/dashboard',
         icon: getIcon('PieChart'),
-        description: 'Detailed analytics and insights',
+        description: 'Detailed procurement analytics and insights',
         roles: ['admin', 'accountant', 'head of institution', 'auditor']
       },
       {
@@ -370,24 +370,14 @@ export const navigationSections: NavigationSection[] = [
 
   // 4. PROCUREMENT - COMPLETE WORKFLOW WITH SUPPLIER TABS
   {
-    id: 'procurement',
-    title: 'Procurement',
+    id: 'procurement-quotations',
+    title: 'Quotations',
     icon: getIcon('ShoppingCart'),
     defaultOpen: false,
     items: [
       // ============================================
       // INTERNAL PROCUREMENT TABS (Staff/Admin)
       // ============================================
-
-      // 1. DASHBOARD
-      {
-        id: 'procurement_dashboard',
-        name: 'Dashboard',
-        href: '/procurement/dashboard',
-        icon: getIcon('LayoutDashboard'),
-        description: 'Procurement overview and statistics',
-        roles: ['admin', 'procurement', 'accountant', 'head_of_institution', 'auditor', 'hod']
-      },
 
       // 2. CREATE RFQ
       {
@@ -396,7 +386,7 @@ export const navigationSections: NavigationSection[] = [
         href: '/procurement/request-for-quotations/create',
         icon: getIcon('FilePlus'),
         description: 'Create new Request for Quotations',
-        roles: ['admin', 'procurement']
+        roles: ['admin', 'procurement','accountant']
       },
 
       // 3. RFQ MANAGEMENT
@@ -418,89 +408,19 @@ export const navigationSections: NavigationSection[] = [
         description: 'View and evaluate supplier quotations',
         roles: ['admin', 'procurement', 'accountant', 'hod']
       },
-
-      // 5. TENDERS
+      // 16. APPROVED QUOTATIONS - View approved quotations and LPO/LSO
       {
-        id: 'tenders',
-        name: 'Tenders',
-        href: '/procurement/tenders',
-        icon: getIcon('AlertTriangle'),
-        description: 'Tender management and evaluation',
+        id: 'supplier_quotations',
+        name: 'Supplier Quotations',
+        href: '/procurement/supplier-quotations',
+        icon: getIcon('CheckCircle'),
+        description: 'View your suppliers quotations and awarded contracts',
         roles: ['admin', 'procurement', 'accountant']
       },
 
-      // 6. CONTRACTS
-      {
-        id: 'contracts',
-        name: 'Contracts',
-        href: '/procurement/contracts',
-        icon: getIcon('FileCheck'),
-        description: 'Contract management',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 7. PURCHASE ORDERS
-      {
-        id: 'purchase_orders',
-        name: 'Purchase Orders',
-        href: '/procurement/purchase-orders',
-        icon: getIcon('ShoppingBag'),
-        description: 'Manage LPOs and LSOs',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 8. SERVICE ACKNOWLEDGMENT (SAN)
-      {
-        id: 'service_acknowledgment',
-        name: 'Service Acknowledgment',
-        href: '/procurement/san',
-        icon: getIcon('Handshake'),
-        description: 'Manage Service Acknowledgment Notes (SAN)',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 9. INVOICES
-      {
-        id: 'invoices',
-        name: 'Invoices',
-        href: '/procurement/invoices',
-        icon: getIcon('Receipt'),
-        description: 'Manage supplier invoices',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 10. PAYMENTS
-      {
-        id: 'payments',
-        name: 'Payments',
-        href: '/procurement/payments',
-        icon: getIcon('DollarSign'),
-        description: 'Payment vouchers and cheque management',
-        roles: ['admin', 'procurement', 'accountant']
-      },
-
-      // 11. PROCUREMENT PLANNING
-      {
-        id: 'procurement_planning',
-        name: 'Procurement Planning',
-        href: '/procurement/planning',
-        icon: getIcon('Calendar'),
-        description: 'Procurement plans and schedules',
-        roles: ['admin', 'procurement', 'accountant', 'head_of_institution']
-      },
-
-      // 12. SUPPLIER MANAGEMENT
-      {
-        id: 'supplier_management',
-        name: 'Supplier Management',
-        href: '/procurement/suppliers',
-        icon: getIcon('Users'),
-        description: 'Manage suppliers and vendor registration',
-        roles: ['admin', 'procurement', 'accountant']
-      },
 
       // ============================================
-      // SUPPLIER PORTAL TABS (RECOMMENDED)
+      // SUPPLIER PORTAL TABS
       // ============================================
 
       // 13. SUPPLIER DASHBOARD - Overview
@@ -532,59 +452,92 @@ export const navigationSections: NavigationSection[] = [
         description: 'Track your submitted quotations',
         roles: ['supplier']
       },
-
-
     ]
   },
   // 5. ORDERS
   {
     id: 'orders',
-    title: 'Orders',
+    title: 'Purchase Orders',
     icon: getIcon('Package'),
     defaultOpen: false,
     items: [
+      // 1. MANAGE ORDERS - Main dashboard for all orders
       {
-        id: 'orders',
+        id: 'manage_orders',
         name: 'Manage Orders',
-        href: '/orders',
+        href: '/procurement/purchase-orders/manage-orders',
         icon: getIcon('ShoppingCart'),
         description: 'Create and manage LPO/LSO, GRN/SAN',
-        roles: ['admin', 'procurement', 'accountant', 'head of institution', 'final_approver', 'staff', 'hod', 'auditor', 'supplier']
+        roles: ['admin', 'procurement', 'accountant', 'head of institution', 'final_approver', 'hod', 'auditor', 'storekeeper']
       },
+
+      // 2. PENDING CHECK - HOD review dashboard
+      {
+        id: 'pending_check',
+        name: 'Pending Check (HOD)',
+        href: '/procurement/purchase-orders/pending-check',
+        icon: getIcon('UserCheck'),
+        description: 'Review and check purchase orders awaiting HOD approval',
+        roles: ['admin', 'hod'],
+        badge: 'HOD',
+        badgeColor: 'amber'
+      },
+
+      // 3. PENDING ENDORSEMENT - Accountant review dashboard
+      {
+        id: 'pending_endorsement',
+        name: 'Pending Endorsement',
+        href: '/procurement/purchase-orders/pending-endorsement',
+        icon: getIcon('Signature'),
+        description: 'Review and endorse purchase orders awaiting Accountant approval',
+        roles: ['admin', 'accountant'],
+        badge: 'Accountant',
+        badgeColor: 'blue'
+      },
+
+      // 4. PENDING APPROVAL - Director review dashboard
+      {
+        id: 'pending_approval',
+        name: 'Pending Approval',
+        href: '/procurement/purchase-orders/pending-approval',
+        icon: getIcon('ShieldCheck'),
+        description: 'Review and approve purchase orders awaiting Director approval',
+        roles: ['admin', 'director', 'final_approver'],
+        badge: 'Director',
+        badgeColor: 'purple'
+      },
+
+      // 5. SUPPLIER ACKNOWLEDGMENTS - Supplier view LPOs (NEW)
+      {
+        id: 'supplier_acknowledgments',
+        name: 'Supplier Acknowledgments',
+        href: '/procurement/purchase-orders/supplier-acknowledgments',
+        icon: getIcon('Handshake'),
+        description: 'LPOs sent for Aknowledgement',
+        roles: ['admin', 'supplier'],
+        badge: 'Supplier',
+        badgeColor: 'indigo'
+      },
+
+
+      // 8. TRACK ORDERS - Order tracking dashboard
       {
         id: 'track_orders',
         name: 'Track Orders',
-        href: '/orders/track',
+        href: '/procurement/purchase-orders/track-orders',
         icon: getIcon('Target'),
-        description: 'Track order status',
-        roles: ['admin', 'procurement', 'accountant', 'staff', 'hod', 'head of institution', 'supplier']
-      },
-      // 4. PURCHASE ORDERS (LPO/LSO)
-      {
-        id: 'purchase_orders',
-        name: 'Purchase Orders',
-        href: '/procurement/purchase-orders',
-        icon: getIcon('ShoppingBag'),
-        description: 'Generate and manage LPOs (Goods) and LSOs (Services)',
-        roles: ['admin', 'procurement', 'accountant']
+        description: 'Track order status and delivery progress',
+        roles: ['admin', 'procurement', 'accountant','head of institution',]
       },
 
-      // 5. GOODS RECEIVED (GRN)
-      {
-        id: 'goods_received',
-        name: 'Goods Received',
-        href: '/procurement/grn',
-        icon: getIcon('Truck'),
-        description: 'Manage Goods Received Notes (GRN)',
-        roles: ['admin', 'procurement', 'accountant']
-      },
+      // 9. ORDER HISTORY - Historical orders
       {
         id: 'order_history',
         name: 'Order History',
-        href: '/orders/history',
+        href: '/procurement/purchase-orders/order-history',
         icon: getIcon('Clock'),
-        description: 'Historical orders',
-        roles: ['admin', 'procurement', 'accountant', 'auditor', 'supplier']
+        description: 'View historical purchase orders and receipts',
+        roles: ['supplier']
       }
     ]
   },

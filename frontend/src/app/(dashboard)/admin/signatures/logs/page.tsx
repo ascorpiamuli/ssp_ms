@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   History,
   FileSignature,
@@ -23,6 +23,56 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  FileText,
+  Users,
+  Activity,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Zap,
+  Award,
+  Target,
+  Rocket,
+  Gem,
+  Flame,
+  Leaf,
+  MinusCircle,
+  CircleDashed,
+  Globe,
+  Monitor,
+  Laptop,
+  Tablet,
+  MessageSquare,
+  Box,
+  DollarSign,
+  Package,
+  Briefcase,
+  Layers,
+  Grid,
+  List,
+  Bell,
+  Heart,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Bookmark,
+  Flag,
+  Camera,
+  Video,
+  Music,
+  Code,
+  Cloud,
+  Database,
+  Server,
+  Wifi,
+  Bluetooth,
+  Battery,
+  Lightbulb,
+  HeartPulse,
+  Brain,
+  Cpu,
+  HardDrive,
 } from 'lucide-react';
 import { useAdminSignature } from '@/hooks/useSignature';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -58,6 +108,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
 
 export default function SignatureLogsPage() {
   const { user } = useAuthContext();
@@ -115,6 +170,57 @@ export default function SignatureLogsPage() {
   // Get unique actions for filter dropdown
   const uniqueActions = Array.from(new Set((logs || []).map((log: any) => log.action).filter(Boolean)));
 
+  // Compute stats for StatsCards
+  const statsItems: StatCardItem[] = useMemo(() => {
+    const total = logs?.length || 0;
+    const success = logs?.filter((l: any) => l.status === 'success').length || 0;
+    const failed = logs?.filter((l: any) => l.status === 'failed').length || 0;
+    const pending = logs?.filter((l: any) => l.status === 'pending').length || 0;
+
+    return [
+      {
+        label: "Total Logs",
+        value: total,
+        icon: History,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: "All audit records",
+      },
+      {
+        label: "Successful",
+        value: success,
+        icon: CheckCircle,
+        tagLabel: "SUCCESS",
+        tagColor: "emerald",
+        subtitle: `${success} successful actions`,
+      },
+      {
+        label: "Failed",
+        value: failed,
+        icon: XCircle,
+        tagLabel: "FAILED",
+        tagColor: "rose",
+        subtitle: `${failed} failed actions`,
+      },
+      {
+        label: "Pending",
+        value: pending,
+        icon: Clock,
+        tagLabel: "PENDING",
+        tagColor: "amber",
+        subtitle: `${pending} pending actions`,
+      },
+      {
+        label: "Filtered Results",
+        value: filteredLogs.length,
+        icon: Filter,
+        tagLabel: "FILTERED",
+        tagColor: "purple",
+        subtitle: `${filteredLogs.length} matching records`,
+      },
+    ];
+  }, [logs, filteredLogs]);
+
   // Helper: truncate User Agent for clean display
   const truncateUserAgent = (ua: string | null) => {
     if (!ua) return 'Unknown Device';
@@ -146,6 +252,17 @@ export default function SignatureLogsPage() {
     return <Icon className="h-4 w-4" />;
   };
 
+  const getActionColor = (action: string) => {
+    const map: Record<string, string> = {
+      upload: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+      verify: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+      reject: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+      delete: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700',
+      qr_generate: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+    };
+    return map[action] || 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
+  };
+
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { label: string; className: string; icon: React.ElementType }> = {
       success: {
@@ -164,7 +281,7 @@ export default function SignatureLogsPage() {
         icon: Clock,
       },
     };
-    return configs[status] || { label: status, className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400', icon: AlertCircle };
+    return configs[status] || { label: status, className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700', icon: AlertCircle };
   };
 
   // Helper to parse data column safely
@@ -219,16 +336,20 @@ export default function SignatureLogsPage() {
   return (
     <PageTemplate
       title="Signature Verification Logs"
-      description="Complete audit trail of all signature actions across the system"
+      description="Complete audit trail of all signature actions across the system with forensic tracking"
       icon={<History className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Signature Logs' },
+      ]}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 rounded-xl shadow-sm"
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800 shadow-sm"
             onClick={() => refetchLogs()}
             disabled={isFetching}
           >
@@ -238,7 +359,7 @@ export default function SignatureLogsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 rounded-xl shadow-sm"
+            className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800 shadow-sm"
             onClick={handleClearFilters}
           >
             <Filter className="h-4 w-4" />
@@ -248,135 +369,86 @@ export default function SignatureLogsPage() {
       }
     >
       <div className="space-y-6">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Logs</p>
-                  <p className="text-2xl font-bold mt-1 dark:text-white">{logs?.length || 0}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                  <History className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-emerald-50/50 to-green-50/50 dark:from-emerald-950/20 dark:to-green-950/20">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Successful</p>
-                  <p className="text-2xl font-bold mt-1 dark:text-white text-emerald-600 dark:text-emerald-400">
-                    {logs?.filter((l: any) => l.status === 'success').length || 0}
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-rose-50/50 to-red-50/50 dark:from-rose-950/20 dark:to-red-950/20">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Failed</p>
-                  <p className="text-2xl font-bold mt-1 dark:text-white text-rose-600 dark:text-rose-400">
-                    {logs?.filter((l: any) => l.status === 'failed').length || 0}
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
-                  <XCircle className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-amber-50/50 to-yellow-50/50 dark:from-amber-950/20 dark:to-yellow-950/20">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Filtered</p>
-                  <p className="text-2xl font-bold mt-1 dark:text-white text-amber-600 dark:text-amber-400">
-                    {filteredLogs.length}
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-                  <Filter className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Stats Cards */}
+        <StatsCards
+          stats={statsItems}
+          isLoading={isLoading}
+          columns={5}
+          variant="default"
+          formatCompact={true}
+          tagOrientation="wrapped"
+          tagPosition="top-left"
+        />
 
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="relative col-span-1 md:col-span-2 lg:col-span-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search action, message, or user..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-xl shadow-sm"
-            />
-          </div>
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
+          <CardContent className="p-4 pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="relative col-span-1 md:col-span-2 lg:col-span-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search action, message, or user..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 shadow-sm"
+                />
+              </div>
 
-          <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="rounded-xl shadow-sm">
-              <SelectValue placeholder="Action" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Actions</SelectItem>
-              {uniqueActions.map((action) => (
-                <SelectItem key={action} value={action}>
-                  {getActionLabel(action)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select value={actionFilter} onValueChange={setActionFilter}>
+                <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 shadow-sm">
+                  <SelectValue placeholder="Action" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Actions</SelectItem>
+                  {uniqueActions.map((action) => (
+                    <SelectItem key={action} value={action}>
+                      {getActionLabel(action)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="rounded-xl shadow-sm">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-            </SelectContent>
-          </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 shadow-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
 
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-xl shadow-sm"
-            placeholder="From"
-          />
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-xl shadow-sm"
-            placeholder="To"
-          />
-        </div>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 shadow-sm"
+                placeholder="From"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 shadow-sm"
+                placeholder="To"
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Logs Table */}
-        <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30">
-          <CardHeader className="border-b border-border/50 bg-muted/20">
+        <Card className="border-0 shadow-xl rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-800/30 relative">
+          <WrappedCornerTag label="AUDIT LOGS" color="blue" position="top-left" size="lg" />
+          <CardHeader className="border-b border-border/50 bg-muted/20 pt-8">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <History className="h-5 w-5 text-blue-600" />
                   Audit Logs
                   <Badge className="ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">
-                    Showing {paginatedLogs.length} of {totalFiltered} records
+                    {paginatedLogs.length} of {totalFiltered} records
                   </Badge>
                 </CardTitle>
                 <CardDescription>
@@ -404,14 +476,14 @@ export default function SignatureLogsPage() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[140px]">Timestamp</TableHead>
-                      <TableHead className="w-[140px]">User</TableHead>
-                      <TableHead className="w-[120px]">Action</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[200px]">Message</TableHead>
-                      <TableHead className="w-[180px]">Forensic Details</TableHead>
-                      <TableHead className="w-[60px] text-right">Details</TableHead>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
+                      <TableHead className="min-w-[140px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Timestamp</TableHead>
+                      <TableHead className="min-w-[140px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">User</TableHead>
+                      <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Action</TableHead>
+                      <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
+                      <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Message</TableHead>
+                      <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Forensic Details</TableHead>
+                      <TableHead className="min-w-[60px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-right">Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -421,6 +493,9 @@ export default function SignatureLogsPage() {
                       const actionLabel = getActionLabel(log.action);
                       const parsedData = parseLogData(log.data);
                       const userData = log.createdBy || log.created_by || null;
+                      const actionColor = getActionColor(log.action);
+                      const hasIp = log.ip_address && log.ip_address !== null;
+                      const hasUa = log.user_agent && log.user_agent !== null;
 
                       return (
                         <motion.tr
@@ -428,7 +503,7 @@ export default function SignatureLogsPage() {
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: (index % rowsPerPage) * 0.03 }}
-                          className="hover:bg-muted/30 transition-colors"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group"
                         >
                           <TableCell>
                             <div className="flex flex-col">
@@ -442,10 +517,10 @@ export default function SignatureLogsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-gray-200 dark:ring-gray-700">
                                 {userData?.full_name?.charAt(0) || 'U'}
                               </div>
-                              <div className="flex flex-col">
+                              <div className="flex flex-col min-w-0">
                                 <span className="text-sm font-medium dark:text-white truncate max-w-[80px]">
                                   {userData?.full_name || 'Unknown'}
                                 </span>
@@ -456,23 +531,17 @@ export default function SignatureLogsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className={cn(
-                                "p-1.5 rounded-full",
-                                log.action === 'upload' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
-                                log.action === 'verify' && "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400",
-                                log.action === 'reject' && "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400",
-                                log.action === 'delete' && "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
-                                log.action === 'qr_generate' && "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400",
-                              )}>
-                                {getActionIcon(log.action)}
-                              </div>
-                              <span className="text-sm font-medium dark:text-white">{actionLabel}</span>
-                            </div>
+                            <Badge className={cn(
+                              "flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border",
+                              actionColor
+                            )}>
+                              {getActionIcon(log.action)}
+                              {actionLabel}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             <Badge className={cn(
-                              "flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium text-xs",
+                              "flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border",
                               statusConfig.className
                             )}>
                               <StatusIcon className="h-3 w-3" />
@@ -480,36 +549,38 @@ export default function SignatureLogsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm text-muted-foreground truncate max-w-[180px] block" title={log.message}>
-                              {log.message || 'No message'}
-                            </span>
-                            {parsedData?.specimen_id && (
-                              <span className="text-xs text-muted-foreground mt-0.5 block">
-                                Specimen ID: {parsedData.specimen_id}
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[180px]" title={log.message}>
+                                {log.message || 'No message'}
                               </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1 max-w-[160px]">
-                              {log.ip_address ? (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <Fingerprint className="h-3 w-3 text-blue-500 dark:text-blue-400 shrink-0" />
-                                  <span className="font-mono text-muted-foreground truncate">{log.ip_address}</span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground italic">No IP captured</span>
-                              )}
-                              {log.user_agent ? (
-                                <div className="flex items-start gap-1.5 text-xs">
-                                  <Smartphone className="h-3 w-3 text-purple-500 dark:text-purple-400 shrink-0 mt-0.5" />
-                                  <span className="text-muted-foreground truncate" title={log.user_agent}>
-                                    {truncateUserAgent(log.user_agent)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground italic">No device captured</span>
+                              {parsedData?.specimen_id && (
+                                <span className="text-xs text-muted-foreground mt-0.5">
+                                  Specimen ID: {parsedData.specimen_id}
+                                </span>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {(hasIp || hasUa) ? (
+                              <div className="flex flex-col gap-1 max-w-[160px]">
+                                {hasIp && (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <Fingerprint className="h-3 w-3 text-blue-500 dark:text-blue-400 shrink-0" />
+                                    <span className="font-mono text-muted-foreground truncate">{log.ip_address}</span>
+                                  </div>
+                                )}
+                                {hasUa && (
+                                  <div className="flex items-start gap-1.5 text-xs">
+                                    <Smartphone className="h-3 w-3 text-purple-500 dark:text-purple-400 shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground truncate" title={log.user_agent}>
+                                      {truncateUserAgent(log.user_agent)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No forensic data</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <TooltipProvider>
@@ -518,16 +589,16 @@ export default function SignatureLogsPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-lg hover:bg-muted/50"
+                                    className="h-8 w-8 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                     onClick={() => {
                                       setSelectedLog(log);
                                       setShowDetailDialog(true);
                                     }}
                                   >
-                                    <Eye className="h-4 w-4" />
+                                    <Eye className="h-4 w-4 text-gray-500" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>View full details</TooltipContent>
+                                <TooltipContent className="rounded-xl">View full details</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           </TableCell>
@@ -543,7 +614,7 @@ export default function SignatureLogsPage() {
 
         {/* Pagination Controls */}
         {totalPages > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
             <p className="text-sm text-muted-foreground">
               Showing <span className="font-medium dark:text-white">{startIndex + 1}</span> to{' '}
               <span className="font-medium dark:text-white">{endIndex}</span> of{' '}
@@ -555,7 +626,7 @@ export default function SignatureLogsPage() {
                 size="sm"
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
-                className="rounded-lg"
+                className="rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 First
               </Button>
@@ -564,7 +635,7 @@ export default function SignatureLogsPage() {
                 size="icon"
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="rounded-lg"
+                className="rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -576,7 +647,7 @@ export default function SignatureLogsPage() {
                 size="icon"
                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="rounded-lg"
+                className="rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -585,7 +656,7 @@ export default function SignatureLogsPage() {
                 size="sm"
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages}
-                className="rounded-lg"
+                className="rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 Last
               </Button>
@@ -594,12 +665,14 @@ export default function SignatureLogsPage() {
         )}
       </div>
 
-      {/* Detail Dialog */}
+      {/* Detail Dialog - No Tags */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="rounded-2xl shadow-2xl border-0 max-w-lg">
+        <DialogContent className="rounded-2xl shadow-2xl border-0 max-w-lg dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <History className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               Log Details
             </DialogTitle>
             <DialogDescription>
@@ -609,17 +682,17 @@ export default function SignatureLogsPage() {
           {selectedLog && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">Action</p>
                   <p className="font-medium dark:text-white flex items-center gap-2 mt-0.5">
                     {getActionIcon(selectedLog.action)}
                     {getActionLabel(selectedLog.action)}
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">Status</p>
                   <Badge className={cn(
-                    "mt-0.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium",
+                    "mt-0.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
                     getStatusBadge(selectedLog.status).className
                   )}>
                     {(() => {
@@ -631,7 +704,7 @@ export default function SignatureLogsPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">User</p>
                   <p className="font-medium dark:text-white mt-0.5">
                     {selectedLog.createdBy?.full_name || selectedLog.created_by?.full_name || 'Unknown'}
@@ -640,7 +713,7 @@ export default function SignatureLogsPage() {
                     {selectedLog.createdBy?.email || selectedLog.created_by?.email || 'N/A'}
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">Timestamp</p>
                   <p className="font-medium dark:text-white mt-0.5">
                     {format(new Date(selectedLog.created_at), 'MMM d, yyyy')}
@@ -651,27 +724,27 @@ export default function SignatureLogsPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">IP Address</p>
                   <p className="font-mono text-sm dark:text-white mt-0.5">
                     {selectedLog.ip_address || 'Not captured'}
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">Device</p>
                   <p className="font-mono text-xs dark:text-white mt-0.5 truncate" title={selectedLog.user_agent}>
                     {selectedLog.user_agent ? truncateUserAgent(selectedLog.user_agent) : 'Not captured'}
                   </p>
                 </div>
               </div>
-              <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl text-sm">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
                 <p className="text-xs text-muted-foreground">Message</p>
                 <p className="font-medium dark:text-white mt-0.5">{selectedLog.message || 'No message'}</p>
               </div>
               {selectedLog.data && (
-                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl text-sm">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
                   <p className="text-xs text-muted-foreground">Data Payload</p>
-                  <pre className="text-xs font-mono bg-white dark:bg-gray-900 p-2 rounded-lg mt-0.5 overflow-x-auto border border-border/50">
+                  <pre className="text-xs font-mono bg-white dark:bg-gray-900 p-2 rounded-lg mt-0.5 overflow-x-auto border border-gray-200 dark:border-gray-700 max-h-[150px] overflow-y-auto">
                     {typeof selectedLog.data === 'string' ? selectedLog.data : JSON.stringify(selectedLog.data, null, 2)}
                   </pre>
                 </div>
@@ -679,7 +752,11 @@ export default function SignatureLogsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetailDialog(false)} className="rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => setShowDetailDialog(false)}
+              className="rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+            >
               Close
             </Button>
           </DialogFooter>

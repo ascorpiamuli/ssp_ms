@@ -34,7 +34,7 @@ class SupplierQuotationRequest extends FormRequest
             'items.*.requisition_item_id' => 'required|exists:requisition_items,id',
             'items.*.item_name' => 'required|string|max:255',
             'items.*.description' => 'nullable|string',
-            'items.*.unit_of_measure' => 'nullable|string|max:50',
+            'items.*.unit_of_measure' => 'required|string|max:50',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
