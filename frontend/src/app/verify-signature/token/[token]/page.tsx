@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { useSignature } from "@/hooks/useSignature";
+import { useVerifyByToken } from "@/hooks/useSignature";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -14,19 +14,20 @@ export default function VerifySignatureByTokenPage() {
 
   console.log("📄 [VerifyPage] Component rendered", { token });
 
-  const { mutateAsync: verifyByToken, isPending } = useSignature().verifyByToken;
+  // Use the dedicated verify by token hook
+  const { data, isLoading, error, refetch } = useVerifyByToken(token, {
+    enabled: false, // Disable auto-fetch, we'll control it manually
+  });
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any>(null);
-  const [isDataReady, setIsDataReady] = useState<boolean>(false); // NEW: Guard state
-
-  // useRef to hold data persistently across re-renders
+  const [isDataReady, setIsDataReady] = useState<boolean>(false);
   const dataRef = useRef<any>(null);
 
   useEffect(() => {
     if (!token) {
       setLocalError("Invalid verification link.");
-      setIsDataReady(true); // Mark as ready so Error screen shows
+      setIsDataReady(true);
       return;
     }
 
@@ -36,45 +37,47 @@ export default function VerifySignatureByTokenPage() {
     const verifyToken = async () => {
       try {
         console.log("📄 [VerifyPage] Calling API...");
-        const response = await verifyByToken({ token });
+        const response = await refetch();
 
         console.log("📄 [VerifyPage] API Response received:", response);
 
+        if (response.error) {
+          throw response.error;
+        }
+
         // Store in both state AND ref for persistence
-        dataRef.current = response;
-        setSuccessData(response);
-
-
+        dataRef.current = response.data;
+        setSuccessData(response.data);
       } catch (err: any) {
         console.error("❌ [VerifyPage] API Error:", err);
-        const message = err?.response?.data?.message || "Failed to verify signature.";
+        const message = err?.response?.data?.message || err?.message || "Failed to verify signature.";
         setLocalError(message);
       } finally {
-        // CRITICAL: Mark data as ready AFTER state updates are complete
-        // This stops the "flash of error"
         setIsDataReady(true);
       }
     };
 
     verifyToken();
-  }, [token, verifyByToken]);
+  }, [token, refetch]);
 
   // Use the ref as the primary source of truth, fallback to state
-  const displayData = dataRef.current || successData;
+  const displayData = dataRef.current || successData || data;
 
   console.log("📄 [VerifyPage] Current State:", {
-    isPending,
+    isLoading,
     isDataReady,
     hasSuccessData: !!successData,
     hasRefData: !!dataRef.current,
+    hasQueryData: !!data,
     localError,
-    token
+    error,
+    token,
   });
 
   // ==========================================
   // 1. LOADING STATE (Shows while API is calling)
   // ==========================================
-  if (isPending) {
+  if (isLoading || (!isDataReady && !localError)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="text-center">
@@ -87,26 +90,11 @@ export default function VerifySignatureByTokenPage() {
   }
 
   // ==========================================
-  // 2. WAIT STATE (Crucial Fix!)
-  // If the API finished but React hasn't updated state yet, show a spinner
+  // 2. ERROR STATE
   // ==========================================
-  if (!isDataReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-blue-600 mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700">Loading Data...</h2>
-          <p className="text-gray-500 mt-2">Finalizing verification details.</p>
-        </div>
-      </div>
-    );
-  }
+  if (localError || error) {
+    const errorMessage = localError || (error as any)?.message || "Failed to verify signature.";
 
-  // ==========================================
-  // 3. ERROR STATE
-  // Only renders if we have a specific localError
-  // ==========================================
-  if (localError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-lg text-center">
@@ -116,7 +104,56 @@ export default function VerifySignatureByTokenPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Verification Failed</h2>
-          <p className="text-gray-600 mb-6">{localError}</p>
+          <p className="text-gray-600 mb-6">{errorMessage}</p>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setLocalError(null);
+                setSuccessData(null);
+                dataRef.current = null;
+                setIsDataReady(false);
+                refetch();
+              }}
+              className="inline-block w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+            <Link
+              href="/"
+              className="inline-block w-full px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Go to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 3. SUCCESS STATE
+  // ==========================================
+  const specimen = displayData?.specimen;
+  const qrCodeImage = displayData?.qr_code?.image;
+
+  console.log("📄 [VerifyPage] Rendering Success State", {
+    hasSpecimen: !!specimen,
+    hasQR: !!qrCodeImage,
+    specimenId: specimen?.id,
+    displayData,
+  });
+
+  if (!specimen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-lg text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">No Signature Found</h2>
+          <p className="text-gray-600 mb-6">This token does not correspond to a valid signature.</p>
           <Link
             href="/"
             className="inline-block px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -127,19 +164,6 @@ export default function VerifySignatureByTokenPage() {
       </div>
     );
   }
-
-  // ==========================================
-  // 4. SUCCESS STATE
-  // Only renders if data exists and no errors
-  // ==========================================
-  const specimen = displayData?.specimen;
-  const qrCodeImage = displayData?.qr_code?.image;
-
-  console.log("📄 [VerifyPage] Rendering Success State", {
-    hasSpecimen: !!specimen,
-    hasQR: !!qrCodeImage,
-    specimenId: specimen?.id
-  });
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
@@ -156,7 +180,7 @@ export default function VerifySignatureByTokenPage() {
 
         <div className="p-6 md:p-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Left Column: QR Code & Details */}
+            {/* Left Column: Details */}
             <div className="md:col-span-2 space-y-4">
               <div className="border-b pb-3">
                 <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Signed By</h2>
@@ -174,6 +198,22 @@ export default function VerifySignatureByTokenPage() {
               </div>
 
               <div className="border-b pb-3">
+                <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Status</h2>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${specimen?.is_verified && specimen?.status === 'approved'
+                      ? 'bg-green-100 text-green-800'
+                      : specimen?.status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : specimen?.status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                    }`}>
+                    {specimen?.status_label || specimen?.status || "Unknown"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-b pb-3">
                 <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Document Reference</h2>
                 <p className="text-gray-900 font-mono">{specimen?.document_reference || "N/A"}</p>
               </div>
@@ -186,51 +226,94 @@ export default function VerifySignatureByTokenPage() {
                       dateStyle: "full",
                       timeStyle: "short",
                     })
-                    : "N/A"}
+                    : "Not verified yet"}
                 </p>
               </div>
+
+              {specimen?.verification_notes && (
+                <div>
+                  <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Verification Notes</h2>
+                  <p className="text-gray-900 text-sm italic">{specimen.verification_notes}</p>
+                </div>
+              )}
+
+              {specimen?.verified_by && (
+                <div>
+                  <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Verified By</h2>
+                  <p className="text-gray-900">
+                    {specimen.verified_by?.full_name || "Unknown Verifier"}
+                    {specimen.verified_by?.email && (
+                      <span className="text-sm text-gray-500 ml-2">({specimen.verified_by.email})</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Right Column: Signature Image & QR */}
             <div className="flex flex-col items-center justify-start space-y-4 pt-2 md:pt-0">
               {specimen?.signature_image_url && (
-                <div className="border rounded-lg p-2 bg-gray-50">
+                <div className="border rounded-lg p-2 bg-gray-50 w-full">
                   <h3 className="text-xs text-center text-gray-500 mb-2 uppercase tracking-wider">Signature</h3>
-                  <Image
-                    src={specimen.signature_image_url}
-                    alt="Signature"
-                    width={200}
-                    height={100}
-                    className="object-contain max-h-24"
-                  />
+                  <div className="flex justify-center">
+                    <Image
+                      src={specimen.signature_image_url}
+                      alt="Signature"
+                      width={200}
+                      height={100}
+                      className="object-contain max-h-24"
+                      unoptimized
+                    />
+                  </div>
                 </div>
               )}
 
               {qrCodeImage && (
-                <div className="border rounded-lg p-2 bg-gray-50 mt-2">
+                <div className="border rounded-lg p-2 bg-gray-50 w-full">
                   <h3 className="text-xs text-center text-gray-500 mb-2 uppercase tracking-wider">QR Code</h3>
-                  <Image
-                    src={qrCodeImage}
-                    alt="QR Code"
-                    width={120}
-                    height={120}
-                    className="object-contain rounded"
-                  />
+                  <div className="flex justify-center">
+                    <Image
+                      src={qrCodeImage}
+                      alt="QR Code"
+                      width={120}
+                      height={120}
+                      className="object-contain rounded"
+                      unoptimized
+                    />
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="mt-8 pt-4 border-t flex justify-between items-center">
+          <div className="mt-8 pt-4 border-t flex justify-between items-center flex-wrap gap-2">
             <p className="text-xs text-gray-400">
-              Token: <span className="font-mono">{token.substring(0, 12)}...</span>
+              Token: <span className="font-mono">{token?.substring(0, 12) || "N/A"}...</span>
             </p>
-            <Link
-              href="/"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm"
-            >
-              Back to Home
-            </Link>
+            <div className="flex gap-2">
+              {qrCodeImage && (
+                <button
+                  onClick={() => {
+                    // Download QR code
+                    const link = document.createElement('a');
+                    link.href = qrCodeImage;
+                    link.download = `signature-qr-${specimen?.document_reference || 'unknown'}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Download QR
+                </button>
+              )}
+              <Link
+                href="/"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm"
+              >
+                Back to Home
+              </Link>
+            </div>
           </div>
         </div>
       </div>

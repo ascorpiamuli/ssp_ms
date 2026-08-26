@@ -318,6 +318,57 @@ export function isQRCodeData(data: any): data is QRCodeData {
   return data && typeof data === 'object' && 'data' in data && 'image' in data && 'hash' in data;
 }
 
+// frontend/src/types/signature.types.ts
+
+export interface PublicSignatureData {
+  specimen: {
+    user: {
+      full_name: string;
+      email: string;
+      role_label: string;
+    };
+    signature_image_url: string | null;
+    is_verified: boolean;
+    status: string;
+    status_label: string | null;
+    status_color: string | null;
+    verified_at: string | null;
+    verification_notes: string | null;
+    verification_method: string | null;
+    document_reference: string;
+    verified_by: {
+      full_name: string;
+      email: string;
+    } | null;
+  };
+  qr_code: {
+    data: string | null;
+    image: string | null;
+    hash: string | null;
+  } | null;
+}
+
+export interface PublicSignatureStatusData {
+  user: {
+    id: number;
+    full_name: string;
+    email: string;
+  };
+  signature: {
+    id: number;
+    status: string;
+    status_label: string | null;
+    status_color: string | null;
+    is_verified: boolean;
+    verified_at: string | null;
+    verification_method: string | null;
+    signature_image_url: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  };
+}
+
+// ... rest of existing types remain the same
 // ============================================
 // ENUM TYPES FOR FRONTEND USE
 // ============================================

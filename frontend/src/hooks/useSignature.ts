@@ -10,62 +10,157 @@ import type {
   QRCodeVerificationResult,
   SignatureStats,
   SignatureVerificationLog,
+  PublicSignatureData,
+  PublicSignatureStatusData,
 } from '@/types/signature.types';
 
 console.log('🔧 [useSignature] Hook module loaded');
 
 // ============================================
-// QUERIES (no toasts needed)
+// AUTHENTICATED USER QUERIES
 // ============================================
 
-export const useSignatureStatus = (
-  token?: string,
-  options?: Omit<UseQueryOptions<SignatureStatus | null>, 'queryKey' | 'queryFn'>
-) => {
-  console.log('🔧 [useSignatureStatus] Creating query', { token });
-
-  return useQuery<SignatureStatus | null>({
-    queryKey: ['signature-status', token],
-    queryFn: async () => {
-      console.log('🔧 [useSignatureStatus.queryFn] Executing...', { token });
-      try {
-        const result = await signatureService.getStatus(token);
-        console.log('🔧 [useSignatureStatus.queryFn] Service returned:', result);
-        return result;
-      } catch (error) {
-        console.error('🔧 [useSignatureStatus.queryFn] Error:', error);
-        // Return null instead of throwing for public access
-        return null;
-      }
-    },
-    ...options,
-  });
-};
-
+/**
+ * Get authenticated user's signature
+ * Requires authentication
+ */
 export const useMySignature = (
-  token?: string,
   options?: Omit<UseQueryOptions<SignatureSpecimen | null>, 'queryKey' | 'queryFn'>
 ) => {
-  console.log('🔧 [useMySignature] Creating query', { token });
+  console.log('🔧 [useMySignature] Creating query');
 
   return useQuery<SignatureSpecimen | null>({
-    queryKey: ['my-signature', token],
+    queryKey: ['my-signature'],
     queryFn: async () => {
-      console.log('🔧 [useMySignature.queryFn] Executing...', { token });
+      console.log('🔧 [useMySignature.queryFn] Executing...');
       try {
-        const result = await signatureService.getMySignature(token);
+        const result = await signatureService.getMySignature();
         console.log('🔧 [useMySignature.queryFn] Service returned:', result);
         return result;
       } catch (error) {
         console.error('🔧 [useMySignature.queryFn] Error:', error);
-        // Return null instead of throwing for public access
-        return null;
+        throw error;
       }
     },
     ...options,
   });
 };
 
+/**
+ * Get authenticated user's signature status
+ * Requires authentication
+ */
+export const useMyStatus = (
+  options?: Omit<UseQueryOptions<SignatureStatus | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.log('🔧 [useMyStatus] Creating query');
+
+  return useQuery<SignatureStatus | null>({
+    queryKey: ['my-signature-status'],
+    queryFn: async () => {
+      console.log('🔧 [useMyStatus.queryFn] Executing...');
+      try {
+        const result = await signatureService.getMyStatus();
+        console.log('🔧 [useMyStatus.queryFn] Service returned:', result);
+        return result;
+      } catch (error) {
+        console.error('🔧 [useMyStatus.queryFn] Error:', error);
+        throw error;
+      }
+    },
+    ...options,
+  });
+};
+
+// ============================================
+// PUBLIC/UNAUTHENTICATED USER QUERIES
+// ============================================
+
+/**
+ * Get public signature by token
+ * No authentication required
+ */
+export const usePublicSignature = (
+  token: string,
+  options?: Omit<UseQueryOptions<PublicSignatureData | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.log('🌐 [usePublicSignature] Creating query', { token_preview: token?.substring(0, 10) + '...' });
+
+  return useQuery<PublicSignatureData | null>({
+    queryKey: ['public-signature', token],
+    queryFn: async () => {
+      console.log('🌐 [usePublicSignature.queryFn] Executing...', { token_preview: token?.substring(0, 10) + '...' });
+      if (!token) {
+        console.log('🌐 [usePublicSignature.queryFn] No token provided');
+        return null;
+      }
+      const result = await signatureService.getPublicSignature(token);
+      console.log('🌐 [usePublicSignature.queryFn] Service returned:', result);
+      return result;
+    },
+    enabled: !!token,
+    ...options,
+  });
+};
+
+/**
+ * Get public signature status by token
+ * No authentication required
+ */
+export const usePublicStatus = (
+  token: string,
+  options?: Omit<UseQueryOptions<PublicSignatureStatusData | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.log('🌐 [usePublicStatus] Creating query', { token_preview: token?.substring(0, 10) + '...' });
+
+  return useQuery<PublicSignatureStatusData | null>({
+    queryKey: ['public-signature-status', token],
+    queryFn: async () => {
+      console.log('🌐 [usePublicStatus.queryFn] Executing...', { token_preview: token?.substring(0, 10) + '...' });
+      if (!token) {
+        console.log('🌐 [usePublicStatus.queryFn] No token provided');
+        return null;
+      }
+      const result = await signatureService.getPublicStatus(token);
+      console.log('🌐 [usePublicStatus.queryFn] Service returned:', result);
+      return result;
+    },
+    enabled: !!token,
+    ...options,
+  });
+};
+
+/**
+ * Verify signature by token (QR Code flow)
+ * No authentication required
+ */
+export const useVerifyByToken = (
+  token: string,
+  options?: Omit<UseQueryOptions<PublicSignatureData | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.log('🔑 [useVerifyByToken] Creating query', { token_preview: token?.substring(0, 10) + '...' });
+
+  return useQuery<PublicSignatureData | null>({
+    queryKey: ['verify-signature-token', token],
+    queryFn: async () => {
+      console.log('🔑 [useVerifyByToken.queryFn] Executing...', { token_preview: token?.substring(0, 10) + '...' });
+      if (!token) {
+        console.log('🔑 [useVerifyByToken.queryFn] No token provided');
+        return null;
+      }
+      const result = await signatureService.verifyByToken(token);
+      console.log('🔑 [useVerifyByToken.queryFn] Service returned:', result);
+      return result;
+    },
+    enabled: !!token,
+    ...options,
+  });
+};
+
+/**
+ * Get QR code for a signature specimen
+ * No authentication required
+ */
 export const useSignatureQR = (
   specimenId: number,
   options?: Omit<UseQueryOptions<QRCodeData | null>, 'queryKey' | 'queryFn'>
@@ -88,6 +183,10 @@ export const useSignatureQR = (
     ...options,
   });
 };
+
+// ============================================
+// ADMIN QUERIES
+// ============================================
 
 export const usePendingSignatures = (
   options?: Omit<UseQueryOptions<SignatureSpecimen[]>, 'queryKey' | 'queryFn'>
@@ -140,10 +239,6 @@ export const useSignatureStats = (
   });
 };
 
-// ============================================
-// 🆕 NEW QUERY: Signature Verification Logs
-// ============================================
-
 export const useSignatureLogs = (
   filters?: {
     action?: string;
@@ -184,13 +279,13 @@ export const useUploadSignature = () => {
     onSuccess: (data) => {
       console.log('📤 [useUploadSignature.onSuccess] Upload successful', data);
       queryClient.invalidateQueries({ queryKey: ['my-signature'] });
-      queryClient.invalidateQueries({ queryKey: ['signature-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-signature-status'] });
       queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
       success('Signature uploaded successfully');
     },
     onError: (error: any) => {
       console.error('📤 [useUploadSignature.onError] Upload failed', error);
-      success('An error occurred', error?.response?.data?.message || 'Failed to upload signature');
+      error(error?.response?.data?.message || 'Failed to upload signature');
     },
   });
 };
@@ -207,7 +302,7 @@ export const useVerifySignature = () => {
     onSuccess: (data, variables) => {
       console.log('✅ [useVerifySignature.onSuccess] Verification successful', data);
       queryClient.invalidateQueries({ queryKey: ['my-signature'] });
-      queryClient.invalidateQueries({ queryKey: ['signature-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-signature-status'] });
       queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
@@ -232,7 +327,7 @@ export const useVerifySignatureByQR = () => {
     onSuccess: (data) => {
       console.log('📱 [useVerifySignatureByQR.onSuccess] QR verification successful', data);
       queryClient.invalidateQueries({ queryKey: ['my-signature'] });
-      queryClient.invalidateQueries({ queryKey: ['signature-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-signature-status'] });
       queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
@@ -241,26 +336,6 @@ export const useVerifySignatureByQR = () => {
     onError: (error: any) => {
       console.error('📱 [useVerifySignatureByQR.onError] QR verification failed', error);
       error(error?.response?.data?.message || 'Failed to verify signature via QR code');
-    },
-  });
-};
-
-export const useVerifySignatureByToken = () => {
-  const { success, error } = useToast();
-
-  return useMutation({
-    mutationFn: ({ token }: { token: string }) => {
-      console.log('🔑 [useVerifySignatureByToken.mutationFn] Verifying by token...', { token });
-      return signatureService.verifyByToken(token);
-    },
-    onSuccess: (data) => {
-      console.log('🔑 [useVerifySignatureByToken.onSuccess] Token verification successful', data);
-      success('Signature found and verified successfully');
-      return data;
-    },
-    onError: (error: any) => {
-      console.error('🔑 [useVerifySignatureByToken.onError] Token verification failed', error);
-      error(error?.response?.data?.message || 'Invalid or expired verification link');
     },
   });
 };
@@ -277,7 +352,7 @@ export const useRejectSignature = () => {
     onSuccess: (data, variables) => {
       console.log('❌ [useRejectSignature.onSuccess] Rejection successful', data);
       queryClient.invalidateQueries({ queryKey: ['my-signature'] });
-      queryClient.invalidateQueries({ queryKey: ['signature-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-signature-status'] });
       queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
@@ -324,7 +399,7 @@ export const useDeleteSignature = () => {
     onSuccess: (_, variables) => {
       console.log('🗑️ [useDeleteSignature.onSuccess] Deletion successful');
       queryClient.invalidateQueries({ queryKey: ['my-signature'] });
-      queryClient.invalidateQueries({ queryKey: ['signature-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-signature-status'] });
       queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
       queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
@@ -339,14 +414,17 @@ export const useDeleteSignature = () => {
 };
 
 // ============================================
-// COMBINED HOOKS FOR EASY USE
+// COMBINED HOOK FOR AUTHENTICATED USERS
 // ============================================
 
-export const useSignature = (token?: string) => {
-  console.log('🔧 [useSignature] Creating combined hook', { token });
+export const useSignature = (options?: {
+  statusOptions?: Omit<UseQueryOptions<SignatureStatus | null>, 'queryKey' | 'queryFn'>;
+  signatureOptions?: Omit<UseQueryOptions<SignatureSpecimen | null>, 'queryKey' | 'queryFn'>;
+}) => {
+  console.log('🔧 [useSignature] Creating combined hook');
 
-  const statusQuery = useSignatureStatus(token);
-  const mySignatureQuery = useMySignature(token);
+  const statusQuery = useMyStatus(options?.statusOptions);
+  const mySignatureQuery = useMySignature(options?.signatureOptions);
 
   const signature = mySignatureQuery.data ?? null;
   const status = statusQuery.data ?? null;
@@ -415,7 +493,7 @@ export const useSignature = (token?: string) => {
   });
 
   return {
-    // Data - keep both for flexibility
+    // Data
     signature,
     status,
     effectiveSignature,
@@ -431,7 +509,6 @@ export const useSignature = (token?: string) => {
     upload: useUploadSignature(),
     verify: useVerifySignature(),
     verifyByQR: useVerifySignatureByQR(),
-    verifyByToken: useVerifySignatureByToken(),
     reject: useRejectSignature(),
     regenerateQR: useRegenerateQR(),
     delete: useDeleteSignature(),
@@ -453,6 +530,52 @@ export const useSignature = (token?: string) => {
     getUserEmail,
     getImageUrl,
     getQRCodeImage,
+  };
+};
+
+// ============================================
+// COMBINED HOOK FOR PUBLIC USERS
+// ============================================
+
+export const usePublicSignatureData = (token: string) => {
+  console.log('🌐 [usePublicSignatureData] Creating public combined hook', {
+    token_preview: token?.substring(0, 10) + '...',
+  });
+
+  const signatureQuery = usePublicSignature(token);
+  const statusQuery = usePublicStatus(token);
+
+  const publicData = signatureQuery.data ?? null;
+  const publicStatus = statusQuery.data ?? null;
+
+  return {
+    // Data
+    publicData,
+    publicStatus,
+
+    // Loading states
+    isLoading: signatureQuery.isLoading || statusQuery.isLoading,
+    isFetching: signatureQuery.isFetching || statusQuery.isFetching,
+
+    // Error states
+    error: signatureQuery.error || statusQuery.error,
+
+    // Refetch functions
+    refetchSignature: signatureQuery.refetch,
+    refetchStatus: statusQuery.refetch,
+    refetch: () => {
+      signatureQuery.refetch();
+      statusQuery.refetch();
+    },
+
+    // Helper methods
+    isVerified: () => publicData?.specimen?.is_verified ?? false,
+    getStatus: () => publicData?.specimen?.status ?? 'unknown',
+    getStatusLabel: () => publicData?.specimen?.status_label ?? 'Unknown',
+    getUserName: () => publicData?.specimen?.user?.full_name ?? 'Unknown',
+    getUserEmail: () => publicData?.specimen?.user?.email ?? 'Unknown',
+    getSignatureImage: () => publicData?.specimen?.signature_image_url ?? null,
+    getQRCodeImage: () => publicData?.qr_code?.image ?? null,
   };
 };
 
@@ -516,7 +639,7 @@ export const useAdminSignature = () => {
 };
 
 // ============================================
-// UTILITY HOOKS
+// QR CODE HOOK
 // ============================================
 
 export const useSignatureQRCode = (specimenId: number) => {
@@ -532,4 +655,79 @@ export const useSignatureQRCode = (specimenId: number) => {
     regenerate: () => regenerateMutation.mutateAsync({ specimenId }),
     refetch: qrQuery.refetch,
   };
+};
+
+// ============================================
+// DEPRECATED LEGACY HOOKS (for backward compatibility)
+// Will be removed in future versions
+// ============================================
+
+/**
+ * @deprecated Use useMyStatus() or usePublicStatus() instead
+ */
+export const useSignatureStatus = (
+  token?: string,
+  options?: Omit<UseQueryOptions<SignatureStatus | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.warn('⚠️ [useSignatureStatus] DEPRECATED - Use useMyStatus() or usePublicStatus()');
+
+  if (token) {
+    // Use public status
+    return useQuery<SignatureStatus | null>({
+      queryKey: ['signature-status-deprecated', token],
+      queryFn: async () => {
+        console.log('🔧 [useSignatureStatus.queryFn] Executing with token...', {
+          token_preview: token?.substring(0, 10) + '...',
+        });
+        try {
+          const result = await signatureService.getStatus(token);
+          console.log('🔧 [useSignatureStatus.queryFn] Service returned:', result);
+          return result;
+        } catch (error) {
+          console.error('🔧 [useSignatureStatus.queryFn] Error:', error);
+          return null;
+        }
+      },
+      enabled: !!token,
+      ...options,
+    });
+  }
+
+  // Use authenticated status
+  return useMyStatus(options);
+};
+
+/**
+ * @deprecated Use useMySignature() instead
+ */
+export const useMySignatureLegacy = (
+  token?: string,
+  options?: Omit<UseQueryOptions<SignatureSpecimen | null>, 'queryKey' | 'queryFn'>
+) => {
+  console.warn('⚠️ [useMySignatureLegacy] DEPRECATED - Use useMySignature() or usePublicSignature()');
+
+  if (token) {
+    // Use public signature
+    return useQuery<SignatureSpecimen | null>({
+      queryKey: ['my-signature-deprecated', token],
+      queryFn: async () => {
+        console.log('🔧 [useMySignatureLegacy.queryFn] Executing with token...', {
+          token_preview: token?.substring(0, 10) + '...',
+        });
+        try {
+          const result = await signatureService.getMySignatureLegacy(token);
+          console.log('🔧 [useMySignatureLegacy.queryFn] Service returned:', result);
+          return result;
+        } catch (error) {
+          console.error('🔧 [useMySignatureLegacy.queryFn] Error:', error);
+          return null;
+        }
+      },
+      enabled: !!token,
+      ...options,
+    });
+  }
+
+  // Use authenticated signature
+  return useMySignature(options);
 };

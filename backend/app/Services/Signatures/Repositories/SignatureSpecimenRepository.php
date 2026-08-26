@@ -26,6 +26,7 @@ class SignatureSpecimenRepository implements SignatureSpecimenRepositoryInterfac
   {
     return SignatureSpecimen::with(['user', 'verifiedBy'])
       ->where('qr_verification_token', $token)
+      ->with(['user', 'verifiedBy'])
       ->first();
   }
 
@@ -130,4 +131,6 @@ class SignatureSpecimenRepository implements SignatureSpecimenRepositoryInterfac
       })
       ->get();
   }
+
+
 }

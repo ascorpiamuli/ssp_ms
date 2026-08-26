@@ -74,7 +74,16 @@ Route::prefix('v1')->group(function () {
 
   Route::get('/departments/active', [DepartmentController::class, 'active']);
   Route::get('/roles/available', [RoleController::class, 'index']);
-  Route::get('/signatures/token/{token}', [SignatureController::class, 'verifyByToken']);
+
+  // ============================================
+  // PUBLIC ROUTES (No authentication required)
+  // ============================================
+
+  Route::get('signatures/public/{token}', [SignatureController::class, 'publicSignature']);
+  Route::get('signatures/public/{token}/status', [SignatureController::class, 'publicStatus']);
+  Route::get('signatures/token/{token}', [SignatureController::class, 'verifyByToken']);
+  Route::get('signatures/qr/{specimenId}', [SignatureController::class, 'getQR']);
+
 
   Route::get('/supplier-categories', function () {
     return response()->json([
@@ -239,10 +248,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/remove-hod', [DepartmentController::class, 'removeHOD']);
         // HOD-specific staff management routes
         Route::get('{id}/available-staff', [DepartmentController::class, 'availableStaff'])->withoutMiddleware('role:ADMIN');
-        Route::get('{id}/staff-list', [DepartmentController::class, 'staffList'])->withoutMiddleware('role:ADMIN');;
-        Route::post('{id}/assign-staff', [DepartmentController::class, 'assignStaff'])->withoutMiddleware('role:ADMIN');;
-        Route::post('{id}/remove-staff', [DepartmentController::class, 'removeStaff'])->withoutMiddleware('role:ADMIN');;
-        Route::post('{id}/bulk-assign-staff', [DepartmentController::class, 'bulkAssignStaff'])->withoutMiddleware('role:ADMIN');;
+        Route::get('{id}/staff-list', [DepartmentController::class, 'staffList'])->withoutMiddleware('role:ADMIN');
+        Route::post('{id}/assign-staff', [DepartmentController::class, 'assignStaff'])->withoutMiddleware('role:ADMIN');
+        Route::post('{id}/remove-staff', [DepartmentController::class, 'removeStaff'])->withoutMiddleware('role:ADMIN');
+        Route::post('{id}/bulk-assign-staff', [DepartmentController::class, 'bulkAssignStaff'])->withoutMiddleware('role:ADMIN');
       });
     });
 
@@ -432,46 +441,46 @@ Route::prefix('v1')->group(function () {
       Route::post('/select-supplier', [RequestForQuotationController::class, 'selectSupplier']);
 
       // PDF Routes
-      Route::get('/{id}/download-pdf', [RequestForQuotationController::class, 'downloadPDF']);      // Download as attachment
+      Route::get('/{id}/download-pdf', [RequestForQuotationController::class, 'downloadPDF']);
       Route::post('/{id}/track-download', [RequestForQuotationController::class, 'trackDownload']);
-      Route::get('/{id}/preview-pdf', [RequestForQuotationController::class, 'previewPDF']);        // Preview inline
-      Route::get('/{id}/base64-pdf', [RequestForQuotationController::class, 'getBase64PDF']);       // Base64 for emails
+      Route::get('/{id}/preview-pdf', [RequestForQuotationController::class, 'previewPDF']);
+      Route::get('/{id}/base64-pdf', [RequestForQuotationController::class, 'getBase64PDF']);
     });
 
 
+    // ============================================
+    // SUPPLIER QUOTATION ROUTES
+    // ============================================
+    Route::prefix('supplier-quotations')->group(function () {
+      // CRUD Operations
+      Route::get('/', [SupplierQuotationController::class, 'index']);
+      Route::post('/', [SupplierQuotationController::class, 'store']);
+      Route::get('/lowest/{qtnId}', [SupplierQuotationController::class, 'lowest']);
+      Route::get('/{id}', [SupplierQuotationController::class, 'show']);
+
+      // Verification & Evaluation
+      Route::post('/{id}/verify', [SupplierQuotationController::class, 'verify']);
+      Route::post('/{id}/evaluate', [SupplierQuotationController::class, 'evaluate']);
+
       // ============================================
-      // SUPPLIER QUOTATION ROUTES
+      // PDF GENERATION ROUTES
       // ============================================
-      Route::prefix('supplier-quotations')->group(function () {
-          // CRUD Operations
-          Route::get('/', [SupplierQuotationController::class, 'index']);
-          Route::post('/', [SupplierQuotationController::class, 'store']);
-          Route::get('/lowest/{qtnId}', [SupplierQuotationController::class, 'lowest']);
-          Route::get('/{id}', [SupplierQuotationController::class, 'show']);
 
-          // Verification & Evaluation
-          Route::post('/{id}/verify', [SupplierQuotationController::class, 'verify']);
-          Route::post('/{id}/evaluate', [SupplierQuotationController::class, 'evaluate']);
+      // Download PDF
+      Route::get('/{id}/download-pdf', [SupplierQuotationController::class, 'downloadPDF']);
+      Route::post('/{id}/track-download', [SupplierQuotationController::class, 'trackDownload']);
+      Route::get('/{id}/download-verified', [SupplierQuotationController::class, 'downloadVerifiedPDF']);
+      Route::get('/{id}/download-draft', [SupplierQuotationController::class, 'downloadDraftPDF']);
 
-          // ============================================
-          // PDF GENERATION ROUTES
-          // ============================================
+      // Preview PDF (inline display)
+      Route::get('/{id}/preview-pdf', [SupplierQuotationController::class, 'previewPDF']);
 
-          // Download PDF
-          Route::get('/{id}/download-pdf', [SupplierQuotationController::class, 'downloadPDF']);
-          Route::post('/{id}/track-download', [SupplierQuotationController::class, 'trackDownload']);
-          Route::get('/{id}/download-verified', [SupplierQuotationController::class, 'downloadVerifiedPDF']);
-          Route::get('/{id}/download-draft', [SupplierQuotationController::class, 'downloadDraftPDF']);
+      // Base64 PDF (for email attachments)
+      Route::get('/{id}/base64-pdf', [SupplierQuotationController::class, 'getBase64PDF']);
 
-          // Preview PDF (inline display)
-          Route::get('/{id}/preview-pdf', [SupplierQuotationController::class, 'previewPDF']);
-
-          // Base64 PDF (for email attachments)
-          Route::get('/{id}/base64-pdf', [SupplierQuotationController::class, 'getBase64PDF']);
-
-          // Save PDF to storage
-          Route::post('/{id}/save-pdf', [SupplierQuotationController::class, 'savePDF']);
-      });
+      // Save PDF to storage
+      Route::post('/{id}/save-pdf', [SupplierQuotationController::class, 'savePDF']);
+    });
 
     // --------------------------------------------
     // PURCHASE ORDER ROUTES
@@ -502,7 +511,7 @@ Route::prefix('v1')->group(function () {
       Route::post('/{id}/cancel', [PurchaseOrderController::class, 'cancel']);
     });
 
-    Route::prefix('company')->middleware(['auth:sanctum'])->group(function () {
+    Route::prefix('company')->group(function () {
       Route::get('/profile', [CompanyProfileController::class, 'index']);
       Route::post('/profile', [CompanyProfileController::class, 'save']);
       Route::delete('/profile/logo', [CompanyProfileController::class, 'deleteLogo']);
@@ -647,28 +656,41 @@ Route::prefix('v1')->group(function () {
       Route::get('statistics', [ProcurementController::class, 'statistics']);
     });
 
-    // Signature Routes
+    // ============================================
+    // SIGNATURE ROUTES
+    // ============================================
     Route::prefix('signatures')->group(function () {
-      // Public/User routes
-      Route::post('upload', [SignatureController::class, 'upload']);
-      Route::get('status', [SignatureController::class, 'status']);
-      Route::get('my-signature', [SignatureController::class, 'mySignature'])->withoutMiddleware('auth:sanctum');
-      Route::get('qr/{specimenId}', [SignatureController::class, 'getQR']);
-      Route::post('regenerate-qr/{specimenId}', [SignatureController::class, 'regenerateQR']);
-      Route::delete('{specimenId}', [SignatureController::class, 'destroy']);
 
-      // NEW: Route for the clean QR code scanning flow
-      // This allows users to scan the QR code and hit the token endpoint
-      Route::get('token/{token}', [SignatureController::class, 'verifyByToken'])->withoutMiddleware('auth:sanctum');
-      // Admin-only routes
-      Route::middleware(['role:ADMIN'])->group(function () {
+
+
+      // DEPRECATED - Keep for backward compatibility (will be removed in future)
+      Route::get('my-signature', [SignatureController::class, 'mySignature']);
+      Route::get('status', [SignatureController::class, 'status']);
+
+      // ============================================
+      // AUTHENTICATED ROUTES (Require auth:sanctum)
+      // ============================================
+      Route::middleware(['auth:sanctum'])->group(function () {
+
+        // User-specific routes
+        Route::get('my', [SignatureController::class, 'mySignature']);
+        Route::get('my/status', [SignatureController::class, 'myStatus']);
+
+        // CRUD operations
+        Route::post('upload', [SignatureController::class, 'upload']);
+        Route::post('regenerate-qr/{specimenId}', [SignatureController::class, 'regenerateQR']);
+        Route::delete('{specimenId}', [SignatureController::class, 'destroy']);
         Route::post('verify/{specimenId}', [SignatureController::class, 'verify']);
         Route::post('verify-qr', [SignatureController::class, 'verifyByQR']);
-        Route::post('reject/{specimenId}', [SignatureController::class, 'reject']);
-        Route::get('pending', [SignatureController::class, 'pending']);
-        Route::get('verified', [SignatureController::class, 'verified']);
-        Route::get('stats', [SignatureController::class, 'stats']);
-        Route::get('logs', [SignatureController::class, 'logs']);
+
+        // Admin-only routes
+        Route::middleware(['role:ADMIN'])->group(function () {
+          Route::post('reject/{specimenId}', [SignatureController::class, 'reject']);
+          Route::get('pending', [SignatureController::class, 'pending']);
+          Route::get('verified', [SignatureController::class, 'verified']);
+          Route::get('stats', [SignatureController::class, 'stats']);
+          Route::get('logs', [SignatureController::class, 'logs']);
+        });
       });
     });
 

@@ -111,6 +111,7 @@ export default function AdminSignatureVerificationPage() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
 
+  // Use the admin hook
   const {
     pending,
     verified,
@@ -118,7 +119,13 @@ export default function AdminSignatureVerificationPage() {
     isLoading,
     verify,
     reject,
+    regenerateQR,
+    delete: deleteSignature,
     refetch,
+    refetchPending,
+    refetchVerified,
+    refetchStats,
+    refetchLogs,
     getPendingCount,
     getVerifiedCount,
     getTotalCount,
@@ -241,9 +248,11 @@ export default function AdminSignatureVerificationPage() {
         });
         setShowVerifyDialog(false);
         setSelectedSignature(null);
+        // Invalidate all relevant queries
         queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['signature-logs'] });
         success('Signature verified successfully');
       } catch (err) {
         console.error('❌ [AdminSignatureVerification] Verify failed:', err);
@@ -262,9 +271,11 @@ export default function AdminSignatureVerificationPage() {
         setShowRejectDialog(false);
         setSelectedSignature(null);
         setRejectReason('');
+        // Invalidate all relevant queries
         queryClient.invalidateQueries({ queryKey: ['pending-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['verified-signatures'] });
         queryClient.invalidateQueries({ queryKey: ['signature-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['signature-logs'] });
         success('Signature rejected successfully');
       } catch (err) {
         console.error('❌ [AdminSignatureVerification] Reject failed:', err);
@@ -563,7 +574,8 @@ export default function AdminSignatureVerificationPage() {
     );
   };
 
-  if (isLoading) {
+  // Show loading state
+  if (isLoading && !pending.length && !verified.length) {
     return (
       <PageTemplate
         title="Signature Verification"
@@ -784,7 +796,7 @@ export default function AdminSignatureVerificationPage() {
         </Tabs>
       </div>
 
-      {/* Verify Dialog - No Tags */}
+      {/* Verify Dialog */}
       <Dialog open={showVerifyDialog} onOpenChange={setShowVerifyDialog}>
         <DialogContent className="rounded-2xl shadow-2xl border-0 dark:bg-gray-900">
           <DialogHeader>
@@ -864,7 +876,7 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog - No Tags */}
+      {/* Reject Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent className="rounded-2xl shadow-2xl border-0 dark:bg-gray-900">
           <DialogHeader>
@@ -940,7 +952,7 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Image Preview Dialog - No Tags */}
+      {/* Image Preview Dialog */}
       <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
         <DialogContent className="rounded-2xl shadow-2xl border-0 max-w-md max-h-[90vh] overflow-y-auto dark:bg-gray-900">
           <DialogHeader>
@@ -1047,7 +1059,7 @@ export default function AdminSignatureVerificationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Code Dialog - No Tags */}
+      {/* QR Code Dialog */}
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
         <DialogContent className="rounded-2xl shadow-xl border-0 max-w-md overflow-hidden p-0 dark:bg-gray-900">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 text-white">

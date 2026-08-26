@@ -21,4 +21,5 @@ interface SignatureSpecimenRepositoryInterface
   public function getPending(): Collection;
   public function getVerified(): Collection;
   public function searchByUser(string $searchTerm): Collection;
+  public function findByToken(string $token): ?SignatureSpecimen;
 }

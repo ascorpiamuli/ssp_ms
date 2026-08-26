@@ -92,9 +92,11 @@ export default function SignatureSettingsPage() {
   const [showSuccessAlert, setShowSuccessAlert] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Use the new signature hook for authenticated users
   const {
     signature,
     status,
+    effectiveSignature,
     isLoading,
     upload,
     verify,
@@ -111,19 +113,19 @@ export default function SignatureSettingsPage() {
     refetch,
   } = useSignature();
 
-  // Use specimen from status if signature is null (pending case)
-  const effectiveSignature = signature || status?.specimen || null;
-  const effectiveImageUrl = effectiveSignature?.signature_image_url || null;
-  const effectiveQrCodeImage = effectiveSignature?.qr_code?.image || null;
-  const effectiveCreatedAt = effectiveSignature?.created_at || null;
-  const effectiveIsVerified = effectiveSignature?.is_verified || isVerified() || false;
-  const effectiveIsPending = effectiveSignature?.status === 'pending' || isPending() || false;
-  const effectiveIsRejected = effectiveSignature?.status === 'rejected' || isRejected() || false;
+  // Use effectiveSignature from the hook
+  const currentSignature = effectiveSignature || signature || status?.specimen || null;
+  const effectiveImageUrl = currentSignature?.signature_image_url || null;
+  const effectiveQrCodeImage = currentSignature?.qr_code?.image || null;
+  const effectiveCreatedAt = currentSignature?.created_at || null;
+  const effectiveIsVerified = currentSignature?.is_verified || isVerified() || false;
+  const effectiveIsPending = currentSignature?.status === 'pending' || isPending() || false;
+  const effectiveIsRejected = currentSignature?.status === 'rejected' || isRejected() || false;
 
   // Extract Forensic & Rejection Data
-  const verificationNotes = effectiveSignature?.verification_notes || null;
-  const verifiedBy = effectiveSignature?.verified_by || null;
-  const verificationMethod = effectiveSignature?.verification_method || null;
+  const verificationNotes = currentSignature?.verification_notes || null;
+  const verifiedBy = currentSignature?.verified_by || null;
+  const verificationMethod = currentSignature?.verification_method || null;
 
   // Helpers to truncate User Agent for UI
   const truncateUserAgent = (ua: string | null) => {
@@ -206,10 +208,10 @@ export default function SignatureSettingsPage() {
   };
 
   const handleVerify = async () => {
-    if (!effectiveSignature) return;
+    if (!currentSignature) return;
     try {
       await verify.mutateAsync({
-        specimenId: effectiveSignature.id,
+        specimenId: currentSignature.id,
         notes: 'Verified via settings'
       });
       setShowSuccessAlert('✅ Signature verified successfully!');
@@ -219,10 +221,10 @@ export default function SignatureSettingsPage() {
   };
 
   const handleReject = async () => {
-    if (!effectiveSignature) return;
+    if (!currentSignature) return;
     try {
       await reject.mutateAsync({
-        specimenId: effectiveSignature.id,
+        specimenId: currentSignature.id,
         reason: 'Rejected via settings'
       });
       setShowSuccessAlert('Signature rejected.');
@@ -232,9 +234,9 @@ export default function SignatureSettingsPage() {
   };
 
   const handleRegenerateQR = async () => {
-    if (!effectiveSignature) return;
+    if (!currentSignature) return;
     try {
-      await regenerateQR.mutateAsync({ specimenId: effectiveSignature.id });
+      await regenerateQR.mutateAsync({ specimenId: currentSignature.id });
       setShowQRDialog(true);
       setShowSuccessAlert('🔄 QR Code regenerated successfully!');
     } catch (error) {
@@ -243,9 +245,9 @@ export default function SignatureSettingsPage() {
   };
 
   const handleDelete = async () => {
-    if (!effectiveSignature) return;
+    if (!currentSignature) return;
     try {
-      await deleteSignature.mutateAsync({ specimenId: effectiveSignature.id });
+      await deleteSignature.mutateAsync({ specimenId: currentSignature.id });
       setShowDeleteDialog(false);
       setShowSuccessAlert('🗑️ Signature deleted successfully.');
     } catch (error) {
@@ -258,7 +260,7 @@ export default function SignatureSettingsPage() {
     if (!qrImage) return;
     const link = document.createElement('a');
     link.href = qrImage;
-    link.download = `signature-qr-${effectiveSignature?.id || 'unknown'}.png`;
+    link.download = `signature-qr-${currentSignature?.id || 'unknown'}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -276,6 +278,7 @@ export default function SignatureSettingsPage() {
         gradient: 'from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800',
         statusKey: 'loading',
         glow: 'shadow-gray-200/20',
+        action: 'Loading...',
       };
     }
 
@@ -607,7 +610,7 @@ export default function SignatureSettingsPage() {
                     </CardDescription>
                   </div>
                 </div>
-                {effectiveSignature && (
+                {currentSignature && (
                   <Badge
                     className={cn(
                       'px-3 py-1 text-xs font-medium rounded-full',
@@ -680,7 +683,7 @@ export default function SignatureSettingsPage() {
                           Uploaded: {effectiveCreatedAt ? format(new Date(effectiveCreatedAt), 'PPP') : 'N/A'}
                         </span>
                       </div>
-                      {isSignatureVerified && effectiveSignature?.verified_at && (
+                      {isSignatureVerified && currentSignature?.verified_at && (
                         <motion.div
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
@@ -688,8 +691,8 @@ export default function SignatureSettingsPage() {
                         >
                           <ShieldCheck className="h-4 w-4" />
                           <span>
-                            Verified on {format(new Date(effectiveSignature.verified_at), 'PPP')}
-                            {effectiveSignature.verified_by?.full_name && ` by ${effectiveSignature.verified_by.full_name}`}
+                            Verified on {format(new Date(currentSignature.verified_at), 'PPP')}
+                            {currentSignature.verified_by?.full_name && ` by ${currentSignature.verified_by.full_name}`}
                           </span>
                         </motion.div>
                       )}
@@ -859,7 +862,7 @@ export default function SignatureSettingsPage() {
                         </Button>
                       </>
                     )}
-                    {!isSignaturePending && effectiveSignature && (
+                    {!isSignaturePending && currentSignature && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1145,10 +1148,10 @@ export default function SignatureSettingsPage() {
                 This QR code contains your encrypted signature verification data.
                 It can be scanned by authorized personnel to verify your identity.
               </p>
-              {effectiveSignature?.verified_at && (
+              {currentSignature?.verified_at && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
                   <CheckCircle className="h-3 w-3" />
-                  Verified on {format(new Date(effectiveSignature.verified_at), 'PPP')}
+                  Verified on {format(new Date(currentSignature.verified_at), 'PPP')}
                 </p>
               )}
             </div>
