@@ -92,9 +92,7 @@ jobs:
             docker exec sspmis_backend php artisan config:cache
             docker exec sspmis_backend php artisan route:cache
             docker exec sspmis_backend php artisan view:cache || true
+            
           fi
           docker image prune -f
           docker compose ps
-
-
-          
