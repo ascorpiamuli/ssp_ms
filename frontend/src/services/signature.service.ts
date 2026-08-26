@@ -18,17 +18,30 @@ import type {
 const BASE_URL = '/signatures';
 
 console.log('🔧 [SignatureService] Initialized with BASE_URL:', BASE_URL);
+// frontend/src/services/signature.service.ts
 
 // Helper to get full image URL - only for signature images, not QR codes
 const getFullImageUrl = (path: string | null | undefined): string | null => {
   if (!path) return null;
+
   // If it's already a full URL or data URL, return it as is
   if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
     return path;
   }
-  // Otherwise, prepend the API base URL
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://api.sspms.internal:443';
-  return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+
+  // ✅ Use the production API URL from environment
+  // In production: https://api.sspmis.pasbestventures.com
+  // In development: http://api.sspms.internal:443
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  // If no environment variable, use production as fallback
+  const apiUrl = baseUrl || 'https://api.sspmis.pasbestventures.com';
+
+  // Ensure the path has a leading slash
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  // Return the full URL
+  return `${apiUrl}${cleanPath}`;
 };
 
 export const signatureService = {
