@@ -183,7 +183,6 @@ import type { Requisition, RequisitionFilters, RequisitionStats, RequisitionHist
 // UI Components
 import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
 import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
-import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag';
 
 // ============================================
 // CONSTANTS
@@ -248,19 +247,6 @@ const STATUS_ICONS: Record<string, any> = {
   cancelled: X,
 };
 
-// Stage weights for procurement completion calculation
-const STAGE_WEIGHTS: Record<string, number> = {
-  'initiated': 10,
-  'quotation_in_progress': 25,
-  'awaiting_quotations': 30,
-  'evaluating_quotations': 45,
-  'supplier_selected': 60,
-  'goods_receipt_pending': 75,
-  'invoicing_pending': 85,
-  'payment_pending': 95,
-  'completed': 100,
-};
-
 // ============================================
 // HELPERS
 // ============================================
@@ -322,21 +308,48 @@ const hasProcurementStarted = (requisition: Requisition): boolean => {
   return requisition.is_procurement_created === true || requisition.procurement_created_at !== null;
 };
 
-const isProcurementComplete = (requisition: Requisition): boolean => {
+const isProcurementComplete = (requisition: Requisition, summary?: any): boolean => {
+  // Use backend data first
+  if (summary) {
+    const isCompleted = safeGet(summary, 'procurement.is_completed', false);
+    if (isCompleted) return true;
+  }
+  // Fallback to local check
   return requisition.is_procurement_created === true &&
     requisition.status === 'final_approved' &&
     (requisition.metadata?.payment_completed === true ||
       requisition.metadata?.cheque_issued === true);
 };
 
+// Get procurement progress from backend
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
 
+  // Use backend completion rate from metrics
+  const completionRate = safeGet(summary, 'metrics.completion_rate', null);
+  if (completionRate !== null && completionRate !== undefined) {
+    return Math.min(Math.max(completionRate, 0), 100);
+  }
+
+  // Fallback to stage-based calculation
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 100;
 
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
+
+  // Stage weights
+  const STAGE_WEIGHTS: Record<string, number> = {
+    'initiated': 10,
+    'quotation_in_progress': 25,
+    'awaiting_quotations': 30,
+    'evaluating_quotations': 45,
+    'supplier_selected': 60,
+    'goods_receipt_pending': 75,
+    'invoicing_pending': 85,
+    'payment_pending': 95,
+    'completed': 100,
+  };
 
   if (status && STAGE_WEIGHTS[status]) {
     let progress = STAGE_WEIGHTS[status];
@@ -618,7 +631,7 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
   }
 
   const started = hasProcurementStarted(requisition);
-  const complete = isProcurementComplete(requisition);
+  const complete = isProcurementComplete(requisition, summary);
   const progress = getProcurementProgress(summary);
   const statusLabel = getProcurementStatusLabel(summary);
   const progressColor = getProcurementProgressColor(progress);
@@ -998,7 +1011,7 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
 
   return (
     <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl relative">
-      <HorizontalCornerTag label="FILTERS" color="blue" position="top-left" size="sm" variant="rounded" />
+
       <CardContent className="p-4 pt-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -1563,20 +1576,6 @@ export default function ManageRequisitionsPage() {
     const revised = data.filter(r => r.status === 'revised').length;
     const cancelled = data.filter(r => r.status === 'cancelled').length;
 
-    const procurementReady = data.filter(r =>
-      r.status === 'final_approved' &&
-      !hasProcurementStarted(r)
-    ).length;
-    const procurementInProgress = data.filter(r =>
-      r.status === 'final_approved' &&
-      hasProcurementStarted(r) &&
-      !isProcurementComplete(r)
-    ).length;
-    const procurementComplete = data.filter(r =>
-      r.status === 'final_approved' &&
-      isProcurementComplete(r)
-    ).length;
-
     return [
       {
         label: "Total",
@@ -1844,20 +1843,19 @@ export default function ManageRequisitionsPage() {
         </div>
       }
     >
-      {/* Stats Cards - Using the component with no tags */}
+      {/* Stats Cards */}
       <StatsCards
         stats={statsItems}
         isLoading={isLoading}
         columns={6}
         variant="default"
         formatCompact={true}
-        tagOrientation="wrapped"
+        tagOrientation="none"
       />
 
       {/* Info Banner - Procurement Reminder */}
       {procurementReadyCount > 0 && (
         <div className="mb-6 border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl shadow-sm p-4 relative">
-          <HorizontalCornerTag label="READY" color="blue" position="top-left" size="sm" variant="rounded" />
           <div className="pt-6 flex items-start gap-3">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex-shrink-0">
               <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />

@@ -77,7 +77,7 @@ const ProcurementProgress = dynamic(
   }
 );
 
-// Stage weights for completion calculation
+// Stage weights for completion calculation (fallback only)
 const STAGE_WEIGHTS: Record<string, number> = {
   'initiated': 10,
   'quotation_in_progress': 25,
@@ -133,15 +133,15 @@ export default function RequisitionDetailsPage() {
     refetch: refetchProcurementStatus
   } = useProcurementStatus(id, { enabled: !!id && isApproved });
 
-  const { data: procurementSummary } = useProcurementSummary(id, {
+  const { data: procurementSummary, isLoading: procurementSummaryLoading } = useProcurementSummary(id, {
     enabled: !!id && isApproved && procurementStatus?.is_procurement_created === true,
   });
 
-  const { data: procurementTimeline } = useProcurementTimeline(id, {
+  const { data: procurementTimeline, isLoading: procurementTimelineLoading } = useProcurementTimeline(id, {
     enabled: !!id && isApproved && procurementStatus?.is_procurement_created === true,
   });
 
-  const { data: procurementMetrics } = useProcurementMetrics(id, {
+  const { data: procurementMetrics, isLoading: procurementMetricsLoading } = useProcurementMetrics(id, {
     enabled: !!id && isApproved && procurementStatus?.is_procurement_created === true,
   });
 
@@ -165,90 +165,98 @@ export default function RequisitionDetailsPage() {
   const [comment, setComment] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  // Derived State - Procurement
+  // Derived State - USING BACKEND DATA DIRECTLY with safe access
   const hasProcurementStarted = useMemo(() => {
-    if (procurementStatus?.is_procurement_created === true) return true;
+    if ((procurementStatus as any)?.is_procurement_created === true) return true;
     if (requisition?.is_procurement_created === true) return true;
     if (requisition?.procurement_created_at) return true;
-    if (requisition?.metadata?.procurement_started === true) return true;
     return false;
   }, [procurementStatus, requisition]);
 
   const isProcurementComplete = useMemo(() => {
-    if (procurementStatus?.current_status === 'completed') return true;
-    if (requisition?.metadata?.procurement_completed === true) return true;
-    // Check if requisition status is procurement_completed (using type guard)
+    // Use backend status from procurementStatus with type assertion
+    const status = procurementStatus as any;
+    if (status?.is_completed === true) return true;
+    if (status?.current_status === 'completed') return true;
+    // Check procurement summary
+    const summary = procurementSummary as any;
+    if (summary?.procurement?.is_completed === true) return true;
     if (requisition?.status === 'procurement_completed' as any) return true;
-    if (requisition?.status === 'final_approved' && requisition?.metadata?.payment_completed === true) return true;
     return false;
-  }, [procurementStatus, requisition]);
+  }, [procurementStatus, procurementSummary, requisition]);
 
   const currentProcurementStatus = useMemo(() => {
-    if (procurementStatus?.current_status) return procurementStatus.current_status;
+    // Use backend status directly from procurementStatus with type assertion
+    const status = procurementStatus as any;
+    if (status?.current_status) return status.current_status;
+    const summary = procurementSummary as any;
+    if (summary?.procurement?.status) return summary.procurement.status;
     if (requisition?.metadata?.procurement_status) return requisition.metadata.procurement_status;
-    // Safely access procurement.status from procurementSummary using type guard
-    const status = safeGet(procurementSummary, 'procurement.status', null);
-    if (status) return status;
     return null;
-  }, [procurementStatus, requisition, procurementSummary]);
+  }, [procurementStatus, procurementSummary, requisition]);
 
-  // Safely get steps from procurementSummary
+  // Use backend steps from procurementSummary with type assertion
   const steps = useMemo(() => {
-    return safeGet(procurementSummary, 'procurement.steps', {});
+    const summary = procurementSummary as any;
+    return summary?.procurement?.steps || {};
   }, [procurementSummary]);
 
-  // Safely get qtn details
+  // Use backend metrics directly with type assertion
+  const metrics = useMemo(() => {
+    return procurementMetrics as any || {};
+  }, [procurementMetrics]);
+
+  // Use backend completion rate as progress
+  const procurementProgress = useMemo(() => {
+    if (isProcurementComplete) return 100;
+    if (!hasProcurementStarted) return 0;
+
+    // Use backend metrics completion_rate
+    if (metrics?.completion_rate !== undefined && metrics.completion_rate !== null) {
+      return Math.min(Math.max(metrics.completion_rate, 0), 100);
+    }
+
+    // Fallback to status-based if metrics not available
+    if (currentProcurementStatus && STAGE_WEIGHTS[currentProcurementStatus]) {
+      return STAGE_WEIGHTS[currentProcurementStatus];
+    }
+
+    return 0;
+  }, [isProcurementComplete, hasProcurementStarted, metrics, currentProcurementStatus]);
+
+  // Get qtn details from backend steps
   const qtnDetails = useMemo(() => {
-    // Try steps.quotation first
-    const stepQuotation = safeGet(steps, 'quotation', null);
-    if (stepQuotation && typeof stepQuotation === 'object') {
+    const stepQuotation = steps?.quotation;
+    if (stepQuotation) {
       return {
-        status: (stepQuotation as any).status || 'active',
-        number: (stepQuotation as any).qtn_number || null,
-        created_at: (stepQuotation as any).created_at || null,
-        hasQtn: true
+        status: stepQuotation.status || 'active',
+        number: stepQuotation.qtn_number || null,
+        created_at: stepQuotation.created_at || null,
+        hasQtn: !!stepQuotation.qtn_number,
       };
     }
-    // Try procurementStatus.steps.quotation
-    if (procurementStatus?.steps?.quotation) {
-      return {
-        status: procurementStatus.steps.quotation.status,
-        number: procurementStatus.steps.quotation.qtn_number,
-        created_at: procurementStatus.steps.quotation.created_at,
-        hasQtn: true
-      };
-    }
-    // Try requisition metadata
     if (requisition?.metadata?.qtn_number) {
       return {
         status: requisition.metadata.qtn_status || 'generated',
         number: requisition.metadata.qtn_number,
         created_at: requisition.metadata.qtn_created_at,
-        hasQtn: true
+        hasQtn: true,
       };
     }
     return { hasQtn: false };
-  }, [steps, procurementStatus, requisition]);
+  }, [steps, requisition]);
 
-  // Safely get PO details
+  // Get PO details from backend steps - handle different property names
   const poDetails = useMemo(() => {
-    const poGen = safeGet(steps, 'po_generation', null);
-    if (poGen && typeof poGen === 'object') {
+    // Try po_generation first (from procurementSummary)
+    const stepPo = steps?.po_generation || steps?.purchase_order;
+    if (stepPo && stepPo.po_number) {
       return {
-        status: (poGen as any).status || 'generated',
-        number: (poGen as any).po_number || null,
-        type: (poGen as any).po_type || 'LPO',
-        created_at: (poGen as any).created_at || null,
-        hasPo: true
-      };
-    }
-    if (procurementStatus?.steps?.purchase_order) {
-      return {
-        status: procurementStatus.steps.purchase_order.status,
-        number: procurementStatus.steps.purchase_order.po_number,
-        type: procurementStatus.steps.purchase_order.type,
-        created_at: procurementStatus.steps.purchase_order.created_at,
-        hasPo: true
+        status: stepPo.status || 'generated',
+        number: stepPo.po_number,
+        type: stepPo.po_type || stepPo.type || 'LPO',
+        created_at: stepPo.created_at || null,
+        hasPo: true,
       };
     }
     if (requisition?.metadata?.lpo_number) {
@@ -257,29 +265,22 @@ export default function RequisitionDetailsPage() {
         number: requisition.metadata.lpo_number,
         type: requisition.metadata.lpo_type || 'LPO',
         created_at: requisition.metadata.lpo_created_at,
-        hasPo: true
+        hasPo: true,
       };
     }
     return { hasPo: false };
-  }, [steps, procurementStatus, requisition]);
+  }, [steps, requisition]);
 
-  // Safely get GRN details
+  // Get GRN details from backend steps - handle different property names
   const grnDetails = useMemo(() => {
-    const delivery = safeGet(steps, 'delivery', null);
-    if (delivery && typeof delivery === 'object') {
+    // Try delivery first (from procurementSummary)
+    const stepDelivery = steps?.delivery || steps?.goods_received;
+    if (stepDelivery && stepDelivery.grn_number) {
       return {
-        status: (delivery as any).status || 'generated',
-        number: (delivery as any).grn_number || null,
-        created_at: (delivery as any).created_at || null,
-        hasGrn: true
-      };
-    }
-    if (procurementStatus?.steps?.goods_received) {
-      return {
-        status: procurementStatus.steps.goods_received.status,
-        number: procurementStatus.steps.goods_received.grn_number,
-        created_at: procurementStatus.steps.goods_received.created_at,
-        hasGrn: true
+        status: stepDelivery.status || 'generated',
+        number: stepDelivery.grn_number,
+        created_at: stepDelivery.created_at || null,
+        hasGrn: true,
       };
     }
     if (requisition?.metadata?.grn_number) {
@@ -287,29 +288,21 @@ export default function RequisitionDetailsPage() {
         status: 'generated',
         number: requisition.metadata.grn_number,
         created_at: requisition.metadata.grn_created_at,
-        hasGrn: true
+        hasGrn: true,
       };
     }
     return { hasGrn: false };
-  }, [steps, procurementStatus, requisition]);
+  }, [steps, requisition]);
 
-  // Safely get payment details
+  // Get payment details from backend steps
   const paymentDetails = useMemo(() => {
-    const payment = safeGet(steps, 'payment', null);
-    if (payment && typeof payment === 'object') {
+    const stepPayment = steps?.payment;
+    if (stepPayment && stepPayment.voucher_number) {
       return {
-        status: (payment as any).status || 'generated',
-        number: (payment as any).voucher_number || null,
-        created_at: (payment as any).created_at || null,
-        hasPayment: true
-      };
-    }
-    if (procurementStatus?.steps?.payment) {
-      return {
-        status: procurementStatus.steps.payment.status,
-        number: procurementStatus.steps.payment.voucher_number,
-        created_at: procurementStatus.steps.payment.created_at,
-        hasPayment: true
+        status: stepPayment.status || 'generated',
+        number: stepPayment.voucher_number,
+        created_at: stepPayment.created_at || null,
+        hasPayment: true,
       };
     }
     if (requisition?.metadata?.payment_voucher_number) {
@@ -317,148 +310,37 @@ export default function RequisitionDetailsPage() {
         status: 'generated',
         number: requisition.metadata.payment_voucher_number,
         created_at: requisition.metadata.payment_created_at,
-        hasPayment: true
+        hasPayment: true,
       };
     }
     return { hasPayment: false };
-  }, [steps, procurementStatus, requisition]);
+  }, [steps, requisition]);
 
-  // Check if supplier is selected
+  // Get supplier selected from backend - handle different property names
   const hasSupplierSelected = useMemo(() => {
-    const sel = safeGet(steps, 'supplier_selection', null);
-    if (sel && typeof sel === 'object') {
-      if ((sel as any).status === 'completed') return true;
-      if ((sel as any).selected_supplier_id) return true;
-    }
-    if (procurementStatus?.current_status === 'supplier_selected') return true;
-    if (procurementStatus?.steps?.quotation?.status === 'evaluated') return true;
+    const selection = steps?.supplier_selection;
+    if (selection?.status === 'completed') return true;
+    if (selection?.selected_supplier_id) return true;
+    const status = procurementStatus as any;
+    if (status?.current_status === 'supplier_selected') return true;
     if (requisition?.metadata?.supplier_selected === true) return true;
-    if (requisition?.metadata?.selected_supplier) return true;
     return false;
   }, [steps, procurementStatus, requisition]);
 
-  // Get quotes count
+  // Get quotes count from backend
   const quotesCount = useMemo(() => {
-    const sq = safeGet(steps, 'supplier_quotations', null);
-    if (sq && typeof sq === 'object') {
-      const count = (sq as any).quotes_received;
-      if (typeof count === 'number') return count;
+    const quotations = steps?.supplier_quotations;
+    if (quotations?.quotes_received) {
+      return quotations.quotes_received;
     }
-    if (procurementSummary) {
-      const summary = procurementSummary as any;
-      if (summary.quotes_count) return summary.quotes_count;
-      if (summary.quotesCount) return summary.quotesCount;
-      if (summary.totalQuotes) return summary.totalQuotes;
+    if (metrics?.total_quotes !== undefined) {
+      return metrics.total_quotes;
     }
     if (requisition?.metadata?.quotes_received_count) {
       return requisition.metadata.quotes_received_count;
     }
     return 0;
-  }, [steps, procurementSummary, requisition]);
-
-  // Calculate procurement progress
-  const procurementProgress = useMemo(() => {
-    if (isProcurementComplete) return 100;
-    if (!hasProcurementStarted) return 0;
-
-    const status = currentProcurementStatus;
-
-    if (status && STAGE_WEIGHTS[status]) {
-      let progress = STAGE_WEIGHTS[status];
-
-      const sq = safeGet(steps, 'supplier_quotations', null);
-      if (status === 'evaluating_quotations') {
-        if (sq && typeof sq === 'object' && (sq as any).status === 'completed') {
-          progress += 5;
-        }
-        if (sq && typeof sq === 'object' && (sq as any).quotes_reviewed > 0) {
-          progress += Math.min(5, ((sq as any).quotes_reviewed / Math.max(1, quotesCount)) * 5);
-        }
-      }
-
-      if (status === 'supplier_selected') {
-        if (poDetails.hasPo) {
-          progress += 5;
-        }
-        const sel = safeGet(steps, 'supplier_selection', null);
-        if (sel && typeof sel === 'object' && (sel as any).status === 'completed') {
-          progress += 5;
-        }
-      }
-
-      return Math.min(progress, 99);
-    }
-
-    // Fallback calculation
-    let progress = 0;
-    if (qtnDetails.hasQtn) {
-      if (qtnDetails.status === 'closed' || qtnDetails.status === 'completed') {
-        progress += 20;
-      } else {
-        progress += 15;
-      }
-    }
-
-    if (quotesCount > 0) {
-      const sq = safeGet(steps, 'supplier_quotations', null);
-      if (sq && typeof sq === 'object' && (sq as any).status === 'completed') {
-        progress += 20;
-      } else if (sq && typeof sq === 'object' && (sq as any).quotes_reviewed > 0) {
-        progress += 15;
-      } else {
-        progress += 10;
-      }
-    }
-
-    if (hasSupplierSelected) {
-      const sel = safeGet(steps, 'supplier_selection', null);
-      if (sel && typeof sel === 'object' && (sel as any).status === 'completed') {
-        progress += 20;
-      } else {
-        progress += 15;
-      }
-    }
-
-    if (poDetails.hasPo) {
-      const pg = safeGet(steps, 'po_generation', null);
-      if (pg && typeof pg === 'object' && (pg as any).status === 'completed') {
-        progress += 15;
-      } else {
-        progress += 10;
-      }
-    }
-
-    if (grnDetails.hasGrn) {
-      const del = safeGet(steps, 'delivery', null);
-      if (del && typeof del === 'object' && (del as any).status === 'completed') {
-        progress += 15;
-      } else {
-        progress += 10;
-      }
-    }
-
-    if (paymentDetails.hasPayment) {
-      const pay = safeGet(steps, 'payment', null);
-      if (pay && typeof pay === 'object' && (pay as any).status === 'completed') {
-        progress += 10;
-      } else {
-        progress += 5;
-      }
-    }
-
-    return Math.min(progress, 99);
-  }, [
-    hasProcurementStarted,
-    isProcurementComplete,
-    currentProcurementStatus,
-    steps,
-    qtnDetails,
-    quotesCount,
-    hasSupplierSelected,
-    poDetails,
-    grnDetails,
-    paymentDetails
-  ]);
+  }, [steps, metrics, requisition]);
 
   // Permissions
   const permissions = usePermissions(requisition, user, userRoles);
@@ -479,6 +361,7 @@ export default function RequisitionDetailsPage() {
     if (!canViewProcurement) return false;
     if (!hasProcurementStarted) return false;
     if (isProcurementComplete) return false;
+    // Check if all required steps are complete based on backend status
     if (paymentDetails.hasPayment && paymentDetails.status === 'completed') return true;
     if (poDetails.hasPo && grnDetails.hasGrn) return true;
     if (qtnDetails.hasQtn && quotesCount > 0 && hasSupplierSelected && poDetails.hasPo && grnDetails.hasGrn) {
@@ -620,7 +503,9 @@ export default function RequisitionDetailsPage() {
   };
 
   // Loading State
-  if (isLoading) {
+  const isLoadingOverall = isLoading || procurementStatusLoading || procurementSummaryLoading || procurementTimelineLoading || procurementMetricsLoading;
+
+  if (isLoadingOverall) {
     return (
       <PageTemplate
         title="Requisition Details"
@@ -773,8 +658,8 @@ export default function RequisitionDetailsPage() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2 h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800" disabled={isLoading}>
-                    <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                  <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2 h-9 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800" disabled={isLoadingOverall}>
+                    <RefreshCw className={cn("h-4 w-4", isLoadingOverall && "animate-spin")} />
                     <span className="hidden sm:inline">Refresh</span>
                   </Button>
                 </TooltipTrigger>
@@ -877,23 +762,6 @@ export default function RequisitionDetailsPage() {
         }
       >
         <div className="space-y-6">
-          <RequisitionAlerts
-            isReturned={isReturned}
-            isDeclined={isDeclined}
-            isEmergency={isEmergency}
-            isProcurementComplete={isProcurementComplete}
-            hasProcurementStarted={hasProcurementStarted}
-            procurementProgress={procurementProgress}
-            currentProcurementStatus={currentProcurementStatus}
-            qtnDetails={qtnDetails}
-            quotesCount={quotesCount}
-            hasSupplierSelected={hasSupplierSelected}
-            poDetails={poDetails}
-            grnDetails={grnDetails}
-            paymentDetails={paymentDetails}
-            requisition={requisition}
-          />
-
           <ProcurementProgress
             hasProcurementStarted={hasProcurementStarted}
             isProcurementComplete={isProcurementComplete}
@@ -904,7 +772,7 @@ export default function RequisitionDetailsPage() {
             steps={steps}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div>
             <div className="lg:col-span-2 space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="w-full bg-muted/50 p-1 h-auto rounded-xl">
@@ -1025,47 +893,6 @@ export default function RequisitionDetailsPage() {
                 </TabsContent>
               </Tabs>
             </div>
-
-            <RequisitionSidebar
-              requisition={requisition}
-              isDeclined={isDeclined}
-              isReturned={isReturned}
-              isEmergency={isEmergency}
-              isProcurementComplete={isProcurementComplete}
-              hasProcurementStarted={hasProcurementStarted}
-              procurementProgress={procurementProgress}
-              qtnDetails={qtnDetails}
-              quotesCount={quotesCount}
-              hasSupplierSelected={hasSupplierSelected}
-              poDetails={poDetails}
-              grnDetails={grnDetails}
-              paymentDetails={paymentDetails}
-              totalItems={totalItems}
-              totalApprovals={totalApprovals}
-              pendingApprovals={pendingApprovals.length}
-              canSubmit={canSubmit}
-              canEdit={canEdit}
-              canReturn={canReturn}
-              canCancel={canCancel}
-              canDelete={canDelete}
-              canStartProcurement={canStartProcurement}
-              canContinueProcurement={canContinueProcurement}
-              canCompleteProcurement={canCompleteProcurement}
-              canCancelProcurement={canCancelProcurement}
-              isStartingProcurement={isStartingProcurement}
-              isCompletingProcurement={isCompletingProcurement}
-              isCancellingProcurement={isCancellingProcurement}
-              onEdit={handleEdit}
-              onSubmit={handleSubmit}
-              onReturn={handleReturn}
-              onCancelRequisition={handleCancelRequisition}
-              onDelete={handleDelete}
-              onStartProcurement={handleStartProcurement}
-              onCompleteProcurement={handleCompleteProcurement}
-              onNavigateToProcurement={handleNavigateToProcurement}
-              setShowCancelDialog={setShowCancelDialog}
-              setComment={setComment}
-            />
           </div>
         </div>
       </PageTemplate>

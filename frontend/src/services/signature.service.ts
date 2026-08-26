@@ -1,6 +1,6 @@
 // frontend/src/services/signature.service.ts
 
-import { api } from './api';
+import { api, publicApi } from './api'; // ✅ Import publicApi
 import type {
   SignatureSpecimen,
   SignatureVerification,
@@ -12,7 +12,7 @@ import type {
   VerifySignatureRequest,
   VerifySignatureQRRequest,
   RejectSignatureRequest,
-  SignatureVerificationLog, // ✅ NEW TYPE IMPORT (You'll need to add this to your types)
+  SignatureVerificationLog,
 } from '@/types/signature.types';
 
 const BASE_URL = '/signatures';
@@ -34,6 +34,7 @@ const getFullImageUrl = (path: string | null | undefined): string | null => {
 export const signatureService = {
   /**
    * Upload a signature specimen
+   * Requires authentication
    */
   upload: async (file: File, notes?: string): Promise<SignatureSpecimen> => {
     console.log('📤 [SignatureService.upload] Starting upload', { fileName: file.name, notes });
@@ -53,7 +54,8 @@ export const signatureService = {
   },
 
   /**
-   * Verify a signature specimen
+   * Verify a signature specimen (Admin only)
+   * Requires authentication
    */
   verify: async (specimenId: number, notes?: string): Promise<{
     specimen: SignatureSpecimen;
@@ -68,6 +70,7 @@ export const signatureService = {
 
   /**
    * Verify signature via QR Code (Legacy JSON payload scanning)
+   * Requires authentication
    */
   verifyByQR: async (qrData: string): Promise<QRCodeVerificationResult> => {
     console.log('📱 [SignatureService.verifyByQR] Starting QR verification');
@@ -78,16 +81,18 @@ export const signatureService = {
   },
 
   /**
-   * NEW: Verify signature via Secure Token (Clean QR Code scanning flow)
+   * 🔑 VERIFY SIGNATURE BY TOKEN - PUBLIC ENDPOINT (No authentication required)
    * This is the endpoint called by the frontend page at /verify-signature/token/{token}
+   * Uses publicApi so it works without authentication
    */
   verifyByToken: async (token: string): Promise<{
     specimen: SignatureSpecimen;
     qr_code: QRCodeData | null;
   }> => {
-    console.log('🔑 [SignatureService.verifyByToken] Fetching signature by token', { token });
+    console.log('🔑 [SignatureService.verifyByToken] Fetching signature by token (public)', { token });
     try {
-      const response = await api.get(`${BASE_URL}/token/${token}`);
+      // ✅ Use publicApi instead of api for unauthenticated access
+      const response = await publicApi.get(`${BASE_URL}/token/${token}`);
       console.log('🔑 [SignatureService.verifyByToken] Response:', response);
 
       // Ensure we don't modify the QR code image (it's a base64 data URL)
@@ -105,6 +110,7 @@ export const signatureService = {
 
   /**
    * Reject a signature specimen
+   * Requires authentication (Admin)
    */
   reject: async (specimenId: number, reason?: string): Promise<SignatureSpecimen> => {
     console.log('❌ [SignatureService.reject] Starting rejection', { specimenId, reason });
@@ -116,11 +122,18 @@ export const signatureService = {
 
   /**
    * Get current user's signature status
+   * Can work with or without authentication when token is provided
    */
-  getStatus: async (): Promise<SignatureStatus> => {
-    console.log('📊 [SignatureService.getStatus] Fetching signature status...');
+  getStatus: async (token?: string): Promise<SignatureStatus | null> => {
+    console.log('📊 [SignatureService.getStatus] Fetching signature status...', { token });
     try {
-      const response = await api.get(`${BASE_URL}/status`);
+      let url = `${BASE_URL}/status`;
+      if (token) {
+        url += `?token=${token}`;
+      }
+
+      // ✅ Use publicApi for this endpoint (works without auth)
+      const response = await publicApi.get(url);
       console.log('📊 [SignatureService.getStatus] Response:', response);
 
       const statusData = response;
@@ -142,17 +155,25 @@ export const signatureService = {
       return statusData;
     } catch (error) {
       console.error('📊 [SignatureService.getStatus] Error fetching status:', error);
-      throw error;
+      // Return null instead of throwing for public access
+      return null;
     }
   },
 
   /**
    * Get current user's signature specimen
+   * Can work with or without authentication when token is provided
    */
-  getMySignature: async (): Promise<SignatureSpecimen | null> => {
-    console.log('📄 [SignatureService.getMySignature] Fetching user signature...');
+  getMySignature: async (token?: string): Promise<SignatureSpecimen | null> => {
+    console.log('📄 [SignatureService.getMySignature] Fetching user signature...', { token });
     try {
-      const response = await api.get(`${BASE_URL}/my-signature`);
+      let url = `${BASE_URL}/my-signature`;
+      if (token) {
+        url += `?token=${token}`;
+      }
+
+      // ✅ Use publicApi for this endpoint (works without auth)
+      const response = await publicApi.get(url);
       console.log('📄 [SignatureService.getMySignature] Response:', response);
 
       const signatureData = response;
@@ -170,9 +191,6 @@ export const signatureService = {
         console.log('📄 [SignatureService.getMySignature] Fixed image URL:', signatureData.signature_image_url);
       }
 
-      // QR code images are base64 data URLs - leave them as is
-      // Do NOT modify qr_code.image
-
       console.log('📄 [SignatureService.getMySignature] Returning signature:', {
         id: signatureData.id,
         hasImage: !!signatureData.signature_image_url,
@@ -182,31 +200,34 @@ export const signatureService = {
       return signatureData;
     } catch (error) {
       console.error('📄 [SignatureService.getMySignature] Error fetching signature:', error);
-      throw error;
+      // Return null instead of throwing for public access
+      return null;
     }
   },
 
   /**
    * Get QR code for a signature specimen
+   * PUBLIC - Works without authentication
    */
   getQR: async (specimenId: number): Promise<QRCodeData | null> => {
     console.log('📱 [SignatureService.getQR] Fetching QR code', { specimenId });
     try {
-      const response = await api.get(`${BASE_URL}/qr/${specimenId}`);
+      // ✅ Use publicApi for this endpoint (works without auth)
+      const response = await publicApi.get(`${BASE_URL}/qr/${specimenId}`);
       console.log('📱 [SignatureService.getQR] Response:', response);
 
       const qrData = response;
-      // QR code image is base64 - leave as is
       console.log('📱 [SignatureService.getQR] QR data:', qrData);
       return qrData;
     } catch (error) {
       console.error('📱 [SignatureService.getQR] Error fetching QR code:', error);
-      throw error;
+      return null;
     }
   },
 
   /**
    * Regenerate QR code for a signature specimen
+   * Requires authentication
    */
   regenerateQR: async (specimenId: number): Promise<QRCodeData> => {
     console.log('🔄 [SignatureService.regenerateQR] Regenerating QR', { specimenId });
@@ -215,7 +236,6 @@ export const signatureService = {
       console.log('🔄 [SignatureService.regenerateQR] Response:', response);
 
       const qrData = response.data;
-      // QR code image is base64 - leave as is
       console.log('🔄 [SignatureService.regenerateQR] QR data:', qrData);
       return qrData;
     } catch (error) {
@@ -226,6 +246,7 @@ export const signatureService = {
 
   /**
    * Delete a signature specimen
+   * Requires authentication
    */
   delete: async (specimenId: number): Promise<boolean> => {
     console.log('🗑️ [SignatureService.delete] Deleting signature', { specimenId });
@@ -248,6 +269,7 @@ export const signatureService = {
 
   /**
    * Admin - Get all pending signatures
+   * Requires authentication (Admin)
    */
   getPending: async (): Promise<SignatureSpecimen[]> => {
     console.log('⏳ [SignatureService.getPending] Fetching pending signatures...');
@@ -260,12 +282,10 @@ export const signatureService = {
         pendingData = response.data?.data || [];
       }
 
-      // Only fix signature image URLs - QR codes are base64 and should not be modified
       if (Array.isArray(pendingData)) {
         pendingData = pendingData.map(item => ({
           ...item,
           signature_image_url: getFullImageUrl(item.signature_image_url),
-          // QR code images are base64 - leave as is
           qr_code: item.qr_code,
         }));
       }
@@ -280,6 +300,7 @@ export const signatureService = {
 
   /**
    * Admin - Get all verified signatures
+   * Requires authentication (Admin)
    */
   getVerified: async (): Promise<SignatureSpecimen[]> => {
     console.log('✅ [SignatureService.getVerified] Fetching verified signatures...');
@@ -292,12 +313,10 @@ export const signatureService = {
         verifiedData = response.data?.data || [];
       }
 
-      // Only fix signature image URLs - QR codes are base64 and should not be modified
       if (Array.isArray(verifiedData)) {
         verifiedData = verifiedData.map(item => ({
           ...item,
           signature_image_url: getFullImageUrl(item.signature_image_url),
-          // QR code images are base64 - leave as is
           qr_code: item.qr_code,
         }));
       }
@@ -312,6 +331,7 @@ export const signatureService = {
 
   /**
    * Admin - Get signature statistics
+   * Requires authentication (Admin)
    */
   getStats: async (): Promise<SignatureStats> => {
     console.log('📊 [SignatureService.getStats] Fetching stats...');
@@ -328,12 +348,9 @@ export const signatureService = {
     }
   },
 
-  // ==========================================================
-  // 🆕 NEW: Get all signature verification logs (Admin only)
-  // ==========================================================
-
   /**
    * Admin - Get all signature verification logs
+   * Requires authentication (Admin)
    */
   getLogs: async (filters?: {
     action?: string;
@@ -344,7 +361,6 @@ export const signatureService = {
   }): Promise<SignatureVerificationLog[]> => {
     console.log('📋 [SignatureService.getLogs] Fetching verification logs...', filters);
     try {
-      // Build query string from filters
       const queryParams = new URLSearchParams();
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
@@ -360,7 +376,6 @@ export const signatureService = {
       const response = await api.get(url);
       console.log('📋 [SignatureService.getLogs] Response:', response);
 
-      // The backend returns { success: true, data: [...] }
       const logsData = response || response.data;
 
       console.log('📋 [SignatureService.getLogs] Logs data:', logsData);

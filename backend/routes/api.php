@@ -229,7 +229,7 @@ Route::prefix('v1')->group(function () {
       Route::get('/{id}', [DepartmentController::class, 'show']);
       Route::get('/{id}/users', [DepartmentController::class, 'users']);
 
-      Route::middleware(['role:ADMIN'])->group(function () {
+      Route::middleware(['role:ADMIN,HOD'])->group(function () {
         Route::post('/', [DepartmentController::class, 'store']);
         Route::put('/{id}', [DepartmentController::class, 'update']);
         Route::delete('/{id}', [DepartmentController::class, 'destroy']);
@@ -237,6 +237,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/deactivate', [DepartmentController::class, 'deactivate']);
         Route::post('/{id}/assign-hod', [DepartmentController::class, 'assignHOD']);
         Route::post('/{id}/remove-hod', [DepartmentController::class, 'removeHOD']);
+        // HOD-specific staff management routes
+        Route::get('{id}/available-staff', [DepartmentController::class, 'availableStaff'])->withoutMiddleware('role:ADMIN');
+        Route::get('{id}/staff-list', [DepartmentController::class, 'staffList'])->withoutMiddleware('role:ADMIN');;
+        Route::post('{id}/assign-staff', [DepartmentController::class, 'assignStaff'])->withoutMiddleware('role:ADMIN');;
+        Route::post('{id}/remove-staff', [DepartmentController::class, 'removeStaff'])->withoutMiddleware('role:ADMIN');;
+        Route::post('{id}/bulk-assign-staff', [DepartmentController::class, 'bulkAssignStaff'])->withoutMiddleware('role:ADMIN');;
       });
     });
 
@@ -646,14 +652,14 @@ Route::prefix('v1')->group(function () {
       // Public/User routes
       Route::post('upload', [SignatureController::class, 'upload']);
       Route::get('status', [SignatureController::class, 'status']);
-      Route::get('my-signature', [SignatureController::class, 'mySignature']);
+      Route::get('my-signature', [SignatureController::class, 'mySignature'])->withoutMiddleware('auth:sanctum');
       Route::get('qr/{specimenId}', [SignatureController::class, 'getQR']);
       Route::post('regenerate-qr/{specimenId}', [SignatureController::class, 'regenerateQR']);
       Route::delete('{specimenId}', [SignatureController::class, 'destroy']);
 
       // NEW: Route for the clean QR code scanning flow
       // This allows users to scan the QR code and hit the token endpoint
-      Route::get('token/{token}', [SignatureController::class, 'verifyByToken']);
+      Route::get('token/{token}', [SignatureController::class, 'verifyByToken'])->withoutMiddleware('auth:sanctum');
       // Admin-only routes
       Route::middleware(['role:ADMIN'])->group(function () {
         Route::post('verify/{specimenId}', [SignatureController::class, 'verify']);

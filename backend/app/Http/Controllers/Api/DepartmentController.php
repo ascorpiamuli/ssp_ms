@@ -562,4 +562,248 @@ class DepartmentController extends Controller
       ], 500);
     }
   }
+
+
+
+  // Add these methods to your existing DepartmentController.php
+
+  /**
+   * Get available staff for assignment (HOD only)
+   */
+  public function availableStaff(Request $request, $id)
+  {
+    Log::info('📋 DepartmentController::availableStaff - Fetching available staff for HOD', [
+      'department_id' => $id,
+      'user_id' => auth()->id()
+    ]);
+
+    try {
+      $hodId = auth()->id();
+      $staff = $this->departmentService->getAvailableStaffForAssignment($id, $hodId);
+
+      Log::info('✅ DepartmentController::availableStaff - Available staff fetched', [
+        'department_id' => $id,
+        'count' => $staff->count()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $staff,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ DepartmentController::availableStaff - Failed to fetch available staff', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'department_id' => $id
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get department staff list (HOD only)
+   */
+  public function staffList($id)
+  {
+    Log::info('📋 DepartmentController::staffList - Fetching department staff list', [
+      'department_id' => $id,
+      'user_id' => auth()->id()
+    ]);
+
+    try {
+      $hodId = auth()->id();
+      $staff = $this->departmentService->getDepartmentStaffList($id, $hodId);
+
+      Log::info('✅ DepartmentController::staffList - Staff list fetched', [
+        'department_id' => $id,
+        'count' => $staff->count()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => $staff,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ DepartmentController::staffList - Failed to fetch staff list', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'department_id' => $id
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Assign staff to department (HOD only)
+   */
+  public function assignStaff(Request $request, $id)
+  {
+    Log::info('📋 DepartmentController::assignStaff - Assigning staff to department', [
+      'department_id' => $id,
+      'staff_id' => $request->user_id,
+      'user_id' => auth()->id()
+    ]);
+
+    try {
+      $request->validate([
+        'user_id' => 'required|exists:users,id',
+      ]);
+
+      $hodId = auth()->id();
+      $this->departmentService->assignStaffToDepartment($id, $request->user_id, $hodId);
+
+      Log::info('✅ DepartmentController::assignStaff - Staff assigned successfully', [
+        'department_id' => $id,
+        'staff_id' => $request->user_id,
+        'hod_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Staff assigned to department successfully',
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('⚠️ DepartmentController::assignStaff - Validation failed', [
+        'errors' => $e->errors(),
+        'data' => $request->all()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      Log::error('❌ DepartmentController::assignStaff - Failed to assign staff', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'department_id' => $id,
+        'staff_id' => $request->user_id
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Remove staff from department (HOD only)
+   */
+  public function removeStaff(Request $request, $id)
+  {
+    Log::info('📋 DepartmentController::removeStaff - Removing staff from department', [
+      'department_id' => $id,
+      'staff_id' => $request->user_id,
+      'user_id' => auth()->id()
+    ]);
+
+    try {
+      $request->validate([
+        'user_id' => 'required|exists:users,id',
+      ]);
+
+      $hodId = auth()->id();
+      $this->departmentService->removeStaffFromDepartment($id, $request->user_id, $hodId);
+
+      Log::info('✅ DepartmentController::removeStaff - Staff removed successfully', [
+        'department_id' => $id,
+        'staff_id' => $request->user_id,
+        'hod_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Staff removed from department successfully',
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('⚠️ DepartmentController::removeStaff - Validation failed', [
+        'errors' => $e->errors(),
+        'data' => $request->all()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      Log::error('❌ DepartmentController::removeStaff - Failed to remove staff', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'department_id' => $id,
+        'staff_id' => $request->user_id
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Bulk assign staff to department (HOD only)
+   */
+  public function bulkAssignStaff(Request $request, $id)
+  {
+    Log::info('📋 DepartmentController::bulkAssignStaff - Bulk assigning staff to department', [
+      'department_id' => $id,
+      'user_ids' => $request->user_ids,
+      'user_id' => auth()->id()
+    ]);
+
+    try {
+      $request->validate([
+        'user_ids' => 'required|array',
+        'user_ids.*' => 'exists:users,id',
+      ]);
+
+      $hodId = auth()->id();
+      $this->departmentService->bulkAssignStaffToDepartment($id, $request->user_ids, $hodId);
+
+      Log::info('✅ DepartmentController::bulkAssignStaff - Bulk assignment completed', [
+        'department_id' => $id,
+        'count' => count($request->user_ids),
+        'hod_id' => auth()->id()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Staff assigned to department successfully',
+      ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+      Log::warning('⚠️ DepartmentController::bulkAssignStaff - Validation failed', [
+        'errors' => $e->errors(),
+        'data' => $request->all()
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Validation failed',
+        'errors' => $e->errors(),
+      ], 422);
+    } catch (\Exception $e) {
+      Log::error('❌ DepartmentController::bulkAssignStaff - Failed to assign staff', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'department_id' => $id,
+        'user_ids' => $request->user_ids
+      ]);
+
+      return response()->json([
+        'success' => false,
+        'message' => $e->getMessage(),
+      ], 500);
+    }
+  }
 }

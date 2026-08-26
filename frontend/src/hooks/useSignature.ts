@@ -9,7 +9,7 @@ import type {
   QRCodeData,
   QRCodeVerificationResult,
   SignatureStats,
-  SignatureVerificationLog, // ✅ Import the new type
+  SignatureVerificationLog,
 } from '@/types/signature.types';
 
 console.log('🔧 [useSignature] Hook module loaded');
@@ -19,21 +19,23 @@ console.log('🔧 [useSignature] Hook module loaded');
 // ============================================
 
 export const useSignatureStatus = (
-  options?: Omit<UseQueryOptions<SignatureStatus>, 'queryKey' | 'queryFn'>
+  token?: string,
+  options?: Omit<UseQueryOptions<SignatureStatus | null>, 'queryKey' | 'queryFn'>
 ) => {
-  console.log('🔧 [useSignatureStatus] Creating query');
+  console.log('🔧 [useSignatureStatus] Creating query', { token });
 
-  return useQuery({
-    queryKey: ['signature-status'],
+  return useQuery<SignatureStatus | null>({
+    queryKey: ['signature-status', token],
     queryFn: async () => {
-      console.log('🔧 [useSignatureStatus.queryFn] Executing...');
+      console.log('🔧 [useSignatureStatus.queryFn] Executing...', { token });
       try {
-        const result = await signatureService.getStatus();
+        const result = await signatureService.getStatus(token);
         console.log('🔧 [useSignatureStatus.queryFn] Service returned:', result);
         return result;
       } catch (error) {
         console.error('🔧 [useSignatureStatus.queryFn] Error:', error);
-        throw error;
+        // Return null instead of throwing for public access
+        return null;
       }
     },
     ...options,
@@ -41,21 +43,23 @@ export const useSignatureStatus = (
 };
 
 export const useMySignature = (
+  token?: string,
   options?: Omit<UseQueryOptions<SignatureSpecimen | null>, 'queryKey' | 'queryFn'>
 ) => {
-  console.log('🔧 [useMySignature] Creating query');
+  console.log('🔧 [useMySignature] Creating query', { token });
 
-  return useQuery({
-    queryKey: ['my-signature'],
+  return useQuery<SignatureSpecimen | null>({
+    queryKey: ['my-signature', token],
     queryFn: async () => {
-      console.log('🔧 [useMySignature.queryFn] Executing...');
+      console.log('🔧 [useMySignature.queryFn] Executing...', { token });
       try {
-        const result = await signatureService.getMySignature();
+        const result = await signatureService.getMySignature(token);
         console.log('🔧 [useMySignature.queryFn] Service returned:', result);
         return result;
       } catch (error) {
         console.error('🔧 [useMySignature.queryFn] Error:', error);
-        throw error;
+        // Return null instead of throwing for public access
+        return null;
       }
     },
     ...options,
@@ -68,7 +72,7 @@ export const useSignatureQR = (
 ) => {
   console.log('🔧 [useSignatureQR] Creating query', { specimenId });
 
-  return useQuery({
+  return useQuery<QRCodeData | null>({
     queryKey: ['signature-qr', specimenId],
     queryFn: async () => {
       console.log('🔧 [useSignatureQR.queryFn] Executing...', { specimenId });
@@ -90,7 +94,7 @@ export const usePendingSignatures = (
 ) => {
   console.log('🔧 [usePendingSignatures] Creating query');
 
-  return useQuery({
+  return useQuery<SignatureSpecimen[]>({
     queryKey: ['pending-signatures'],
     queryFn: async () => {
       console.log('🔧 [usePendingSignatures.queryFn] Executing...');
@@ -107,7 +111,7 @@ export const useVerifiedSignatures = (
 ) => {
   console.log('🔧 [useVerifiedSignatures] Creating query');
 
-  return useQuery({
+  return useQuery<SignatureSpecimen[]>({
     queryKey: ['verified-signatures'],
     queryFn: async () => {
       console.log('🔧 [useVerifiedSignatures.queryFn] Executing...');
@@ -124,7 +128,7 @@ export const useSignatureStats = (
 ) => {
   console.log('🔧 [useSignatureStats] Creating query');
 
-  return useQuery({
+  return useQuery<SignatureStats>({
     queryKey: ['signature-stats'],
     queryFn: async () => {
       console.log('🔧 [useSignatureStats.queryFn] Executing...');
@@ -152,7 +156,7 @@ export const useSignatureLogs = (
 ) => {
   console.log('🔧 [useSignatureLogs] Creating query', { filters });
 
-  return useQuery({
+  return useQuery<SignatureVerificationLog[]>({
     queryKey: ['signature-logs', filters],
     queryFn: async () => {
       console.log('🔧 [useSignatureLogs.queryFn] Executing...');
@@ -186,7 +190,7 @@ export const useUploadSignature = () => {
     },
     onError: (error: any) => {
       console.error('📤 [useUploadSignature.onError] Upload failed', error);
-      error(error?.response?.data?.message || 'Failed to upload signature');
+      success('An error occurred', error?.response?.data?.message || 'Failed to upload signature');
     },
   });
 };
@@ -246,12 +250,13 @@ export const useVerifySignatureByToken = () => {
 
   return useMutation({
     mutationFn: ({ token }: { token: string }) => {
+      console.log('🔑 [useVerifySignatureByToken.mutationFn] Verifying by token...', { token });
       return signatureService.verifyByToken(token);
     },
     onSuccess: (data) => {
       console.log('🔑 [useVerifySignatureByToken.onSuccess] Token verification successful', data);
       success('Signature found and verified successfully');
-      return data; // 👈 PASS THE DATA BACK UP
+      return data;
     },
     onError: (error: any) => {
       console.error('🔑 [useVerifySignatureByToken.onError] Token verification failed', error);
@@ -337,11 +342,11 @@ export const useDeleteSignature = () => {
 // COMBINED HOOKS FOR EASY USE
 // ============================================
 
-export const useSignature = () => {
-  console.log('🔧 [useSignature] Creating combined hook');
+export const useSignature = (token?: string) => {
+  console.log('🔧 [useSignature] Creating combined hook', { token });
 
-  const statusQuery = useSignatureStatus();
-  const mySignatureQuery = useMySignature();
+  const statusQuery = useSignatureStatus(token);
+  const mySignatureQuery = useMySignature(token);
 
   const signature = mySignatureQuery.data ?? null;
   const status = statusQuery.data ?? null;
@@ -413,7 +418,7 @@ export const useSignature = () => {
     // Data - keep both for flexibility
     signature,
     status,
-    effectiveSignature, // combined signature from both sources
+    effectiveSignature,
 
     // Loading states
     isLoading: statusQuery.isLoading || mySignatureQuery.isLoading,
@@ -461,7 +466,7 @@ export const useAdminSignature = () => {
   const pendingQuery = usePendingSignatures();
   const verifiedQuery = useVerifiedSignatures();
   const statsQuery = useSignatureStats();
-  const logsQuery = useSignatureLogs(); // ✅ NEW: Fetch logs
+  const logsQuery = useSignatureLogs();
 
   console.log('🔧 [useAdminSignature] Data:', {
     pendingCount: pendingQuery.data?.length || 0,
@@ -475,7 +480,7 @@ export const useAdminSignature = () => {
     pending: pendingQuery.data ?? [],
     verified: verifiedQuery.data ?? [],
     stats: statsQuery.data ?? null,
-    logs: logsQuery.data ?? [], // ✅ NEW: Expose logs
+    logs: logsQuery.data ?? [],
 
     // Loading states
     isLoading: pendingQuery.isLoading || verifiedQuery.isLoading || statsQuery.isLoading || logsQuery.isLoading,
@@ -494,12 +499,12 @@ export const useAdminSignature = () => {
     refetchPending: pendingQuery.refetch,
     refetchVerified: verifiedQuery.refetch,
     refetchStats: statsQuery.refetch,
-    refetchLogs: logsQuery.refetch, // ✅ NEW: Refetch logs
+    refetchLogs: logsQuery.refetch,
     refetch: () => {
       pendingQuery.refetch();
       verifiedQuery.refetch();
       statsQuery.refetch();
-      logsQuery.refetch(); // ✅ NEW
+      logsQuery.refetch();
     },
 
     // Helper methods

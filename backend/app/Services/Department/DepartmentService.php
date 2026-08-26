@@ -221,7 +221,7 @@ class DepartmentService extends BaseService
           $user->assignRole('HOD');
           Log::info('✅ HOD role assigned to user', [
             'user_id' => $userId,
-            'user_name' => $user->full_name
+            'user_name' => $user->first_name . ' ' . $user->last_name
           ]);
         }
 
@@ -384,6 +384,312 @@ class DepartmentService extends BaseService
     ]);
 
     return $departments;
+  }
+
+  /**
+   * Assign staff member to department (HOD only)
+   * HOD can only assign staff to their own department
+   */
+  public function assignStaffToDepartment(int $departmentId, int $userId, int $hodId): void
+  {
+    Log::info('🔍 DepartmentService::assignStaffToDepartment - Assigning staff to department', [
+      'department_id' => $departmentId,
+      'user_id' => $userId,
+      'hod_id' => $hodId
+    ]);
+
+    DB::transaction(function () use ($departmentId, $userId, $hodId) {
+      // Verify HOD belongs to this department
+      $department = Department::where('id', $departmentId)
+        ->where('hod_id', $hodId)
+        ->first();
+
+      if (!$department) {
+        Log::warning('⚠️ DepartmentService::assignStaffToDepartment - HOD not authorized for this department', [
+          'department_id' => $departmentId,
+          'hod_id' => $hodId
+        ]);
+        throw new \Exception('You are not authorized to manage this department.');
+      }
+
+      // Verify user exists and has STAFF role
+      $user = User::find($userId);
+      if (!$user) {
+        throw new \Exception('User not found.');
+      }
+
+      if (!$user->hasRole('STAFF')) {
+        throw new \Exception('User must have STAFF role to be assigned to department.');
+      }
+
+      // Check if user is already assigned to another department
+      if ($user->department_id && $user->department_id !== $departmentId) {
+        Log::warning('⚠️ DepartmentService::assignStaffToDepartment - User already assigned to another department', [
+          'user_id' => $userId,
+          'current_department_id' => $user->department_id,
+          'target_department_id' => $departmentId
+        ]);
+        throw new \Exception('User is already assigned to another department.');
+      }
+
+      // Assign user to department
+      $user->update(['department_id' => $departmentId]);
+
+      $userFullName = $user->first_name . ' ' . $user->last_name;
+
+      Log::info('✅ DepartmentService::assignStaffToDepartment - Staff assigned successfully', [
+        'department_id' => $departmentId,
+        'department_name' => $department->name,
+        'user_id' => $userId,
+        'user_name' => $userFullName,
+        'hod_id' => $hodId
+      ]);
+
+      // Log activity
+      $this->logActivity($department, 'STAFF_ASSIGNED', "Staff assigned to department: {$userFullName} (ID: {$userId})");
+    });
+  }
+
+  /**
+   * Remove staff member from department (HOD only)
+   */
+  public function removeStaffFromDepartment(int $departmentId, int $userId, int $hodId): void
+  {
+    Log::info('🔍 DepartmentService::removeStaffFromDepartment - Removing staff from department', [
+      'department_id' => $departmentId,
+      'user_id' => $userId,
+      'hod_id' => $hodId
+    ]);
+
+    DB::transaction(function () use ($departmentId, $userId, $hodId) {
+      // Verify HOD belongs to this department
+      $department = Department::where('id', $departmentId)
+        ->where('hod_id', $hodId)
+        ->first();
+
+      if (!$department) {
+        Log::warning('⚠️ DepartmentService::removeStaffFromDepartment - HOD not authorized for this department', [
+          'department_id' => $departmentId,
+          'hod_id' => $hodId
+        ]);
+        throw new \Exception('You are not authorized to manage this department.');
+      }
+
+      // Verify user exists and belongs to this department
+      $user = User::where('id', $userId)
+        ->where('department_id', $departmentId)
+        ->first();
+
+      if (!$user) {
+        throw new \Exception('User not found or not assigned to this department.');
+      }
+
+      // Remove user from department
+      $user->update(['department_id' => null]);
+
+      $userFullName = $user->first_name . ' ' . $user->last_name;
+
+      Log::info('✅ DepartmentService::removeStaffFromDepartment - Staff removed successfully', [
+        'department_id' => $departmentId,
+        'department_name' => $department->name,
+        'user_id' => $userId,
+        'user_name' => $userFullName,
+        'hod_id' => $hodId
+      ]);
+
+      // Log activity
+      $this->logActivity($department, 'STAFF_REMOVED', "Staff removed from department: {$userFullName} (ID: {$userId})");
+    });
+  }
+
+  /**
+   * Get all staff members available for assignment (not assigned to any department)
+   * HOD can only see staff that are not assigned to any department
+   */
+  public function getAvailableStaffForAssignment(int $departmentId, int $hodId)
+  {
+    Log::info('🔍 DepartmentService::getAvailableStaffForAssignment - Fetching available staff', [
+      'department_id' => $departmentId,
+      'hod_id' => $hodId
+    ]);
+
+    // Verify HOD belongs to this department
+    $department = Department::where('id', $departmentId)
+      ->where('hod_id', $hodId)
+      ->first();
+
+    if (!$department) {
+      Log::warning('⚠️ DepartmentService::getAvailableStaffForAssignment - HOD not authorized', [
+        'department_id' => $departmentId,
+        'hod_id' => $hodId
+      ]);
+      throw new \Exception('You are not authorized to manage this department.');
+    }
+
+    // Get all users with STAFF role that are not assigned to any department
+    $staff = User::role('STAFF')
+      ->whereNull('department_id')
+      ->orderBy('first_name')
+      ->orderBy('last_name')
+      ->get(['id', 'first_name', 'last_name', 'email', 'department_id']);
+
+    // Add full_name attribute to each user for frontend
+    $staff->each(function ($user) {
+      $user->full_name = $user->first_name . ' ' . $user->last_name;
+      $user->initials = strtoupper(substr($user->first_name, 0, 1) . substr($user->last_name, 0, 1));
+
+      // Add role info for frontend display
+      $role = $user->roles()->first();
+      if ($role) {
+        $user->role_label = $role->label ?? $role->name;
+        $user->role_display_name = $role->label ?? ucwords(str_replace('_', ' ', strtolower($role->name)));
+        $user->role_info = [
+          'id' => $role->id,
+          'name' => $role->name,
+          'label' => $role->label,
+          'description' => $role->description,
+          'guard_name' => $role->guard_name,
+        ];
+      }
+    });
+
+    Log::info('✅ DepartmentService::getAvailableStaffForAssignment - Available staff fetched', [
+      'department_id' => $departmentId,
+      'count' => $staff->count()
+    ]);
+
+    return $staff;
+  }
+
+  /**
+   * Get all staff members in a specific department (for HOD)
+   */
+  public function getDepartmentStaffList(int $departmentId, int $hodId)
+  {
+    Log::info('🔍 DepartmentService::getDepartmentStaffList - Fetching department staff list', [
+      'department_id' => $departmentId,
+      'hod_id' => $hodId
+    ]);
+
+    // Verify HOD belongs to this department
+    $department = Department::where('id', $departmentId)
+      ->where('hod_id', $hodId)
+      ->first();
+
+    if (!$department) {
+      Log::warning('⚠️ DepartmentService::getDepartmentStaffList - HOD not authorized', [
+        'department_id' => $departmentId,
+        'hod_id' => $hodId
+      ]);
+      throw new \Exception('You are not authorized to manage this department.');
+    }
+
+    // Get all STAFF users in this department
+    $staff = User::role('STAFF')
+      ->where('department_id', $departmentId)
+      ->orderBy('first_name')
+      ->orderBy('last_name')
+      ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'department_id', 'is_active']);
+
+    // Add full_name attribute to each user for frontend
+    $staff->each(function ($user) {
+      $user->full_name = $user->first_name . ' ' . $user->last_name;
+    });
+
+    Log::info('✅ DepartmentService::getDepartmentStaffList - Department staff list fetched', [
+      'department_id' => $departmentId,
+      'count' => $staff->count()
+    ]);
+
+    return $staff;
+  }
+
+  /**
+   * Check if HOD is authorized for a department
+   */
+  public function isHodAuthorized(int $departmentId, int $hodId): bool
+  {
+    $department = Department::where('id', $departmentId)
+      ->where('hod_id', $hodId)
+      ->exists();
+
+    Log::info('🔍 DepartmentService::isHodAuthorized - Authorization check', [
+      'department_id' => $departmentId,
+      'hod_id' => $hodId,
+      'authorized' => $department
+    ]);
+
+    return $department;
+  }
+
+  /**
+   * Bulk assign staff to department (HOD only)
+   */
+  public function bulkAssignStaffToDepartment(int $departmentId, array $userIds, int $hodId): void
+  {
+    Log::info('🔍 DepartmentService::bulkAssignStaffToDepartment - Bulk assigning staff', [
+      'department_id' => $departmentId,
+      'user_ids' => $userIds,
+      'hod_id' => $hodId
+    ]);
+
+    DB::transaction(function () use ($departmentId, $userIds, $hodId) {
+      // Verify HOD belongs to this department
+      $department = Department::where('id', $departmentId)
+        ->where('hod_id', $hodId)
+        ->first();
+
+      if (!$department) {
+        throw new \Exception('You are not authorized to manage this department.');
+      }
+
+      $assignedCount = 0;
+      $failedIds = [];
+
+      foreach ($userIds as $userId) {
+        try {
+          $user = User::find($userId);
+          if (!$user) {
+            $failedIds[] = $userId;
+            continue;
+          }
+
+          if (!$user->hasRole('STAFF')) {
+            $failedIds[] = $userId;
+            continue;
+          }
+
+          // Skip if already assigned to this department
+          if ($user->department_id === $departmentId) {
+            continue;
+          }
+
+          // Check if user is assigned to another department
+          if ($user->department_id) {
+            $failedIds[] = $userId;
+            continue;
+          }
+
+          $user->update(['department_id' => $departmentId]);
+          $assignedCount++;
+        } catch (\Exception $e) {
+          $failedIds[] = $userId;
+          Log::error('❌ DepartmentService::bulkAssignStaffToDepartment - Failed to assign user', [
+            'user_id' => $userId,
+            'error' => $e->getMessage()
+          ]);
+        }
+      }
+
+      Log::info('✅ DepartmentService::bulkAssignStaffToDepartment - Bulk assignment completed', [
+        'department_id' => $departmentId,
+        'assigned_count' => $assignedCount,
+        'failed_count' => count($failedIds)
+      ]);
+
+      // Log activity
+      $this->logActivity($department, 'BULK_STAFF_ASSIGNED', "Bulk assigned {$assignedCount} staff members to department");
+    });
   }
 
   /**

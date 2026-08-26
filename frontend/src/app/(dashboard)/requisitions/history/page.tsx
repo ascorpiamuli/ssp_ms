@@ -219,6 +219,7 @@ const safeEquals = (obj: any, path: string, target: string): boolean => {
   return String(value) === target;
 };
 
+// Stage weights for completion calculation (fallback only)
 const STAGE_WEIGHTS: Record<string, number> = {
   'initiated': 10,
   'quotation_in_progress': 25,
@@ -335,16 +336,30 @@ const hasProcurementStarted = (requisition: Requisition): boolean => {
   return requisition.is_procurement_created === true || requisition.procurement_created_at !== null;
 };
 
-const isProcurementComplete = (requisition: Requisition): boolean => {
+const isProcurementComplete = (requisition: Requisition, summary?: any): boolean => {
+  // Use backend data first
+  if (summary) {
+    const isCompleted = safeGet(summary, 'procurement.is_completed', false);
+    if (isCompleted) return true;
+  }
+  // Fallback to local check
   return requisition.is_procurement_created === true &&
     requisition.status === 'final_approved' &&
     (requisition.metadata?.payment_completed === true ||
       requisition.metadata?.cheque_issued === true);
 };
 
+// Get procurement progress from backend
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
 
+  // Use backend completion rate from metrics
+  const completionRate = safeGet(summary, 'metrics.completion_rate', null);
+  if (completionRate !== null && completionRate !== undefined) {
+    return Math.min(Math.max(completionRate, 0), 100);
+  }
+
+  // Fallback to stage-based calculation
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 100;
 
@@ -624,7 +639,7 @@ const ProcurementProgressIndicator = ({ requisition }: { requisition: Requisitio
   }
 
   const started = hasProcurementStarted(requisition);
-  const complete = isProcurementComplete(requisition);
+  const complete = isProcurementComplete(requisition, summary);
   const progress = getProcurementProgress(summary);
   const statusLabel = getProcurementStatusLabel(summary);
   const progressColor = getProcurementProgressColor(progress);
@@ -1434,7 +1449,7 @@ export default function RequisitionHistoryPage() {
   const data = filterSubmittedOnly(rawData);
   const isLoading = allRequisitionsQuery.isLoading || departmentsLoading;
 
-  // Build stats for StatsCards component
+  // Build stats for StatsCards component - using backend data
   const statsItems: StatCardItem[] = useMemo(() => {
     const submitted = rawData.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
     const total = submitted.length;
@@ -1454,6 +1469,7 @@ export default function RequisitionHistoryPage() {
     const returned = submitted.filter(r => r.status === 'returned').length;
     const cancelled = rawData.filter(r => r.status === 'cancelled').length;
 
+    // Procurement stats - using backend data
     const readyForProcurement = rawData.filter(r =>
       r.status === 'final_approved' &&
       !hasProcurementStarted(r) &&
@@ -1650,7 +1666,7 @@ export default function RequisitionHistoryPage() {
         </Card>
       )}
 
-      {/* Stats Cards - Using the component with no tags */}
+      {/* Stats Cards - tagOrientation set to none */}
       <StatsCards
         stats={statsItems}
         isLoading={isLoading}

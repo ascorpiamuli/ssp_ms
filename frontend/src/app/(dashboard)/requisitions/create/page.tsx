@@ -50,6 +50,20 @@ import {
   Calendar as CalendarIcon2,
   ShoppingCart,
   RefreshCw,
+  Minus,
+  Plus as PlusIcon,
+  Edit,
+  Eye,
+  Printer,
+  Download,
+  Share2,
+  Copy,
+  HelpCircle,
+  AlertTriangle,
+  Info as InfoIcon,
+  ChevronRight,
+  Lightbulb,
+  FileCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,7 +77,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -96,6 +110,7 @@ const DEBOUNCE_DELAY = 500;
 
 // HOD role identifiers
 const HOD_ROLES = ['hod', 'head_of_department'];
+const STAFF_ROLES = ['staff'];
 
 // Priority options with colors
 const PRIORITY_OPTIONS = [
@@ -114,35 +129,6 @@ const URGENCY_OPTIONS = [
   { value: 'routine', label: 'Routine', color: 'text-gray-400' },
   { value: 'urgent', label: 'Urgent', color: 'text-amber-500' },
   { value: 'critical', label: 'Critical', color: 'text-red-500' },
-];
-
-const BUDGET_SOURCE_OPTIONS = [
-  { value: 'recurrent', label: 'Recurrent', color: 'text-blue-500' },
-  { value: 'development', label: 'Development', color: 'text-emerald-500' },
-  { value: 'donor', label: 'Donor Funded', color: 'text-purple-500' },
-  { value: 'internal', label: 'Internal', color: 'text-amber-500' },
-];
-
-const FUNDING_SOURCE_OPTIONS = [
-  { value: 'government', label: 'Government', color: 'text-blue-500' },
-  { value: 'donor', label: 'Donor', color: 'text-red-500' },
-  { value: 'internal', label: 'Internal', color: 'text-emerald-500' },
-  { value: 'private', label: 'Private Sector', color: 'text-purple-500' },
-];
-
-const PROCUREMENT_METHOD_OPTIONS = [
-  { value: 'direct_purchase', label: 'Direct Purchase', color: 'text-blue-500' },
-  { value: 'request_for_quotation', label: 'Request for Quotation', color: 'text-amber-500' },
-  { value: 'tender', label: 'Tender', color: 'text-emerald-500' },
-  { value: 'framework_agreement', label: 'Framework Agreement', color: 'text-purple-500' },
-  { value: 'emergency_procurement', label: 'Emergency Procurement', color: 'text-red-500' },
-];
-
-const RISK_LEVEL_OPTIONS = [
-  { value: 'low', label: 'Low', color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-  { value: 'medium', label: 'Medium', color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  { value: 'high', label: 'High', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
-  { value: 'critical', label: 'Critical', color: 'text-red-600', bg: 'bg-red-200 dark:bg-red-900/50' },
 ];
 
 // ============================================
@@ -218,6 +204,19 @@ const isUserHOD = (user: any): boolean => {
   return false;
 };
 
+const isUserStaff = (user: any): boolean => {
+  if (!user) return false;
+  if (user.roles && Array.isArray(user.roles)) {
+    return user.roles.some((r: any) =>
+      STAFF_ROLES.includes(r?.toLowerCase?.() || r?.name?.toLowerCase?.() || '')
+    );
+  }
+  if (user.role) {
+    return STAFF_ROLES.includes(user.role.toLowerCase());
+  }
+  return false;
+};
+
 const findUserHODDepartment = (user: any, departments: Department[]): Department | null => {
   if (!user || !departments || departments.length === 0) return null;
   const hodDepartment = departments.find(dept => dept.hod_id === user.id);
@@ -232,7 +231,7 @@ const findUserHODDepartment = (user: any, departments: Department[]): Department
 };
 
 // ============================================
-// MEMOIZED ITEM ROW COMPONENT
+// ITEM ROW COMPONENT
 // ============================================
 
 interface ItemRowProps {
@@ -240,12 +239,22 @@ interface ItemRowProps {
   item: any;
   onChange: (index: number, field: string, value: any) => void;
   onRemove: (index: number) => void;
+  onAdd: () => void;
   canRemove: boolean;
-  suppliers: any[];
+  isFirst: boolean;
 }
 
-const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }: ItemRowProps) => {
+const ItemRow = memo(({
+  index,
+  item,
+  onChange,
+  onRemove,
+  onAdd,
+  canRemove,
+  isFirst
+}: ItemRowProps) => {
   const total = (item.quantity || 0) * (item.estimated_unit_cost || 0);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleChange = useCallback((field: string, value: any) => {
     onChange(index, field, value);
@@ -255,79 +264,76 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
     onRemove(index);
   }, [index, onRemove]);
 
+  const handleAdd = useCallback(() => {
+    onAdd();
+  }, [onAdd]);
+
+  const toggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev);
+  }, []);
+
   return (
-    <div className="relative group border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 rounded-xl p-4 bg-white dark:bg-gray-900 hover:shadow-lg transition-all duration-300">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={handleRemove}
-        disabled={!canRemove}
-        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 rounded-lg"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+    <div className={cn(
+      "border-b border-gray-200 dark:border-gray-700 py-2 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors",
+      isFirst && "bg-blue-50/30 dark:bg-blue-900/10"
+    )}>
+      {/* Main Row */}
+      <div className="grid grid-cols-12 gap-2 items-center">
+        {/* Item Number */}
+        <div className="col-span-1">
+          <span className="text-xs font-medium text-muted-foreground">{index + 1}.</span>
+        </div>
 
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-      </div>
-
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-12 md:col-span-3 space-y-1">
-          <Label className="text-xs text-muted-foreground">
-            Item Name <span className="text-red-500">*</span>
-          </Label>
+        {/* Item Name */}
+        <div className="col-span-3">
           <Input
-            placeholder="Enter item name"
+            placeholder="Item name"
             value={item.item_name || ''}
             onChange={(e) => handleChange('item_name', e.target.value)}
-            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+            className={cn(
+              "h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg",
+              isFirst && "border-blue-300 dark:border-blue-700"
+            )}
           />
         </div>
 
-        <div className="col-span-12 md:col-span-3 space-y-1">
-          <Label className="text-xs text-muted-foreground">Description</Label>
+        {/* Description */}
+        <div className="col-span-3">
           <Input
-            placeholder="Item description"
+            placeholder="Description"
             value={item.description || ''}
             onChange={(e) => handleChange('description', e.target.value)}
-            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+            className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1">
-          <Label className="text-xs text-muted-foreground">
-            Qty <span className="text-red-500">*</span>
-          </Label>
+        {/* Quantity */}
+        <div className="col-span-1">
           <Input
             type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="0"
+            step="1"
+            min="1"
+            placeholder="Qty"
             value={item.quantity || ''}
-            onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 0)}
-            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg text-center"
+            onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 1)}
+            className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg text-center"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1">
-          <Label className="text-xs text-muted-foreground">
-            Unit <span className="text-red-500">*</span>
-          </Label>
+        {/* Unit */}
+        <div className="col-span-1">
           <Input
-            placeholder="e.g., Each"
+            placeholder="Unit"
             value={item.unit_of_measure || ''}
             onChange={(e) => handleChange('unit_of_measure', e.target.value)}
-            className="h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+            className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
           />
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1">
-          <Label className="text-xs text-muted-foreground">
-            Unit Cost <span className="text-red-500">*</span>
-          </Label>
+        {/* Unit Cost */}
+        <div className="col-span-1">
           <div className="relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">KES</span>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">KES</span>
             <Input
               type="number"
               step="0.01"
@@ -335,102 +341,127 @@ const ItemRow = memo(({ index, item, onChange, onRemove, canRemove, suppliers }:
               placeholder="0.00"
               value={item.estimated_unit_cost || ''}
               onChange={(e) => handleChange('estimated_unit_cost', parseFloat(e.target.value) || 0)}
-              className="pl-11 h-9 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+              className="pl-8 h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
             />
           </div>
         </div>
 
-        <div className="col-span-3 md:col-span-1 space-y-1">
-          <Label className="text-xs text-muted-foreground">Total</Label>
-          <div className="h-9 flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3">
-            KES {total.toFixed(2)}
+        {/* Total */}
+        <div className="col-span-1">
+          <div className="h-8 flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2">
+            {total.toFixed(2)}
           </div>
+        </div>
+
+        {/* Actions */}
+        <div className="col-span-1 flex items-center justify-end gap-1">
+          {/* Expand/Collapse Button */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleExpand}
+            className="h-7 w-7 p-0 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-muted-foreground"
+            title={isExpanded ? "Hide details" : "Show details"}
+          >
+            <ChevronDown className={cn(
+              "h-4 w-4 transition-transform duration-200",
+              isExpanded && "rotate-180"
+            )} />
+          </Button>
+
+          {/* Add Item Button */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleAdd}
+            className="h-7 w-7 p-0 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 text-muted-foreground"
+            title="Add new item"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+
+          {/* Remove Item Button */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleRemove}
+            disabled={!canRemove}
+            className="h-7 w-7 p-0 rounded-lg hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 disabled:opacity-30"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
 
-      {/* Expandable details */}
-      <details className="mt-2">
-        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-          More options
-        </summary>
-        <div className="mt-2 grid grid-cols-12 gap-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
-          <div className="col-span-12 md:col-span-3 space-y-1">
-            <Label className="text-xs text-muted-foreground">Specifications</Label>
-            <Input
-              placeholder="Specifications"
-              value={item.specifications || ''}
-              onChange={(e) => handleChange('specifications', e.target.value)}
-              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
-            />
-          </div>
-          <div className="col-span-4 md:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground">Catalog #</Label>
-            <Input
-              placeholder="Catalog"
-              value={item.catalog_number || ''}
-              onChange={(e) => handleChange('catalog_number', e.target.value)}
-              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
-            />
-          </div>
-          <div className="col-span-4 md:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground">Manufacturer</Label>
-            <Input
-              placeholder="Manufacturer"
-              value={item.manufacturer || ''}
-              onChange={(e) => handleChange('manufacturer', e.target.value)}
-              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
-            />
-          </div>
-          <div className="col-span-4 md:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground">Model</Label>
-            <Input
-              placeholder="Model"
-              value={item.model_number || ''}
-              onChange={(e) => handleChange('model_number', e.target.value)}
-              className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
-            />
-          </div>
-          <div className="col-span-12 md:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground">Supplier</Label>
-            <Select
-              value={item.supplier_id?.toString() || undefined}
-              onValueChange={(value) => handleChange('supplier_id', value && value !== 'none' ? parseInt(value) : null)}
-            >
-              <SelectTrigger className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg">
-                <SelectValue placeholder="Supplier" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {suppliers && suppliers.length > 0 && suppliers.map((s: any) => (
-                  <SelectItem key={s.id} value={s.id.toString()}>
-                    {s.company_name || s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-1 space-y-1 flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id={`item-${index}-inventory`}
-              checked={item.is_inventory_item || false}
-              onChange={(e) => handleChange('is_inventory_item', e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <Label htmlFor={`item-${index}-inventory`} className="text-xs cursor-pointer">
-              Inventory
-            </Label>
-            {item.is_inventory_item && (
+      {/* Expanded Details Row */}
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-3 space-y-1">
+              <Label className="text-xs text-muted-foreground">Specifications</Label>
               <Input
-                placeholder="Inv code"
-                value={item.inventory_code || ''}
-                onChange={(e) => handleChange('inventory_code', e.target.value)}
-                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg flex-1"
+                placeholder="Specifications"
+                value={item.specifications || ''}
+                onChange={(e) => handleChange('specifications', e.target.value)}
+                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
               />
-            )}
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs text-muted-foreground">Catalog Number</Label>
+              <Input
+                placeholder="Catalog #"
+                value={item.catalog_number || ''}
+                onChange={(e) => handleChange('catalog_number', e.target.value)}
+                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs text-muted-foreground">Manufacturer</Label>
+              <Input
+                placeholder="Manufacturer"
+                value={item.manufacturer || ''}
+                onChange={(e) => handleChange('manufacturer', e.target.value)}
+                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs text-muted-foreground">Model</Label>
+              <Input
+                placeholder="Model"
+                value={item.model_number || ''}
+                onChange={(e) => handleChange('model_number', e.target.value)}
+                className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs text-muted-foreground">Inventory Item</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`item-${index}-inventory`}
+                  checked={item.is_inventory_item || false}
+                  onChange={(e) => handleChange('is_inventory_item', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <Label htmlFor={`item-${index}-inventory`} className="text-xs cursor-pointer">
+                  Track inventory
+                </Label>
+                {item.is_inventory_item && (
+                  <Input
+                    placeholder="Inventory code"
+                    value={item.inventory_code || ''}
+                    onChange={(e) => handleChange('inventory_code', e.target.value)}
+                    className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg flex-1"
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </details>
+      )}
     </div>
   );
 });
@@ -458,52 +489,76 @@ const DraftRestoreAlert = memo(({
 
   return (
     <Alert className="mb-6 border-amber-500/50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-xl">
-      <div className="flex items-start gap-3">
-        <RotateCcw className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-            💾 Draft found!
-          </p>
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            You have an unsaved requisition draft from{' '}
-            <span className="font-medium">{timeString}</span>.
-          </p>
-          <div className="flex gap-3 mt-3">
-            <Button
-              size="sm"
-              onClick={onRestore}
-              className="gap-1.5 h-8 bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Restore Draft
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                onDiscard();
-                setIsVisible(false);
-              }}
-              className="h-8 rounded-lg"
-            >
-              Discard Draft
-            </Button>
-          </div>
+      <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+      <AlertTitle className="text-amber-800 dark:text-amber-300">Draft Found</AlertTitle>
+      <AlertDescription className="text-amber-700 dark:text-amber-400">
+        You have an unsaved requisition draft from {timeString}.
+        <div className="flex gap-3 mt-3">
+          <Button
+            size="sm"
+            onClick={onRestore}
+            className="gap-1.5 h-8 bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Restore Draft
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              onDiscard();
+              setIsVisible(false);
+            }}
+            className="h-8 rounded-lg"
+          >
+            Discard Draft
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsVisible(false)}
-          className="h-7 w-7 p-0 rounded-lg"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+      </AlertDescription>
     </Alert>
   );
 });
 
 DraftRestoreAlert.displayName = 'DraftRestoreAlert';
+
+// ============================================
+// INFO ALERTS
+// ============================================
+
+const InfoAlerts = memo(() => (
+  <div className="space-y-3 mb-6">
+    <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 rounded-xl">
+      <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      <AlertTitle className="text-blue-800 dark:text-blue-300 text-sm font-medium">How to Create a Requisition</AlertTitle>
+      <AlertDescription className="text-blue-700 dark:text-blue-400 text-sm">
+        Fill in the requisition details below. Start by adding items to your requisition.
+        Each item requires a name, quantity, unit of measure, and estimated cost.
+        You can add multiple items by clicking the plus button on each row.
+      </AlertDescription>
+    </Alert>
+
+    <Alert className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl">
+      <FileCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+      <AlertTitle className="text-emerald-800 dark:text-emerald-300 text-sm font-medium">Approval Workflow</AlertTitle>
+      <AlertDescription className="text-emerald-700 dark:text-emerald-400 text-sm">
+        Once submitted, your requisition will go through the approval workflow:
+        HOD Review, Accountant Review, Principal Review, and Director / Finance Administrator's Approval.
+        You can track the status of your requisition in the Requisitions Dashboard.
+      </AlertDescription>
+    </Alert>
+
+    <Alert className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-xl">
+      <InfoIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+      <AlertTitle className="text-amber-800 dark:text-amber-300 text-sm font-medium">Draft Auto-Save</AlertTitle>
+      <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+        Your progress is automatically saved as a draft. If you leave the page,
+        you can restore your draft when you return. Drafts are stored locally in your browser.
+      </AlertDescription>
+    </Alert>
+  </div>
+));
+
+InfoAlerts.displayName = 'InfoAlerts';
 
 // ============================================
 // SELECT COMPONENT
@@ -519,8 +574,6 @@ interface SimpleSelectProps {
 }
 
 const SimpleSelect = memo(({ value, onValueChange, placeholder, options, disabled, className }: SimpleSelectProps) => {
-  const selectedOption = options.find(opt => opt.value === value);
-
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectTrigger className={cn("h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg", className)}>
@@ -581,6 +634,7 @@ export default function CreateRequisitionPage() {
   }, [suppliersData]);
 
   const isHOD = useMemo(() => isUserHOD(user), [user]);
+  const isStaff = useMemo(() => isUserStaff(user), [user]);
 
   const hodDepartment = useMemo(() => {
     if (!isHOD || !user || departments.length === 0) return null;
@@ -625,8 +679,7 @@ export default function CreateRequisitionPage() {
     requisition_number: requisitionNumber,
     title: '',
     description: '',
-    department_id: isHOD ? userDepartmentId : '',
-    supplier_id: '',
+    department_id: isHOD || isStaff ? userDepartmentId : '',
     priority: 'medium' as const,
     type: 'normal' as const,
     urgency: 'routine' as const,
@@ -657,14 +710,13 @@ export default function CreateRequisitionPage() {
         catalog_number: '',
         manufacturer: '',
         model_number: '',
-        supplier_id: null as number | null,
         is_inventory_item: false,
         inventory_code: '',
         tax_rate: 0,
         discount_percentage: 0,
       },
     ],
-  }), [user, requisitionNumber, isHOD, userDepartmentId]);
+  }), [user, requisitionNumber, isHOD, isStaff, userDepartmentId]);
 
   const [formData, setFormData] = useState(getDefaultFormState);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -678,14 +730,14 @@ export default function CreateRequisitionPage() {
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!isPageLoading && user && isHOD && !departmentsLoading) {
+    if (!isPageLoading && user && (isHOD || isStaff) && !departmentsLoading) {
       if (!userDepartmentId) {
-        setError('You are not assigned as HOD to any department. Please contact your administrator.');
+        setError('You are not assigned to any department. Please contact your administrator.');
       } else {
         setError(null);
       }
     }
-  }, [isPageLoading, user, isHOD, userDepartmentId, departmentsLoading]);
+  }, [isPageLoading, user, isHOD, isStaff, userDepartmentId, departmentsLoading]);
 
   useEffect(() => {
     if (!isPageLoading && user) {
@@ -727,13 +779,13 @@ export default function CreateRequisitionPage() {
   const restoreDraft = useCallback(() => {
     const savedData = loadFromLocalStorage();
     if (savedData) {
-      if (isHOD && userDepartmentId) {
+      if ((isHOD || isStaff) && userDepartmentId) {
         savedData.department_id = userDepartmentId;
       }
       setFormData(savedData);
       setHasDraft(false);
     }
-  }, [isHOD, userDepartmentId]);
+  }, [isHOD, isStaff, userDepartmentId]);
 
   const discardDraft = useCallback(() => {
     clearLocalStorage();
@@ -748,10 +800,10 @@ export default function CreateRequisitionPage() {
         ...prev,
         requester_name: user.full_name || user.email || '',
         requester_email: user.email || '',
-        department_id: isHOD ? userDepartmentId : prev.department_id,
+        department_id: (isHOD || isStaff) ? userDepartmentId : prev.department_id,
       }));
     }
-  }, [user, isInitialLoad, isHOD, userDepartmentId]);
+  }, [user, isInitialLoad, isHOD, isStaff, userDepartmentId]);
 
   const handleItemChange = useCallback((index: number, field: string, value: any) => {
     setFormData(prev => {
@@ -776,7 +828,6 @@ export default function CreateRequisitionPage() {
           catalog_number: '',
           manufacturer: '',
           model_number: '',
-          supplier_id: null,
           is_inventory_item: false,
           inventory_code: '',
           tax_rate: 0,
@@ -860,7 +911,6 @@ export default function CreateRequisitionPage() {
       title: formData.title,
       description: formData.description || undefined,
       department_id: parseInt(formData.department_id),
-      supplier_id: formData.supplier_id ? parseInt(formData.supplier_id) : undefined,
       priority: formData.priority as any,
       type: formData.type as any,
       urgency: formData.urgency as any,
@@ -892,7 +942,6 @@ export default function CreateRequisitionPage() {
           catalog_number: item.catalog_number || undefined,
           manufacturer: item.manufacturer || undefined,
           model_number: item.model_number || undefined,
-          supplier_id: item.supplier_id || undefined,
           is_inventory_item: item.is_inventory_item,
           inventory_code: item.inventory_code || undefined,
           tax_rate: item.tax_rate,
@@ -917,6 +966,13 @@ export default function CreateRequisitionPage() {
     });
   }, [formData, validateForm, createRequisition, router]);
 
+  // Sort items: empty items first, then filled items
+  const sortedItems = useMemo(() => {
+    const emptyItems = formData.items.filter(item => !item.item_name.trim());
+    const filledItems = formData.items.filter(item => item.item_name.trim());
+    return [...emptyItems, ...filledItems];
+  }, [formData.items]);
+
   if (authLoading || isPageLoading || departmentsLoading || suppliersLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -932,7 +988,7 @@ export default function CreateRequisitionPage() {
     return null;
   }
 
-  if (isHOD && !departmentsLoading && !userDepartmentId) {
+  if ((isHOD || isStaff) && !departmentsLoading && !userDepartmentId) {
     return (
       <PageTemplate
         title="Create New Requisition"
@@ -946,7 +1002,7 @@ export default function CreateRequisitionPage() {
             <Alert variant="destructive" className="rounded-lg border-red-200 dark:border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                You are not assigned as HOD to any department. Please contact your administrator to set up your department.
+                You are not assigned to any department. Please contact your administrator.
               </AlertDescription>
             </Alert>
             <div className="flex justify-center mt-6">
@@ -965,7 +1021,7 @@ export default function CreateRequisitionPage() {
     <PageTemplate
       title="Create New Requisition"
       description="Fill in the details below to create a new requisition request"
-      icon={<List className="h-5 w-5 text-blue-600" />}
+      icon={<List className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
       background="gradient"
       variant="default"
       breadcrumbs={[
@@ -1019,6 +1075,9 @@ export default function CreateRequisitionPage() {
         </CardHeader>
 
         <CardContent className="pt-6">
+          {/* Info Alerts */}
+          <InfoAlerts />
+
           {error && (
             <Alert variant="destructive" className="mb-6 rounded-lg border-red-200 dark:border-red-800">
               <AlertCircle className="h-4 w-4" />
@@ -1030,7 +1089,7 @@ export default function CreateRequisitionPage() {
             <Alert className="mb-6 rounded-lg border-green-500/50 bg-green-50 dark:bg-green-950/20">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
-                ✅ Requisition created successfully! Redirecting...
+                Requisition created successfully. Redirecting...
               </AlertDescription>
             </Alert>
           )}
@@ -1111,29 +1170,31 @@ export default function CreateRequisitionPage() {
                   <Select
                     value={formData.department_id || undefined}
                     onValueChange={(value) => {
-                      if (isHOD) return;
+                      if (isHOD || isStaff) return;
                       handleChange('department_id', value);
                     }}
-                    disabled={isHOD || isSubmitting || success || isCreating}
+                    disabled={isHOD || isStaff || isSubmitting || success || isCreating}
                   >
                     <SelectTrigger className={cn(
                       "h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700",
-                      isHOD && "bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-80",
+                      (isHOD || isStaff) && "bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-80",
                       formErrors.department_id && "border-red-500"
                     )}>
-                      <SelectValue placeholder={isHOD ? `${userDepartmentName} (locked)` : "Select department"} />
+                      <SelectValue placeholder={isHOD ? `${userDepartmentName} (HOD)` : isStaff ? `${userDepartmentName} (Staff)` : "Select department"} />
                     </SelectTrigger>
                     <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                      {isHOD && userDepartmentId && departments.find(d => d.id.toString() === userDepartmentId) && (
+                      {(isHOD || isStaff) && userDepartmentId && departments.find(d => d.id.toString() === userDepartmentId) && (
                         <SelectItem value={userDepartmentId}>
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-blue-500" />
                             {departments.find(d => d.id.toString() === userDepartmentId)?.name}
-                            <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">HOD</Badge>
+                            <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
+                              {isHOD ? 'HOD' : 'Staff'}
+                            </Badge>
                           </div>
                         </SelectItem>
                       )}
-                      {!isHOD && departments.length > 0 && departments.map((dept: Department) => (
+                      {!isHOD && !isStaff && departments.length > 0 && departments.map((dept: Department) => (
                         <SelectItem key={dept.id} value={dept.id.toString()}>
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -1143,40 +1204,13 @@ export default function CreateRequisitionPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {isHOD && (
+                  {(isHOD || isStaff) && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
                       <Shield className="h-3 w-3 text-blue-500" />
-                      As HOD, you can only create requisitions for <strong className="text-gray-700 dark:text-gray-300">{userDepartmentName}</strong>
+                      As {isHOD ? 'HOD' : 'Staff'}, you can only create requisitions for <strong className="text-gray-700 dark:text-gray-300">{userDepartmentName}</strong>
                     </p>
                   )}
                   {formErrors.department_id && <p className="text-sm text-red-500 mt-1">{formErrors.department_id}</p>}
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    Preferred Supplier
-                  </Label>
-                  <Select
-                    value={formData.supplier_id || undefined}
-                    onValueChange={(value) => handleChange('supplier_id', value)}
-                    disabled={isSubmitting || success || isCreating}
-                  >
-                    <SelectTrigger className="h-11 text-sm rounded-lg dark:bg-gray-900 dark:border-gray-700">
-                      <SelectValue placeholder="Select supplier (optional)" />
-                    </SelectTrigger>
-                    <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                      <SelectItem value="none">None</SelectItem>
-                      {suppliers.length > 0 && suppliers.map((supplier: any) => (
-                        <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-muted-foreground" />
-                            {supplier.company_name || supplier.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="space-y-1">
@@ -1282,7 +1316,7 @@ export default function CreateRequisitionPage() {
 
               <div className="space-y-1">
                 <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <InfoIcon className="h-4 w-4 text-muted-foreground" />
                   Description
                 </Label>
                 <Textarea
@@ -1317,39 +1351,43 @@ export default function CreateRequisitionPage() {
 
             {/* Items Section */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Requisition Items</h3>
-                  <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5">
-                    {formData.items.filter(i => i.item_name.trim()).length}
-                  </Badge>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addItem}
-                  disabled={isSubmitting || success || isCreating}
-                  className="gap-2 rounded-lg"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Item
-                </Button>
+              <div className="flex items-center gap-2.5">
+                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Requisition Items</h3>
+                <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5">
+                  {formData.items.filter(i => i.item_name.trim()).length}
+                </Badge>
               </div>
 
-              <div className="space-y-3">
-                {formData.items.map((item, index) => (
-                  <ItemRow
-                    key={index}
-                    index={index}
-                    item={item}
-                    onChange={handleItemChange}
-                    onRemove={removeItem}
-                    canRemove={formData.items.length > 1}
-                    suppliers={suppliers}
-                  />
-                ))}
+              {/* Items Table Header */}
+              <div className="grid grid-cols-12 gap-2 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs font-medium text-muted-foreground">
+                <div className="col-span-1">#</div>
+                <div className="col-span-3">Item Name <span className="text-red-500">*</span></div>
+                <div className="col-span-3">Description</div>
+                <div className="col-span-1 text-center">Qty <span className="text-red-500">*</span></div>
+                <div className="col-span-1 text-center">Unit <span className="text-red-500">*</span></div>
+                <div className="col-span-1 text-center">Unit Cost <span className="text-red-500">*</span></div>
+                <div className="col-span-1 text-center">Total</div>
+                <div className="col-span-1 text-right">Actions</div>
+              </div>
+
+              <div className="space-y-0">
+                {sortedItems.map((item, index) => {
+                  const realIndex = formData.items.indexOf(item);
+                  const isFirst = index === 0 && !item.item_name.trim();
+                  return (
+                    <ItemRow
+                      key={realIndex}
+                      index={realIndex}
+                      item={item}
+                      onChange={handleItemChange}
+                      onRemove={removeItem}
+                      onAdd={addItem}
+                      canRemove={formData.items.length > 1}
+                      isFirst={isFirst}
+                    />
+                  );
+                })}
               </div>
 
               {formErrors.items && (
@@ -1357,10 +1395,15 @@ export default function CreateRequisitionPage() {
               )}
 
               {/* Total Summary */}
-              <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Total Items: <span className="font-medium text-gray-700 dark:text-gray-300">{formData.items.filter(i => i.item_name.trim()).length}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Total Quantity: <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {formData.items.reduce((sum, i) => sum + (i.quantity || 0), 0)}
+                    </span>
                   </p>
                 </div>
                 <div className="text-right">
@@ -1414,7 +1457,12 @@ export default function CreateRequisitionPage() {
                     value={formData.budget_source || ''}
                     onValueChange={(value) => handleChange('budget_source', value)}
                     placeholder="Select budget source"
-                    options={BUDGET_SOURCE_OPTIONS}
+                    options={[
+                      { value: 'recurrent', label: 'Recurrent' },
+                      { value: 'development', label: 'Development' },
+                      { value: 'donor', label: 'Donor Funded' },
+                      { value: 'internal', label: 'Internal' },
+                    ]}
                     disabled={isSubmitting || success || isCreating}
                   />
                 </div>
@@ -1428,7 +1476,12 @@ export default function CreateRequisitionPage() {
                     value={formData.funding_source || ''}
                     onValueChange={(value) => handleChange('funding_source', value)}
                     placeholder="Select funding source"
-                    options={FUNDING_SOURCE_OPTIONS}
+                    options={[
+                      { value: 'government', label: 'Government' },
+                      { value: 'donor', label: 'Donor' },
+                      { value: 'internal', label: 'Internal' },
+                      { value: 'private', label: 'Private Sector' },
+                    ]}
                     disabled={isSubmitting || success || isCreating}
                   />
                 </div>
@@ -1456,7 +1509,13 @@ export default function CreateRequisitionPage() {
                     value={formData.procurement_method || ''}
                     onValueChange={(value) => handleChange('procurement_method', value)}
                     placeholder="Select procurement method"
-                    options={PROCUREMENT_METHOD_OPTIONS}
+                    options={[
+                      { value: 'direct_purchase', label: 'Direct Purchase' },
+                      { value: 'request_for_quotation', label: 'Request for Quotation' },
+                      { value: 'tender', label: 'Tender' },
+                      { value: 'framework_agreement', label: 'Framework Agreement' },
+                      { value: 'emergency_procurement', label: 'Emergency Procurement' },
+                    ]}
                     disabled={isSubmitting || success || isCreating}
                   />
                 </div>
@@ -1497,7 +1556,12 @@ export default function CreateRequisitionPage() {
                     value={formData.risk_level}
                     onValueChange={(value) => handleChange('risk_level', value)}
                     placeholder="Select risk level"
-                    options={RISK_LEVEL_OPTIONS}
+                    options={[
+                      { value: 'low', label: 'Low', color: 'text-emerald-500' },
+                      { value: 'medium', label: 'Medium', color: 'text-amber-500' },
+                      { value: 'high', label: 'High', color: 'text-red-500' },
+                      { value: 'critical', label: 'Critical', color: 'text-red-600' },
+                    ]}
                     disabled={isSubmitting || success || isCreating}
                   />
                 </div>
@@ -1581,7 +1645,7 @@ export default function CreateRequisitionPage() {
         </CardContent>
 
         <CardFooter className="border-t border-gray-200 dark:border-gray-700 py-3 px-6 bg-gray-50 dark:bg-gray-800/30 rounded-b-xl">
-          <div className="flex justify-between items-center w-full">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
             <p className="text-xs text-muted-foreground">
               <span className="text-red-500">*</span> Required fields. All requisitions go through an approval workflow.
             </p>

@@ -37,38 +37,46 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  const content = (
+    <QueryProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+        storageKey="theme"
+      >
+        <ThemeManager>
+          <NetworkStatusProvider>
+            <OfflineHandler>
+              <ProgressBarProvider>
+                <ScrollRestoration>
+                  <ToastProvider>
+                    <main className="min-h-screen bg-white dark:bg-gray-900">
+                      {children}
+                    </main>
+                    <GlobalModals />
+                  </ToastProvider>
+                </ScrollRestoration>
+              </ProgressBarProvider>
+            </OfflineHandler>
+          </NetworkStatusProvider>
+        </ThemeManager>
+      </ThemeProvider>
+    </QueryProvider>
+  );
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <ErrorBoundary>
-          <QueryProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-              storageKey="theme"
-            >
-              <ThemeManager>
-                <NetworkStatusProvider>
-                  <OfflineHandler>
-                    <ProgressBarProvider>
-                      <ScrollRestoration>
-                        <ToastProvider>
-                          <main className="min-h-screen bg-white dark:bg-gray-900">
-                            {children}
-                          </main>
-                          <GlobalModals />
-                        </ToastProvider>
-                      </ScrollRestoration>
-                    </ProgressBarProvider>
-                  </OfflineHandler>
-                </NetworkStatusProvider>
-              </ThemeManager>
-            </ThemeProvider>
-          </QueryProvider>
-        </ErrorBoundary>
+        {isDevelopment ? (
+          <ErrorBoundary>{content}</ErrorBoundary>
+        ) : (
+          content
+        )}
       </body>
     </html>
-  )
+  );
 }

@@ -60,11 +60,10 @@ class SignatureController extends Controller
         $specimenId,
         $verifier,
         $request->input('notes'),
-        $request->ip(),       // ✅ Pass IP
-        $request->userAgent() // ✅ Pass User Agent
+        $request->ip(),
+        $request->userAgent()
       );
 
-      // Get QR Code (which now contains the token)
       $qr = $this->signatureService->getSignatureQR($specimenId);
 
       return response()->json([
@@ -81,7 +80,6 @@ class SignatureController extends Controller
         'message' => 'Signature specimen not found. It may have been deleted.',
       ], 404);
     } catch (SignatureAlreadyVerifiedException $e) {
-      // Gracefully handle if an admin tries to verify an already verified one
       $qr = $this->signatureService->getSignatureQR($specimenId);
       return response()->json([
         'success' => true,
@@ -109,8 +107,8 @@ class SignatureController extends Controller
     $result = $this->signatureService->verifySignatureByQR(
       $qrData,
       $verifier,
-      $request->ip(),       // ✅ Pass IP
-      $request->userAgent() // ✅ Pass User Agent
+      $request->ip(),
+      $request->userAgent()
     );
 
     return response()->json([
@@ -122,6 +120,7 @@ class SignatureController extends Controller
 
   /**
    * NEW: Verify signature by Secure Token (For the clean QR URL flow)
+   * This is a PUBLIC endpoint - no authentication required
    */
   public function verifyByToken(Request $request, string $token): JsonResponse
   {
@@ -177,7 +176,7 @@ class SignatureController extends Controller
             'verified_at'         => $specimen->verified_at?->toISOString(),
             'verification_notes'  => $specimen->verification_notes,
             'verification_method' => $specimen->verification_method,
-            'document_reference'  => 'SIG-' . $specimen->id, // Only public reference
+            'document_reference'  => 'SIG-' . $specimen->id,
 
             // Public verifier details
             'verified_by' => [
@@ -209,73 +208,109 @@ class SignatureController extends Controller
   }
 
   /**
-   * Reject a signature specimen
-   */
-  public function reject(Request $request, int $specimenId): JsonResponse
-  {
-    try {
-      $rejector = $request->user();
-      $reason = $request->input('reason');
-
-      $rejected = $this->signatureService->rejectSignature(
-        $specimenId,
-        $rejector,
-        $reason,
-        $request->ip(),       // ✅ Pass IP
-        $request->userAgent() // ✅ Pass User Agent
-      );
-
-      return response()->json([
-        'success' => true,
-        'message' => 'Signature rejected successfully',
-        'data' => new SignatureResource($rejected),
-      ]);
-    } catch (SignatureNotFoundException $e) {
-      return response()->json([
-        'success' => false,
-        'message' => 'Signature specimen not found.',
-      ], 404);
-    }
-  }
-
-  /**
    * Get current user's signature status
+   * PUBLIC - Works with or without authentication
    */
   public function status(Request $request): JsonResponse
   {
-    $user = $request->user();
-    $status = $this->signatureService->getUserSignatureStatus($user);
+    try {
+      $user = $request->user();
 
-    return response()->json([
-      'success' => true,
-      'data' => $status,
-    ]);
+      // If user is not authenticated, try to find by token
+      if (!$user) {
+        $token = $request->query('token') ?? $request->input('token');
+        if ($token) {
+          $specimen = SignatureSpecimen::where('qr_verification_token', $token)->first();
+          if ($specimen) {
+            $user = $specimen->user;
+          }
+        }
+      }
+
+      if (!$user) {
+        return response()->json([
+          'success' => false,
+          'message' => 'User not authenticated and no valid token provided',
+          'data' => null,
+        ], 401);
+      }
+
+      $status = $this->signatureService->getUserSignatureStatus($user);
+
+      return response()->json([
+        'success' => true,
+        'data' => $status,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('Error getting signature status: ' . $e->getMessage());
+
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to get signature status',
+        'data' => null,
+      ], 500);
+    }
   }
 
   /**
    * Get current user's signature
+   * PUBLIC - Works with or without authentication
    */
   public function mySignature(Request $request): JsonResponse
   {
-    $user = $request->user();
-    $signature = $this->signatureService->getUserSignature($user);
+    try {
+      $user = $request->user();
 
-    if (!$signature) {
+      // If user is not authenticated, try to find by token
+      if (!$user) {
+        $token = $request->query('token') ?? $request->input('token');
+        Log::info('🔍 [mySignature] No authenticated user, checking token', ['token_present' => !!$token]);
+
+        if ($token) {
+          $specimen = SignatureSpecimen::where('qr_verification_token', $token)->first();
+          if ($specimen) {
+            $user = $specimen->user;
+            Log::info('🔍 [mySignature] Found user via token', ['user_id' => $user?->id]);
+          }
+        }
+      }
+
+      if (!$user) {
+        return response()->json([
+          'success' => false,
+          'message' => 'User not authenticated and no valid token provided',
+          'data' => null,
+        ], 401);
+      }
+
+      $signature = $this->signatureService->getUserSignature($user);
+
+      if (!$signature) {
+        return response()->json([
+          'success' => true,
+          'message' => 'No verified signature found',
+          'data' => null,
+        ]);
+      }
+
       return response()->json([
         'success' => true,
-        'message' => 'No verified signature found',
-        'data' => null,
+        'data' => new SignatureResource($signature),
       ]);
-    }
+    } catch (\Exception $e) {
+      Log::error('Error getting my signature: ' . $e->getMessage());
 
-    return response()->json([
-      'success' => true,
-      'data' => new SignatureResource($signature),
-    ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to get signature: ' . $e->getMessage(),
+        'data' => null,
+      ], 500);
+    }
   }
 
   /**
    * Get signature QR code
+   * PUBLIC - Works with or without authentication
    */
   public function getQR(Request $request, int $specimenId): JsonResponse
   {
@@ -310,17 +345,25 @@ class SignatureController extends Controller
 
   /**
    * Regenerate QR Code
+   * Requires authentication
    */
   public function regenerateQR(Request $request, int $specimenId): JsonResponse
   {
     try {
       $user = $request->user();
 
+      if (!$user) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Authentication required to regenerate QR codes',
+        ], 401);
+      }
+
       $qr = $this->signatureService->regenerateQR(
         $specimenId,
         $user,
-        $request->ip(),       // ✅ Pass IP
-        $request->userAgent() // ✅ Pass User Agent
+        $request->ip(),
+        $request->userAgent()
       );
 
       return response()->json([
@@ -343,11 +386,20 @@ class SignatureController extends Controller
 
   /**
    * Delete signature
+   * Requires authentication
    */
   public function destroy(Request $request, int $specimenId): JsonResponse
   {
     try {
       $user = $request->user();
+
+      if (!$user) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Authentication required to delete signatures',
+        ], 401);
+      }
+
       $result = $this->signatureService->deleteSignature($specimenId, $user);
 
       if (!$result) {
@@ -436,10 +488,6 @@ class SignatureController extends Controller
     ]);
   }
 
-  // ==========================================================
-  // 🆕 NEW METHOD: Get all signature verification logs
-  // ==========================================================
-
   /**
    * Get all signature verification logs (Admin only)
    */
@@ -447,8 +495,6 @@ class SignatureController extends Controller
   {
     try {
       $filters = $request->only(['action', 'status', 'user_id', 'date_from', 'date_to']);
-
-      // Optional: Filter out null/empty values
       $filters = array_filter($filters, fn($value) => !is_null($value) && $value !== '');
 
       $logs = $this->signatureService->getVerificationLogs($filters);

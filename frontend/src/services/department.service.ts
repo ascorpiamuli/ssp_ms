@@ -14,7 +14,19 @@ export interface UpdateDepartmentData {
   is_active?: boolean
 }
 
+export interface StaffAssignmentData {
+  user_id: number
+}
+
+export interface BulkStaffAssignmentData {
+  user_ids: number[]
+}
+
 export class DepartmentService {
+  // ============================================
+  // PUBLIC / GENERAL ENDPOINTS
+  // ============================================
+
   // GET /departments/active (public)
   static async getActiveDepartments() {
     console.log('🔍 [DepartmentService] Fetching active departments...')
@@ -79,6 +91,10 @@ export class DepartmentService {
       throw error
     }
   }
+
+  // ============================================
+  // ADMIN ONLY ENDPOINTS
+  // ============================================
 
   // POST /departments (Admin only)
   static async createDepartment(data: CreateDepartmentData) {
@@ -150,7 +166,6 @@ export class DepartmentService {
   static async assignHOD(id: number, hod_id: number) {
     console.log(`🔍 [DepartmentService] Assigning HOD to department ${id}:`, { hod_id })
     try {
-      // The backend expects the field name to be 'hod_id'
       const response = await api.post(`/departments/${id}/assign-hod`, {
         hod_id
       })
@@ -171,6 +186,80 @@ export class DepartmentService {
       return response
     } catch (error) {
       console.error(`❌ [DepartmentService] Error removing HOD from department ${id}:`, error)
+      throw error
+    }
+  }
+
+  // ============================================
+  // HOD ONLY ENDPOINTS - STAFF MANAGEMENT
+  // ============================================
+
+  // GET /departments/{id}/available-staff (HOD only)
+  // Fetch staff members available for assignment (not assigned to any department)
+  static async getAvailableStaff(id: number) {
+    console.log(`🔍 [DepartmentService] Fetching available staff for department ${id}...`)
+    try {
+      const response = await api.get(`/departments/${id}/available-staff`)
+      console.log(`✅ [DepartmentService] Available staff fetched for department ${id}:`, response)
+      return response
+    } catch (error) {
+      console.error(`❌ [DepartmentService] Error fetching available staff for department ${id}:`, error)
+      throw error
+    }
+  }
+
+  // GET /departments/{id}/staff-list (HOD only)
+  // Fetch all staff members currently assigned to the department
+  static async getDepartmentStaffList(id: number) {
+    console.log(`🔍 [DepartmentService] Fetching staff list for department ${id}...`)
+    try {
+      const response = await api.get(`/departments/${id}/staff-list`)
+      console.log(`✅ [DepartmentService] Staff list fetched for department ${id}:`, response)
+      return response
+    } catch (error) {
+      console.error(`❌ [DepartmentService] Error fetching staff list for department ${id}:`, error)
+      throw error
+    }
+  }
+
+  // POST /departments/{id}/assign-staff (HOD only)
+  // Assign a single staff member to the department
+  static async assignStaffToDepartment(id: number, user_id: number) {
+    console.log(`🔍 [DepartmentService] Assigning staff ${user_id} to department ${id}...`)
+    try {
+      const response = await api.post(`/departments/${id}/assign-staff`, { user_id })
+      console.log(`✅ [DepartmentService] Staff ${user_id} assigned to department ${id}:`, response)
+      return response
+    } catch (error) {
+      console.error(`❌ [DepartmentService] Error assigning staff to department ${id}:`, error)
+      throw error
+    }
+  }
+
+  // POST /departments/{id}/remove-staff (HOD only)
+  // Remove a single staff member from the department
+  static async removeStaffFromDepartment(id: number, user_id: number) {
+    console.log(`🔍 [DepartmentService] Removing staff ${user_id} from department ${id}...`)
+    try {
+      const response = await api.post(`/departments/${id}/remove-staff`, { user_id })
+      console.log(`✅ [DepartmentService] Staff ${user_id} removed from department ${id}:`, response)
+      return response
+    } catch (error) {
+      console.error(`❌ [DepartmentService] Error removing staff from department ${id}:`, error)
+      throw error
+    }
+  }
+
+  // POST /departments/{id}/bulk-assign-staff (HOD only)
+  // Bulk assign multiple staff members to the department
+  static async bulkAssignStaffToDepartment(id: number, user_ids: number[]) {
+    console.log(`🔍 [DepartmentService] Bulk assigning staff to department ${id}:`, user_ids)
+    try {
+      const response = await api.post(`/departments/${id}/bulk-assign-staff`, { user_ids })
+      console.log(`✅ [DepartmentService] Staff assigned to department ${id}:`, response)
+      return response
+    } catch (error) {
+      console.error(`❌ [DepartmentService] Error bulk assigning staff to department ${id}:`, error)
       throw error
     }
   }

@@ -673,26 +673,18 @@ export const navigationSections: NavigationSection[] = [
 
   // 11. PROFILE
   {
-    id: 'profile',
-    title: 'Profile',
-    icon: getIcon('User'),
+    id: 'department-settings',
+    title: 'Department Settings',
+    icon: getIcon('Settings'),
     defaultOpen: false,
     items: [
       {
-        id: 'my_profile',
-        name: 'My Profile',
-        href: '/profile',
-        icon: getIcon('User'),
-        description: 'View and edit profile',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
-      },
-      {
-        id: 'account_settings',
-        name: 'Account Settings',
-        href: '/profile/settings',
-        icon: getIcon('Settings'),
-        description: 'Account settings, security, and preferences',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
+        id: 'staff-management',
+        name: 'Staff Management',
+        href: '/department/staff-management',
+        icon: getIcon('FIle'),
+        description: 'Manage and assign staff to Depts',
+        roles: ['admin', 'hod']
       }
     ]
   },

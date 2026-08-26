@@ -41,43 +41,9 @@ import {
   DollarSign,
   Package,
   Layers,
-  Grid,
-  List,
   Filter,
-  Heart,
-  ThumbsUp,
-  ThumbsDown,
-  Share2,
-  Bookmark,
-  Flag,
-  Camera,
-  Video,
-  Music,
-  Code,
-  Cloud,
-  Database,
-  Server,
-  Wifi,
-  Bluetooth,
-  Battery,
-  Lightbulb,
-  HeartPulse,
-  Brain,
-  Cpu,
-  HardDrive,
-  Monitor,
-  Smartphone,
-  Tablet,
-  Laptop,
-  Headphones,
-  Speaker,
-  Mic,
-  MailIcon,
-  GlobeIcon,
-  ClockIcon,
-  Settings,
-  Menu,
-  MoreHorizontal,
+  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -133,20 +99,21 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Checkbox } from '@/components/ui/checkbox'
 
 // UI Components
 import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards'
 import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
+import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag'
+import {motion} from 'framer-motion'
 
 // ============================================
 // TYPES
@@ -298,300 +265,11 @@ const getUserInitials = (name: string) => {
 }
 
 // ============================================
-// VIEW SUPPLIER MODAL
-// ============================================
-
-const ViewSupplierModal = ({
-  isOpen,
-  onClose,
-  supplier
-}: {
-  isOpen: boolean
-  onClose: () => void
-  supplier: ExtendedSupplier | null
-}) => {
-  if (!isOpen || !supplier) return null
-
-  const StatusBadge = getStatusBadge(supplier.status)
-  const StatusIcon = StatusBadge.icon
-
-  const infoCards: {
-    title: string
-    icon: any
-    items: {
-      label: string
-      value: string
-      isBadge?: boolean
-      isLink?: boolean
-    }[]
-  }[] = [
-      {
-        title: 'Company Information',
-        icon: Building,
-        items: [
-          { label: 'Company Name', value: supplier.company_name },
-          { label: 'Registration Number', value: supplier.company_registration },
-          { label: 'Tax ID / PIN', value: supplier.tax_id || 'Not set' },
-          { label: 'Category', value: supplier.category_label || getCategoryLabel(supplier.category), isBadge: true },
-        ]
-      },
-      {
-        title: 'Contact Details',
-        icon: Phone,
-        items: [
-          { label: 'Email', value: supplier.company_email, isLink: true },
-          { label: 'Phone', value: supplier.company_phone || 'Not set' },
-          { label: 'Website', value: supplier.company_website || 'Not set', isLink: true },
-          { label: 'Address', value: supplier.full_address || 'Not set' },
-        ]
-      },
-      {
-        title: 'Contact Person',
-        icon: UserIcon,
-        items: [
-          { label: 'Name', value: supplier.contact_person_full_name || 'Not set' },
-          { label: 'Email', value: supplier.contact_person_email || 'Not set', isLink: true },
-          { label: 'Phone', value: supplier.contact_person_phone || 'Not set' },
-        ]
-      },
-      {
-        title: 'Banking Information',
-        icon: CreditCard,
-        items: [
-          { label: 'Bank Name', value: supplier.bank_name || 'Not set' },
-          { label: 'Branch', value: supplier.bank_branch || 'Not set' },
-          { label: 'Account Number', value: supplier.bank_account || 'Not set' },
-          { label: 'Preferred Currency', value: supplier.preferred_currency || 'KES' },
-        ]
-      },
-      {
-        title: 'User Account',
-        icon: UserIcon,
-        items: [
-          { label: 'User', value: supplier.user?.full_name || 'N/A' },
-          { label: 'Email', value: supplier.user?.email || 'N/A', isLink: true },
-          { label: 'Phone', value: supplier.user?.phone || 'N/A' },
-        ]
-      },
-    ]
-
-  const modalContent = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl relative"
-        onClick={e => e.stopPropagation()}
-      >
-        <WrappedCornerTag label="SUPPLIER" color="blue" position="top-left" size="lg" />
-
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 rounded-t-2xl pt-8">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                {supplier.company_logo ? (
-                  <div className="h-16 w-16 rounded-2xl overflow-hidden ring-4 ring-blue-100 dark:ring-blue-900/30 shadow-lg">
-                    <Image
-                      src={supplier.company_logo}
-                      alt={supplier.company_name}
-                      width={64}
-                      height={64}
-                      className="object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg ring-4 ring-blue-100 dark:ring-blue-900/30">
-                    {supplier.company_name?.[0] || 'S'}
-                  </div>
-                )}
-                <div className="absolute -bottom-1 -right-1">
-                  <Badge className={cn("border font-medium", getStatusColor(supplier.status))}>
-                    <StatusIcon className="h-3 w-3 mr-1" />
-                    {supplier.status_label || supplier.status}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {supplier.company_name}
-                </h2>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <Badge className={cn("font-medium border", getCategoryColor(supplier.category))}>
-                    {supplier.category_label || getCategoryLabel(supplier.category)}
-                  </Badge>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    • Registered {formatTimeAgo(supplier.created_at)}
-                  </span>
-                  {supplier.is_blacklisted && supplier.blacklist_reason && (
-                    <Badge variant="outline" className="border-red-400 text-red-600 dark:text-red-400">
-                      <Ban className="h-3 w-3 mr-1" />
-                      Blacklisted
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              <XCircle className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Registration</p>
-              <p className="font-semibold text-gray-900 dark:text-white">{supplier.company_registration}</p>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Year Established</p>
-              <p className="font-semibold text-gray-900 dark:text-white">{supplier.established_year || 'N/A'}</p>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Employees</p>
-              <p className="font-semibold text-gray-900 dark:text-white">{supplier.employee_count || 'N/A'}</p>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Annual Revenue</p>
-              <p className="font-semibold text-gray-900 dark:text-white">{supplier.formatted_annual_revenue || 'N/A'}</p>
-            </div>
-          </div>
-
-          {/* Info Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {infoCards.map((card, idx) => {
-              const Icon = card.icon
-              return (
-                <Card key={idx} className="border border-gray-200 dark:border-gray-700">
-                  <CardContent className="pt-6 space-y-2">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Icon className="h-4 w-4 text-blue-500" />
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{card.title}</h3>
-                    </div>
-                    {card.items.map((item, i) => (
-                      <div key={i} className="flex justify-between items-center py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{item.label}</span>
-                        {item.isBadge ? (
-                          <Badge className={cn("text-xs font-medium", getCategoryColor(supplier.category))}>
-                            {item.value}
-                          </Badge>
-                        ) : item.isLink && item.value !== 'Not set' && item.value !== 'N/A' ? (
-                          <a
-                            href={item.value.includes('@') ? `mailto:${item.value}` : item.value}
-                            target={!item.value.includes('@') ? '_blank' : undefined}
-                            rel={!item.value.includes('@') ? 'noopener noreferrer' : undefined}
-                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                          >
-                            {item.value}
-                            {!item.value.includes('@') && item.value !== 'Not set' && <ExternalLink className="h-3 w-3" />}
-                          </a>
-                        ) : (
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            {item.value}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-
-          {/* Company Description */}
-          {supplier.description && (
-            <Card className="mt-6 border border-gray-200 dark:border-gray-700">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText className="h-4 w-4 text-blue-500" />
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Company Description</h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  {supplier.description}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Certifications */}
-          {supplier.certifications_array && supplier.certifications_array.length > 0 && (
-            <Card className="mt-6 border border-gray-200 dark:border-gray-700">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Award className="h-4 w-4 text-blue-500" />
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Certifications</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {supplier.certifications_array.map((cert) => (
-                    <Badge key={cert} variant="secondary" className="px-3 py-1.5 text-xs rounded-full border border-gray-200 dark:border-gray-700">
-                      <Award className="h-3 w-3 mr-1 text-amber-500" />
-                      {cert}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Blacklist Info */}
-          {supplier.is_blacklisted && supplier.blacklist_reason && (
-            <Card className="mt-6 border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <Ban className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Reason for Blacklisting</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{supplier.blacklist_reason}</p>
-                    {supplier.blacklisted_at && (
-                      <p className="text-xs text-gray-500 mt-2">Blacklisted on {formatDate(supplier.blacklisted_at)}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <button
-            onClick={onClose}
-            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
-          >
-            Close
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-
-  if (typeof document !== 'undefined') {
-    return createPortal(
-      <AnimatePresence>
-        {isOpen && modalContent}
-      </AnimatePresence>,
-      document.body
-    )
-  }
-
-  return null
-}
-
-// ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function AdminSuppliersPage() {
+  const router = useRouter()
   const { user: currentUser, hasPermission } = useAuthContext()
 
   const {
@@ -644,7 +322,6 @@ export default function AdminSuppliersPage() {
 
   const [selectedSupplier, setSelectedSupplier] = useState<ExtendedSupplier | null>(null)
   const [selectedSuppliers, setSelectedSuppliers] = useState<number[]>([])
-  const [showViewDialog, setShowViewDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [showBlacklistDialog, setShowBlacklistDialog] = useState(false)
@@ -833,6 +510,10 @@ export default function AdminSuppliersPage() {
     }
   }
 
+  const handleRowClick = (supplierId: number) => {
+    router.push(`/admin/suppliers/${supplierId}`)
+  }
+
   const isLoading = suppliersLoading || categoriesLoading
 
   if (!canManageSuppliers) {
@@ -912,20 +593,20 @@ export default function AdminSuppliersPage() {
       }
     >
       <div className="space-y-6">
-        {/* Stats Cards */}
+        {/* Stats Cards - tagOrientation set to none */}
         <StatsCards
           stats={statsItems}
           isLoading={isLoading}
           columns={5}
           variant="default"
           formatCompact={true}
-          tagOrientation="wrapped"
-          tagPosition="top-left"
+          tagOrientation="none"
         />
 
         {/* Filters */}
-        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900">
-          <CardContent className="p-4">
+        <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 relative">
+          <HorizontalCornerTag label="FILTERS" color="blue" position="top-left" size="sm" variant="rounded" />
+          <CardContent className="p-4 pt-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
                 <div className="relative">
@@ -1038,11 +719,18 @@ export default function AdminSuppliersPage() {
                       const isBlacklisted = supplier.status === 'BLACKLISTED'
 
                       return (
-                        <TableRow key={supplier.id} className={cn(
-                          "hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group",
-                          isBlacklisted && "bg-red-50/30 dark:bg-red-900/5"
-                        )}>
-                          <TableCell>
+                        <motion.tr
+                          key={supplier.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.03 * suppliers.indexOf(supplier) }}
+                          className={cn(
+                            "hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group cursor-pointer border-b dark:border-gray-700/50",
+                            isBlacklisted && "bg-red-50/30 dark:bg-red-900/5"
+                          )}
+                          onClick={() => handleRowClick(supplier.id)}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               checked={selectedSuppliers.includes(supplier.id)}
                               onCheckedChange={(checked) => handleSelectSupplier(supplier.id, !!checked)}
@@ -1079,6 +767,7 @@ export default function AdminSuppliersPage() {
                                       </Tooltip>
                                     </TooltipProvider>
                                   )}
+                                  <ChevronRight className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
@@ -1141,7 +830,7 @@ export default function AdminSuppliersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1149,10 +838,7 @@ export default function AdminSuppliersPage() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                      onClick={() => {
-                                        setSelectedSupplier(supplier)
-                                        setShowViewDialog(true)
-                                      }}
+                                      onClick={() => handleRowClick(supplier.id)}
                                     >
                                       <Eye className="h-4 w-4 text-gray-500" />
                                     </Button>
@@ -1211,7 +897,7 @@ export default function AdminSuppliersPage() {
                               </DropdownMenu>
                             </div>
                           </TableCell>
-                        </TableRow>
+                        </motion.tr>
                       )
                     })
                   )}
@@ -1220,7 +906,8 @@ export default function AdminSuppliersPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 gap-2">
             <div className="text-sm text-gray-500">
               Showing <span className="font-medium text-gray-700 dark:text-gray-300">{suppliers.length}</span> of{' '}
               <span className="font-medium text-gray-700 dark:text-gray-300">{safeSuppliersList.length}</span> suppliers
@@ -1265,264 +952,224 @@ export default function AdminSuppliersPage() {
       </div>
 
       {/* ============================================
-          MODALS - Rendered using Portal
+          MODALS - Properly Centered
           ============================================ */}
 
-      {/* View Supplier Modal */}
-      <ViewSupplierModal
-        isOpen={showViewDialog}
-        onClose={() => {
-          setShowViewDialog(false)
-          setSelectedSupplier(null)
-        }}
-        supplier={selectedSupplier}
-      />
-
       {/* Delete Modal */}
-      {showDeleteDialog && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
-              <WrappedCornerTag label="DELETE" color="red" position="top-left" size="sm" />
-              <DialogHeader className="pt-6">
-                <DialogTitle className="flex items-center gap-2 text-red-600">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Supplier
-                </DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this supplier? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              {selectedSupplier && (
-                <div className="py-4">
-                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                      {selectedSupplier.company_name?.[0] || 'S'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedSupplier.company_name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {selectedSupplier.company_email}
-                      </p>
-                    </div>
-                  </div>
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Supplier
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this supplier? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSupplier && (
+            <div className="py-4">
+              <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  {selectedSupplier.company_name?.[0] || 'S'}
                 </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2 rounded-xl" disabled={isMutating}>
-                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* Bulk Delete Modal */}
-      {showBulkDeleteDialog && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
-              <WrappedCornerTag label="BULK DELETE" color="red" position="top-left" size="sm" />
-              <DialogHeader className="pt-6">
-                <DialogTitle className="flex items-center gap-2 text-red-600">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Selected Suppliers
-                </DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete {selectedSuppliers.length} selected suppliers?
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={handleBulkDeleteSuppliers} className="gap-2 rounded-xl" disabled={isMutating}>
-                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Delete All
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* Blacklist Modal */}
-      {showBlacklistDialog && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          <Dialog open={showBlacklistDialog} onOpenChange={setShowBlacklistDialog}>
-            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
-              <WrappedCornerTag label="BLACKLIST" color="red" position="top-left" size="sm" />
-              <DialogHeader className="pt-6">
-                <DialogTitle className="flex items-center gap-2 text-red-600">
-                  <Ban className="h-5 w-5" />
-                  Blacklist Supplier
-                </DialogTitle>
-                <DialogDescription>
-                  Please provide a reason for blacklisting this supplier.
-                </DialogDescription>
-              </DialogHeader>
-              {selectedSupplier && (
-                <div className="py-4 space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                      {selectedSupplier.company_name?.[0] || 'S'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedSupplier.company_name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {selectedSupplier.company_email}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="blacklist-reason" className="text-sm font-medium">
-                      Reason <span className="text-red-500">*</span>
-                    </Label>
-                    <Textarea
-                      id="blacklist-reason"
-                      placeholder="Enter the reason for blacklisting..."
-                      value={blacklistReason}
-                      onChange={(e) => setBlacklistReason(e.target.value)}
-                      className="min-h-[100px] rounded-xl"
-                    />
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowBlacklistDialog(false)} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleBlacklistSupplier}
-                  className="gap-2 rounded-xl"
-                  disabled={isMutating || !blacklistReason.trim()}
-                >
-                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                  Blacklist
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* Bulk Blacklist Modal */}
-      {showBulkBlacklistDialog && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          <Dialog open={showBulkBlacklistDialog} onOpenChange={setShowBulkBlacklistDialog}>
-            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
-              <WrappedCornerTag label="BULK BLACKLIST" color="red" position="top-left" size="sm" />
-              <DialogHeader className="pt-6">
-                <DialogTitle className="flex items-center gap-2 text-red-600">
-                  <Ban className="h-5 w-5" />
-                  Blacklist Selected Suppliers
-                </DialogTitle>
-                <DialogDescription>
-                  Please provide a reason for blacklisting {selectedSuppliers.length} selected suppliers.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bulk-blacklist-reason" className="text-sm font-medium">
-                    Reason <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    id="bulk-blacklist-reason"
-                    placeholder="Enter the reason for blacklisting..."
-                    value={bulkBlacklistReason}
-                    onChange={(e) => setBulkBlacklistReason(e.target.value)}
-                    className="min-h-[100px] rounded-xl"
-                  />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {selectedSupplier.company_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {selectedSupplier.company_email}
+                  </p>
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowBulkBlacklistDialog(false)} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleBulkBlacklistSuppliers}
-                  className="gap-2 rounded-xl"
-                  disabled={isMutating || !bulkBlacklistReason.trim()}
-                >
-                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                  Blacklist All
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </AnimatePresence>,
-        document.body
-      )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSupplier} className="gap-2 rounded-xl" disabled={isMutating}>
+              {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Modal */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Selected Suppliers
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedSuppliers.length} selected suppliers?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDeleteSuppliers} className="gap-2 rounded-xl" disabled={isMutating}>
+              {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Blacklist Modal */}
+      <Dialog open={showBlacklistDialog} onOpenChange={setShowBlacklistDialog}>
+        <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Ban className="h-5 w-5" />
+              Blacklist Supplier
+            </DialogTitle>
+            <DialogDescription>
+              Please provide a reason for blacklisting this supplier.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSupplier && (
+            <div className="py-4 space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  {selectedSupplier.company_name?.[0] || 'S'}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {selectedSupplier.company_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {selectedSupplier.company_email}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="blacklist-reason" className="text-sm font-medium">
+                  Reason <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="blacklist-reason"
+                  placeholder="Enter the reason for blacklisting..."
+                  value={blacklistReason}
+                  onChange={(e) => setBlacklistReason(e.target.value)}
+                  className="min-h-[100px] rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBlacklistDialog(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBlacklistSupplier}
+              className="gap-2 rounded-xl"
+              disabled={isMutating || !blacklistReason.trim()}
+            >
+              {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+              Blacklist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Blacklist Modal */}
+      <Dialog open={showBulkBlacklistDialog} onOpenChange={setShowBulkBlacklistDialog}>
+        <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Ban className="h-5 w-5" />
+              Blacklist Selected Suppliers
+            </DialogTitle>
+            <DialogDescription>
+              Please provide a reason for blacklisting {selectedSuppliers.length} selected suppliers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-blacklist-reason" className="text-sm font-medium">
+                Reason <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="bulk-blacklist-reason"
+                placeholder="Enter the reason for blacklisting..."
+                value={bulkBlacklistReason}
+                onChange={(e) => setBulkBlacklistReason(e.target.value)}
+                className="min-h-[100px] rounded-xl"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkBlacklistDialog(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkBlacklistSuppliers}
+              className="gap-2 rounded-xl"
+              disabled={isMutating || !bulkBlacklistReason.trim()}
+            >
+              {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+              Blacklist All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Unblacklist Modal */}
-      {showUnblacklistDialog && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          <Dialog open={showUnblacklistDialog} onOpenChange={setShowUnblacklistDialog}>
-            <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 relative">
-              <WrappedCornerTag label="REMOVE" color="emerald" position="top-left" size="sm" />
-              <DialogHeader className="pt-6">
-                <DialogTitle className="flex items-center gap-2 text-emerald-600">
-                  <Check className="h-5 w-5" />
-                  Remove from Blacklist
-                </DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to remove this supplier from the blacklist?
-                </DialogDescription>
-              </DialogHeader>
-              {selectedSupplier && (
-                <div className="py-4">
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                      {selectedSupplier.company_name?.[0] || 'S'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedSupplier.company_name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {selectedSupplier.company_email}
-                      </p>
-                      {selectedSupplier.blacklist_reason && (
-                        <p className="text-xs text-red-600 mt-1">
-                          Reason: {selectedSupplier.blacklist_reason}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+      <Dialog open={showUnblacklistDialog} onOpenChange={setShowUnblacklistDialog}>
+        <DialogContent className="z-[9999] rounded-xl dark:bg-gray-900 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <Check className="h-5 w-5" />
+              Remove from Blacklist
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this supplier from the blacklist?
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSupplier && (
+            <div className="py-4">
+              <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+                  {selectedSupplier.company_name?.[0] || 'S'}
                 </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleUnblacklistSupplier}
-                  className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                  disabled={isMutating}
-                >
-                  {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  Remove
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </AnimatePresence>,
-        document.body
-      )}
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {selectedSupplier.company_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {selectedSupplier.company_email}
+                  </p>
+                  {selectedSupplier.blacklist_reason && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Reason: {selectedSupplier.blacklist_reason}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUnblacklistDialog(false)} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUnblacklistSupplier}
+              className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700"
+              disabled={isMutating}
+            >
+              {isMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageTemplate>
   )
 }

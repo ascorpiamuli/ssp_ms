@@ -1,7 +1,7 @@
 // app/(dashboard)/admin/departments/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Building2,
   Search,
@@ -44,6 +44,9 @@ import {
   Leaf,
   MinusCircle,
   CircleDashed,
+  ChevronDown,
+  ChevronUp,
+  Hash,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,7 +76,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
-import { useToast } from '@/components/ui/toast-context'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { useDepartments } from '@/hooks/useDepartments'
 import { useUsers } from '@/hooks/useUsers'
@@ -87,13 +89,12 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { PageTemplate } from '@/components/dashboard/PageTemplate'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 
 // UI Components
 import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards'
 import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag'
-import HorizontalCornerTag from '@/components/ui/horizontal-corner-tag'
 
 // ============================================
 // TYPES
@@ -128,6 +129,8 @@ interface User {
   email: string
   phone: string
   role: string
+  department_id?: number
+  avatar_url?: string
 }
 
 // ============================================
@@ -171,176 +174,30 @@ const getStatusIcon = (isActive: boolean) => {
   return isActive ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />
 }
 
-// ============================================
-// MODAL COMPONENTS (Portal Ready - No Tags)
-// ============================================
-
-// Create/Edit Department Modal
-const DepartmentFormModal = ({
-  isOpen,
-  isEdit,
-  onClose,
-  onSubmit,
-  initialData,
-  isSubmitting,
-  formErrors,
-  setFormErrors,
-}: {
-  isOpen: boolean
-  isEdit: boolean
-  onClose: () => void
-  onSubmit: (data: any) => void
-  initialData?: any
-  isSubmitting: boolean
-  formErrors: Record<string, string>
-  setFormErrors: (errors: Record<string, string>) => void
-}) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
-  })
-
-  useEffect(() => {
-    if (initialData && isEdit) {
-      setFormData({
-        name: initialData.name || '',
-        code: initialData.code || '',
-        description: initialData.description || '',
-      })
-    } else if (!isEdit) {
-      setFormData({
-        name: '',
-        code: '',
-        description: '',
-      })
-    }
-  }, [initialData, isEdit, isOpen])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit(formData)
-  }
-
-  if (!isOpen) return null
-
-  const modalContent = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              {isEdit ? 'Edit Department' : 'Create New Department'}
-            </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <XCircle className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Department Name <span className="text-red-500">*</span>
-            </label>
-            <Input
-              placeholder="e.g., Computer Science"
-              value={formData.name}
-              onChange={(e) => {
-                setFormData({ ...formData, name: e.target.value })
-                if (formErrors.name) setFormErrors({ ...formErrors, name: '' })
-              }}
-              className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white", formErrors.name ? 'border-red-500' : '')}
-            />
-            {formErrors.name && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Department Code <span className="text-red-500">*</span>
-            </label>
-            <Input
-              placeholder="e.g., CS"
-              value={formData.code}
-              onChange={(e) => {
-                setFormData({ ...formData, code: e.target.value.toUpperCase() })
-                if (formErrors.code) setFormErrors({ ...formErrors, code: '' })
-              }}
-              className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white", formErrors.code ? 'border-red-500' : '')}
-            />
-            {formErrors.code && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.code}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
-            </label>
-            <Input
-              placeholder="Brief description of the department"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {isEdit ? 'Updating...' : 'Creating...'}
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  {isEdit ? 'Update Department' : 'Create Department'}
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </motion.div>
-  )
-
-  if (typeof document !== 'undefined') {
-    return createPortal(
-      <AnimatePresence>
-        {isOpen && modalContent}
-      </AnimatePresence>,
-      document.body
-    )
-  }
-
-  return null
+const getInitials = (firstName?: string, lastName?: string) => {
+  if (!firstName && !lastName) return '?'
+  return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase()
 }
 
-// View Department Modal
+const getFullName = (user: any) => {
+  if (!user) return 'Unknown'
+  if (user.full_name) return user.full_name
+  return `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown'
+}
+
+// Generate a random department code
+const generateDepartmentCode = (name: string): string => {
+  if (!name) return ''
+  // Take first 3 letters of the name and add random numbers
+  const prefix = name.substring(0, 3).toUpperCase()
+  const randomNum = Math.floor(100 + Math.random() * 900)
+  return `${prefix}-${randomNum}`
+}
+
+// ============================================
+// VIEW DEPARTMENT MODAL - Full Screen
+// ============================================
+
 const ViewDepartmentModal = ({
   isOpen,
   onClose,
@@ -357,64 +214,81 @@ const ViewDepartmentModal = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-2xl"
+        initial={{ scale: 0.9, y: 30, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.9, y: 30, opacity: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className="bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
+        <WrappedCornerTag label="DETAILS" color="blue" position="top-left" size="lg" />
+        <div className="p-6 pt-10 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl z-10">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Building2 className="h-6 w-6 text-blue-600" />
                 {department.name}
               </h2>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <Badge variant="secondary" className="rounded-full">{department.code}</Badge>
+                <Badge variant="secondary" className="rounded-full font-mono">{department.code}</Badge>
                 <Badge className={cn("text-xs rounded-full", getStatusColor(department.is_active))}>
                   {department.is_active ? 'Active' : 'Inactive'}
                 </Badge>
+                <Badge variant="outline" className="rounded-full text-xs">
+                  <Hash className="h-3 w-3 mr-1" />
+                  ID: {department.id}
+                </Badge>
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
               <XCircle className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Department ID</p>
+              <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                #{department.id}
+              </p>
+            </div>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Department Name</p>
               <p className="font-semibold text-gray-900 dark:text-white">{department.name}</p>
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Department Code</p>
-              <Badge variant="secondary" className="rounded-full">{department.code}</Badge>
+              <Badge variant="secondary" className="rounded-full font-mono">{department.code}</Badge>
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
               <Badge variant="outline" className="rounded-full">{department.users_count || 0} users</Badge>
             </div>
           </div>
 
           {department.description && (
-            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Description</p>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Description</p>
               <p className="text-gray-900 dark:text-white">{department.description}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Created</p>
               <p className="text-gray-900 dark:text-white">{formatDate(department.created_at)}</p>
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
               <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated</p>
               <p className="text-gray-900 dark:text-white">{formatDate(department.updated_at)}</p>
             </div>
@@ -422,21 +296,21 @@ const ViewDepartmentModal = ({
 
           {department.hod && (
             <>
-              <Separator className="my-4" />
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                  <Crown className="h-4 w-4 text-yellow-500" />
+              <Separator />
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-yellow-500" />
                   Head of Department
                 </h4>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 ring-2 ring-yellow-200 dark:ring-yellow-800">
-                    <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-sm">
-                      {department.hod.first_name?.[0]}{department.hod.last_name?.[0]}
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-14 w-14 ring-2 ring-yellow-200 dark:ring-yellow-800">
+                    <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-lg">
+                      {getInitials(department.hod.first_name, department.hod.last_name)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {department.hod.full_name}
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {getFullName(department.hod)}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{department.hod.email}</p>
                     {department.hod.phone && (
@@ -448,269 +322,12 @@ const ViewDepartmentModal = ({
             </>
           )}
 
-          {!department.hod && department.hod_id && (
-            <>
-              <Separator className="my-4" />
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
-                <h4 className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Head of Department (User Deleted)
-                </h4>
-                <div className="flex items-center gap-3 mt-2">
-                  <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                    <UserX className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      User ID: {department.hod_id}
-                    </p>
-                    <p className="text-sm text-amber-600 dark:text-amber-400">
-                      The previously assigned HOD has been deleted.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
+            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-600/20"
           >
             Close
           </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-
-  if (typeof document !== 'undefined') {
-    return createPortal(
-      <AnimatePresence>
-        {isOpen && modalContent}
-      </AnimatePresence>,
-      document.body
-    )
-  }
-
-  return null
-}
-
-// Delete Department Modal
-const DeleteDepartmentModal = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  departmentName,
-  usersCount,
-  isDeleting
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onConfirm: () => void
-  departmentName: string
-  usersCount: number
-  isDeleting: boolean
-}) => {
-  if (!isOpen) return null
-
-  const modalContent = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl">
-              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Department</h2>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-2">
-            Are you sure you want to delete the department "{departmentName}"?
-          </p>
-          {usersCount > 0 && (
-            <p className="text-sm text-amber-600 dark:text-amber-400 mb-4">
-              This department has {usersCount} user(s). Users must be reassigned before deletion.
-            </p>
-          )}
-          <p className="text-sm text-red-500 dark:text-red-400 mb-6">
-            This action cannot be undone.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={isDeleting || usersCount > 0}
-              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4" />
-                  Delete Department
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-
-  if (typeof document !== 'undefined') {
-    return createPortal(
-      <AnimatePresence>
-        {isOpen && modalContent}
-      </AnimatePresence>,
-      document.body
-    )
-  }
-
-  return null
-}
-
-// Assign HOD Modal
-const AssignHODModal = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  departmentName,
-  users,
-  hodUserId,
-  setHodUserId,
-  selectedHOD,
-  setSelectedHOD,
-  isSubmitting
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onConfirm: () => void
-  departmentName: string
-  users: User[]
-  hodUserId: string
-  setHodUserId: (value: string) => void
-  selectedHOD: User | null
-  setSelectedHOD: (user: User | null) => void
-  isSubmitting: boolean
-}) => {
-  if (!isOpen) return null
-
-  const modalContent = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[95vh] overflow-y-auto shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Crown className="h-5 w-5 text-yellow-500" />
-              Assign Head of Department
-            </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <XCircle className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 sm:p-6 space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Select a user to assign as Head of Department for "{departmentName}".
-          </p>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Select User <span className="text-red-500">*</span>
-            </label>
-            <Select
-              value={hodUserId}
-              onValueChange={(value) => {
-                setHodUserId(value)
-                const user = users.find(u => u.id === parseInt(value))
-                setSelectedHOD(user || null)
-              }}
-            >
-              <SelectTrigger className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white w-full">
-                <SelectValue placeholder="Select a user to assign as HOD" />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id.toString()} className="dark:text-white">
-                    <div className="flex items-center gap-2">
-                      <User className="h-3 w-3" />
-                      {user.full_name}
-                      <span className="text-xs text-gray-400">({user.email})</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedHOD && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                <UserCheck className="h-3 w-3" />
-                Selected: {selectedHOD.full_name} ({selectedHOD.email})
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={isSubmitting || !hodUserId}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <UserCheck className="h-4 w-4" />
-                  Assign HOD
-                </>
-              )}
-            </button>
-          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -734,7 +351,6 @@ const AssignHODModal = ({
 
 export default function AdminDepartmentsPage() {
   const { user: currentUser, hasPermission, isAdmin } = useAuthContext()
-  const { success, error: toastError } = useToast()
   const {
     useAllDepartments,
     useDepartmentStats,
@@ -780,6 +396,9 @@ export default function AdminDepartmentsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
 
+  // Refs for scroll restoration
+  const tableRef = useRef<HTMLDivElement>(null)
+
   // Process data
   let departments: Department[] = []
   if (departmentsData?.data) {
@@ -791,12 +410,23 @@ export default function AdminDepartmentsPage() {
   }
 
   const stats = statsData?.data || statsData || {}
-  let users: User[] = []
+
+  // Process users - show ALL users for HOD assignment (Admin can assign anyone)
+  let allUsers: User[] = []
   if (usersData?.data) {
-    users = usersData.data
+    allUsers = usersData.data
   } else if (Array.isArray(usersData)) {
-    users = usersData
+    allUsers = usersData
   }
+
+  // Filter users that can be assigned as HOD (all active users)
+  const availableUsers = useMemo(() => {
+    return allUsers.filter(user => {
+      // Exclude users who are already HOD of a department
+      const isAlreadyHOD = departments.some(d => d.hod_id === user.id)
+      return !isAlreadyHOD
+    })
+  }, [allUsers, departments])
 
   // Filter departments
   const filteredDepartments = useMemo(() => {
@@ -826,6 +456,7 @@ export default function AdminDepartmentsPage() {
   const inactiveDepartments = departments.filter(d => !d.is_active).length
   const totalUsersInDepts = departments.reduce((acc, d) => acc + (d.users_count || 0), 0)
   const departmentsWithValidHOD = departments.filter(d => d.hod).length
+  const departmentsWithoutHOD = departments.filter(d => !d.hod_id).length
 
   // Stats for StatsCards
   const statsItems: StatCardItem[] = useMemo(() => {
@@ -868,10 +499,18 @@ export default function AdminDepartmentsPage() {
         icon: Crown,
         tagLabel: "HOD",
         tagColor: "amber",
-        subtitle: `${departmentsWithValidHOD} departments with HOD`,
+        subtitle: `${departmentsWithValidHOD} with HOD`,
+      },
+      {
+        label: "Without HOD",
+        value: departmentsWithoutHOD,
+        icon: UserX,
+        tagLabel: "MISSING",
+        tagColor: "red",
+        subtitle: `${departmentsWithoutHOD} need HOD`,
       },
     ]
-  }, [totalDepartments, activeDepartments, inactiveDepartments, totalUsersInDepts, departmentsWithValidHOD])
+  }, [totalDepartments, activeDepartments, inactiveDepartments, totalUsersInDepts, departmentsWithValidHOD, departmentsWithoutHOD])
 
   // Permissions
   const canCreateDepartments = hasPermission('create_departments') || isAdmin()
@@ -884,12 +523,30 @@ export default function AdminDepartmentsPage() {
     setCurrentPage(1)
   }, [searchTerm])
 
+  // Scroll to top when page changes
+  useEffect(() => {
+    if (tableRef.current) {
+      tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [currentPage])
+
+  // Auto-generate code when name changes (only for create)
+  useEffect(() => {
+    if (showCreateDialog && departmentForm.name && !departmentForm.code) {
+      const generatedCode = generateDepartmentCode(departmentForm.name)
+      setDepartmentForm(prev => ({ ...prev, code: generatedCode }))
+    }
+  }, [departmentForm.name, showCreateDialog])
+
   // Handlers
   const handleCreateDepartment = async (data: any) => {
     const errors: Record<string, string> = {}
     if (!data.name) errors.name = 'Department name is required'
     if (!data.code) errors.code = 'Department code is required'
-    if (departments.some(d => d.code === data.code.toUpperCase())) {
+
+    // Check if code already exists (case insensitive)
+    const codeExists = departments.some(d => d.code.toUpperCase() === data.code.toUpperCase())
+    if (codeExists) {
       errors.code = 'Department code already exists'
     }
 
@@ -905,14 +562,16 @@ export default function AdminDepartmentsPage() {
         code: data.code.toUpperCase(),
         description: data.description,
       })
-      success('Department created successfully')
       setShowCreateDialog(false)
       setDepartmentForm({ name: '', code: '', description: '' })
       setFormErrors({})
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      toastError(error.message || 'Failed to create department')
+      console.error('Failed to create department:', error)
+      if (error?.response?.data?.errors?.code) {
+        setFormErrors({ code: error.response.data.errors.code[0] })
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -924,6 +583,14 @@ export default function AdminDepartmentsPage() {
     const errors: Record<string, string> = {}
     if (!data.name) errors.name = 'Department name is required'
     if (!data.code) errors.code = 'Department code is required'
+
+    // Check if code already exists and it's not the current department
+    const codeExists = departments.some(d =>
+      d.code.toUpperCase() === data.code.toUpperCase() && d.id !== selectedDepartment.id
+    )
+    if (codeExists) {
+      errors.code = 'Department code already exists'
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
@@ -940,7 +607,6 @@ export default function AdminDepartmentsPage() {
           description: data.description,
         }
       })
-      success('Department updated successfully')
       setShowEditDialog(false)
       setSelectedDepartment(null)
       setDepartmentForm({ name: '', code: '', description: '' })
@@ -948,7 +614,10 @@ export default function AdminDepartmentsPage() {
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      toastError(error.message || 'Failed to update department')
+      console.error('Failed to update department:', error)
+      if (error?.response?.data?.errors?.code) {
+        setFormErrors({ code: error.response.data.errors.code[0] })
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -959,13 +628,12 @@ export default function AdminDepartmentsPage() {
     setIsSubmitting(true)
     try {
       await deleteDepartment.mutateAsync(selectedDepartment.id)
-      success(`Department "${selectedDepartment.name}" deleted successfully`)
       setShowDeleteDialog(false)
       setSelectedDepartment(null)
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      toastError(error.message || 'Failed to delete department')
+      console.error('Failed to delete department:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -975,21 +643,19 @@ export default function AdminDepartmentsPage() {
     try {
       if (currentStatus) {
         await deactivateDepartment.mutateAsync(id)
-        success('Department deactivated successfully')
       } else {
         await activateDepartment.mutateAsync(id)
-        success('Department activated successfully')
       }
       await refetchDepts()
       await refetchStats()
     } catch (error: any) {
-      toastError(error.message || 'Failed to update department status')
+      console.error('Failed to update department status:', error)
     }
   }
 
   const handleAssignHOD = async () => {
     if (!selectedDepartment || !hodUserId) {
-      toastError('Please select a user to assign as HOD')
+      console.error('Please select a user to assign as HOD')
       return
     }
 
@@ -999,19 +665,13 @@ export default function AdminDepartmentsPage() {
         id: selectedDepartment.id,
         hod_id: parseInt(hodUserId)
       })
-      success('HOD assigned successfully')
       setShowAssignHODDialog(false)
       setHodUserId('')
       setSelectedHOD(null)
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      if (error?.response?.data?.errors) {
-        const errorMessages = Object.values(error.response.data.errors).flat()
-        toastError(errorMessages.join(', '))
-      } else {
-        toastError(error.message || 'Failed to assign HOD')
-      }
+      console.error('Failed to assign HOD:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -1020,11 +680,10 @@ export default function AdminDepartmentsPage() {
   const handleRemoveHOD = async (departmentId: number) => {
     try {
       await removeHOD.mutateAsync(departmentId)
-      success('HOD removed successfully')
       refetchDepts()
       refetchStats()
     } catch (error: any) {
-      toastError(error.message || 'Failed to remove HOD')
+      console.error('Failed to remove HOD:', error)
     }
   }
 
@@ -1032,9 +691,8 @@ export default function AdminDepartmentsPage() {
     setIsRefreshing(true)
     try {
       await Promise.all([refetchDepts(), refetchStats()])
-      success('Data refreshed successfully')
     } catch (error) {
-      toastError('Failed to refresh data')
+      console.error('Failed to refresh data:', error)
     } finally {
       setIsRefreshing(false)
     }
@@ -1145,7 +803,7 @@ export default function AdminDepartmentsPage() {
         <StatsCards
           stats={statsItems}
           isLoading={isLoading}
-          columns={5}
+          columns={6}
           variant="default"
           formatCompact={true}
           tagOrientation="wrapped"
@@ -1183,7 +841,7 @@ export default function AdminDepartmentsPage() {
         {/* Departments Table */}
         <Card className="border-0 shadow-sm rounded-xl bg-white dark:bg-gray-900 overflow-hidden relative">
           <WrappedCornerTag label="DEPARTMENTS" color="blue" position="top-left" size="lg" />
-          <div className="pt-8">
+          <div className="pt-8" ref={tableRef}>
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
@@ -1202,18 +860,30 @@ export default function AdminDepartmentsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
-                        <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Department</TableHead>
-                        <TableHead className="min-w-[80px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Code</TableHead>
+                        <TableHead className="min-w-[60px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">ID</TableHead>
+                        <TableHead className="min-w-[220px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Department</TableHead>
+                        <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Code</TableHead>
                         <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</TableHead>
                         <TableHead className="min-w-[80px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Users</TableHead>
-                        <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Head of Department</TableHead>
-                        <TableHead className="min-w-[150px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Created</TableHead>
-                        <TableHead className="text-right min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</TableHead>
+                        <TableHead className="min-w-[220px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Head of Department</TableHead>
+                        <TableHead className="min-w-[120px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Created</TableHead>
+                        <TableHead className="text-right min-w-[160px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedDepartments.map((department) => (
-                        <TableRow key={department.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
+                      {paginatedDepartments.map((department, index) => (
+                        <motion.tr
+                          key={department.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group border-b dark:border-gray-700/50"
+                        >
+                          <TableCell>
+                            <span className="text-sm font-mono text-muted-foreground">
+                              #{department.id}
+                            </span>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20">
@@ -1253,13 +923,12 @@ export default function AdminDepartmentsPage() {
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-8 w-8 ring-2 ring-yellow-200 dark:ring-yellow-800">
                                   <AvatarFallback className="text-xs bg-gradient-to-r from-yellow-400 to-amber-500 text-white">
-                                    {department.hod.first_name?.[0]}
-                                    {department.hod.last_name?.[0]}
+                                    {getInitials(department.hod.first_name, department.hod.last_name)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {department.hod.full_name}
+                                    {getFullName(department.hod)}
                                   </p>
                                   <p className="text-xs text-gray-500 dark:text-gray-400">
                                     {department.hod.email}
@@ -1268,7 +937,7 @@ export default function AdminDepartmentsPage() {
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger>
-                                      <Crown className="h-3.5 w-3.5 text-yellow-500" />
+                                      <Crown className="h-3.5 w-3.5 text-yellow-500 ml-1" />
                                     </TooltipTrigger>
                                     <TooltipContent className="rounded-xl">Head of Department</TooltipContent>
                                   </Tooltip>
@@ -1408,7 +1077,7 @@ export default function AdminDepartmentsPage() {
                               </DropdownMenu>
                             </div>
                           </TableCell>
-                        </TableRow>
+                        </motion.tr>
                       ))}
                     </TableBody>
                   </Table>
@@ -1418,7 +1087,7 @@ export default function AdminDepartmentsPage() {
                 <div className="flex flex-col sm:flex-row items-center justify-between py-4 px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 gap-2">
                   <div className="text-sm text-gray-500">
                     Showing <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {Math.min((currentPage - 1) * itemsPerPage + 1, filteredDepartments.length)}
+                      {filteredDepartments.length > 0 ? Math.min((currentPage - 1) * itemsPerPage + 1, filteredDepartments.length) : 0}
                     </span> to{' '}
                     <span className="font-medium text-gray-700 dark:text-gray-300">
                       {Math.min(currentPage * itemsPerPage, filteredDepartments.length)}
@@ -1475,39 +1144,10 @@ export default function AdminDepartmentsPage() {
       </div>
 
       {/* ============================================
-          MODALS - Rendered using Portal
+          MODALS - Full Screen using createPortal
           ============================================ */}
 
-      <DepartmentFormModal
-        isOpen={showCreateDialog}
-        isEdit={false}
-        onClose={() => {
-          setShowCreateDialog(false)
-          setFormErrors({})
-          setDepartmentForm({ name: '', code: '', description: '' })
-        }}
-        onSubmit={handleCreateDepartment}
-        initialData={null}
-        isSubmitting={isSubmitting}
-        formErrors={formErrors}
-        setFormErrors={setFormErrors}
-      />
-
-      <DepartmentFormModal
-        isOpen={showEditDialog}
-        isEdit={true}
-        onClose={() => {
-          setShowEditDialog(false)
-          setFormErrors({})
-          setSelectedDepartment(null)
-        }}
-        onSubmit={handleUpdateDepartment}
-        initialData={departmentForm}
-        isSubmitting={isSubmitting}
-        formErrors={formErrors}
-        setFormErrors={setFormErrors}
-      />
-
+      {/* View Department Modal - Using the separate component */}
       <ViewDepartmentModal
         isOpen={showViewDialog}
         onClose={() => {
@@ -1517,35 +1157,547 @@ export default function AdminDepartmentsPage() {
         department={selectedDepartment}
       />
 
-      <DeleteDepartmentModal
-        isOpen={showDeleteDialog}
-        onClose={() => {
-          setShowDeleteDialog(false)
-          setSelectedDepartment(null)
-        }}
-        onConfirm={handleDeleteDepartment}
-        departmentName={selectedDepartment?.name || ''}
-        usersCount={selectedDepartment?.users_count || 0}
-        isDeleting={isSubmitting}
-      />
+      {/* Create Department Modal - Full Screen Overlay with Portal */}
+      {showCreateDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4"
+            onClick={() => {
+              setShowCreateDialog(false)
+              setFormErrors({})
+              setDepartmentForm({ name: '', code: '', description: '' })
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 30, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <WrappedCornerTag label="NEW" color="blue" position="top-left" size="lg" />
+              <div className="p-6 pt-10 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl z-10">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Plus className="h-6 w-6 text-blue-600" />
+                      Create New Department
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Add a new department to the system
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCreateDialog(false)
+                      setFormErrors({})
+                      setDepartmentForm({ name: '', code: '', description: '' })
+                    }}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
 
-      <AssignHODModal
-        isOpen={showAssignHODDialog}
-        onClose={() => {
-          setShowAssignHODDialog(false)
-          setHodUserId('')
-          setSelectedHOD(null)
-          setSelectedDepartment(null)
-        }}
-        onConfirm={handleAssignHOD}
-        departmentName={selectedDepartment?.name || ''}
-        users={users}
-        hodUserId={hodUserId}
-        setHodUserId={setHodUserId}
-        selectedHOD={selectedHOD}
-        setSelectedHOD={setSelectedHOD}
-        isSubmitting={isSubmitting}
-      />
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                handleCreateDepartment(departmentForm)
+              }} className="p-6 space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Department Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="e.g., Computer Science"
+                    value={departmentForm.name}
+                    onChange={(e) => {
+                      setDepartmentForm({ ...departmentForm, name: e.target.value })
+                      if (formErrors.name) setFormErrors({ ...formErrors, name: '' })
+                    }}
+                    className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11", formErrors.name ? 'border-red-500' : '')}
+                  />
+                  {formErrors.name && (
+                    <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Department code will be auto-generated based on the name
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Department Code <span className="text-red-500">*</span>
+                    <span className="text-xs text-muted-foreground ml-2">(Auto-generated, editable)</span>
+                  </label>
+                  <Input
+                    placeholder="Auto-generated code..."
+                    value={departmentForm.code}
+                    onChange={(e) => {
+                      setDepartmentForm({ ...departmentForm, code: e.target.value.toUpperCase() })
+                      if (formErrors.code) setFormErrors({ ...formErrors, code: '' })
+                    }}
+                    className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11 font-mono", formErrors.code ? 'border-red-500' : '')}
+                  />
+                  {formErrors.code && (
+                    <p className="text-xs text-red-500 mt-1">{formErrors.code}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You can edit this code if needed. Must be unique.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Description
+                  </label>
+                  <Input
+                    placeholder="Brief description of the department"
+                    value={departmentForm.description}
+                    onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}
+                    className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateDialog(false)
+                      setFormErrors({})
+                      setDepartmentForm({ name: '', code: '', description: '' })
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Create Department
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Edit Department Modal - Full Screen Overlay with Portal */}
+      {showEditDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4"
+            onClick={() => {
+              setShowEditDialog(false)
+              setFormErrors({})
+              setSelectedDepartment(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 30, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <WrappedCornerTag label="EDIT" color="amber" position="top-left" size="lg" />
+              <div className="p-6 pt-10 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl z-10">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Edit className="h-6 w-6 text-amber-600" />
+                      Edit Department
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Update department information
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowEditDialog(false)
+                      setFormErrors({})
+                      setSelectedDepartment(null)
+                    }}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                handleUpdateDepartment(departmentForm)
+              }} className="p-6 space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Department Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="e.g., Computer Science"
+                    value={departmentForm.name}
+                    onChange={(e) => {
+                      setDepartmentForm({ ...departmentForm, name: e.target.value })
+                      if (formErrors.name) setFormErrors({ ...formErrors, name: '' })
+                    }}
+                    className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11", formErrors.name ? 'border-red-500' : '')}
+                  />
+                  {formErrors.name && (
+                    <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Department Code <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="e.g., CS"
+                    value={departmentForm.code}
+                    onChange={(e) => {
+                      setDepartmentForm({ ...departmentForm, code: e.target.value.toUpperCase() })
+                      if (formErrors.code) setFormErrors({ ...formErrors, code: '' })
+                    }}
+                    className={cn("rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11 font-mono", formErrors.code ? 'border-red-500' : '')}
+                  />
+                  {formErrors.code && (
+                    <p className="text-xs text-red-500 mt-1">{formErrors.code}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Description
+                  </label>
+                  <Input
+                    placeholder="Brief description of the department"
+                    value={departmentForm.description}
+                    onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}
+                    className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditDialog(false)
+                      setFormErrors({})
+                      setSelectedDepartment(null)
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl hover:from-amber-700 hover:to-orange-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Update Department
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Delete Department Modal - Full Screen Overlay with Portal */}
+      {showDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4"
+            onClick={() => {
+              setShowDeleteDialog(false)
+              setSelectedDepartment(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 30, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <WrappedCornerTag label="DANGER" color="red" position="top-left" size="lg" />
+              <div className="p-6 pt-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
+                    <AlertTriangle className="h-7 w-7 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Delete Department</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone</p>
+                  </div>
+                </div>
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  Are you sure you want to delete the department "<span className="font-semibold text-gray-900 dark:text-white">{selectedDepartment?.name}</span>"?
+                </p>
+                {selectedDepartment && selectedDepartment.users_count > 0 && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
+                    <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      This department has <strong>{selectedDepartment.users_count}</strong> user(s). Users must be reassigned before deletion.
+                    </p>
+                  </div>
+                )}
+                <p className="text-sm text-red-500 dark:text-red-400 mb-6">
+                  This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteDialog(false)
+                      setSelectedDepartment(null)
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteDepartment}
+                    disabled={isSubmitting || (selectedDepartment?.users_count || 0) > 0}
+                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Delete Department
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Assign HOD Modal - Full Screen Overlay with Portal */}
+      {showAssignHODDialog && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4"
+            onClick={() => {
+              setShowAssignHODDialog(false)
+              setHodUserId('')
+              setSelectedHOD(null)
+              setSelectedDepartment(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 30, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <WrappedCornerTag label="ASSIGN" color="amber" position="top-left" size="lg" />
+              <div className="p-6 pt-10 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl z-10">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Crown className="h-6 w-6 text-yellow-500" />
+                      Assign Head of Department
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Select a user to assign as HOD for "{selectedDepartment?.name}"
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAssignHODDialog(false)
+                      setHodUserId('')
+                      setSelectedHOD(null)
+                      setSelectedDepartment(null)
+                    }}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  All users are available for assignment. Select a user from the dropdown below.
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Select User <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    value={hodUserId}
+                    onValueChange={(value) => {
+                      setHodUserId(value)
+                      const user = allUsers.find(u => u.id === parseInt(value))
+                      setSelectedHOD(user || null)
+                    }}
+                  >
+                    <SelectTrigger className="rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white h-11 w-full">
+                      <SelectValue placeholder="Search and select a user..." />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="dark:bg-gray-800 dark:border-gray-700 max-h-60 z-[999999]"
+                      position="popper"
+                      sideOffset={8}
+                    >
+                      {allUsers.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No users available
+                        </div>
+                      ) : (
+                        allUsers.map((user) => {
+                          const isAlreadyHOD = departments.some(d => d.hod_id === user.id)
+                          return (
+                            <SelectItem
+                              key={user.id}
+                              value={user.id.toString()}
+                              className={cn(
+                                "dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer py-2.5",
+                                isAlreadyHOD && "opacity-50 pointer-events-none"
+                              )}
+                              disabled={isAlreadyHOD}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="text-xs bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
+                                    {getInitials(user.first_name, user.last_name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium truncate">{getFullName(user)}</span>
+                                    {user.role && (
+                                      <Badge variant="outline" className="text-[10px] rounded-full px-1.5 py-0">
+                                        {user.role}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                                </div>
+                                {isAlreadyHOD && (
+                                  <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full">
+                                    Already HOD
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          )
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {allUsers.length === 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      No users available to assign as HOD.
+                    </p>
+                  )}
+                </div>
+
+                {selectedHOD && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+                    <Avatar className="h-10 w-10 ring-2 ring-blue-200 dark:ring-blue-800">
+                      <AvatarFallback className="text-sm bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
+                        {getInitials(selectedHOD.first_name, selectedHOD.last_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                        {getFullName(selectedHOD)}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        {selectedHOD.email} • {selectedHOD.role || 'No role'}
+                      </p>
+                    </div>
+                    <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800 rounded-full text-xs">
+                      Selected
+                    </Badge>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAssignHODDialog(false)
+                      setHodUserId('')
+                      setSelectedHOD(null)
+                      setSelectedDepartment(null)
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAssignHOD}
+                    disabled={isSubmitting || !hodUserId}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl hover:from-amber-700 hover:to-orange-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Assigning...
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-4 w-4" />
+                        Assign HOD
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
     </PageTemplate>
   )
 }
