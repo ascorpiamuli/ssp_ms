@@ -326,6 +326,7 @@ export const signatureService = {
       const response = await api.delete(`${BASE_URL}/${specimenId}`);
       console.log('🗑️ [SignatureService.delete] Response:', response);
 
+      
       if (response.data && response.data.success !== undefined) {
         return response.data.success;
       }
