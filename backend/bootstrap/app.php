@@ -23,7 +23,6 @@ return Application::configure(basePath: dirname(__DIR__))
       'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
       'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
       'can' => \Illuminate\Auth\Middleware\Authorize::class,
-      //'audit' => \App\Http\Middleware\AuditMiddleware::class,
       'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
       'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
       'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
@@ -33,19 +32,24 @@ return Application::configure(basePath: dirname(__DIR__))
       'permission' => \App\Http\Middleware\CheckPermission::class,
     ]);
 
-    // Trust Proxies
+    // Trust Proxies - Allow all proxies and forward all headers
+    // This tells Laravel to trust the X-Forwarded-* headers
     $middleware->trustProxies(
-      at: '*',
+      at: [
+        '172.20.0.0/16',
+        '192.168.0.0/16',
+        '10.0.0.0/8',
+      ],
       headers: Request::HEADER_X_FORWARDED_FOR |
         Request::HEADER_X_FORWARDED_HOST |
         Request::HEADER_X_FORWARDED_PORT |
-        Request::HEADER_X_FORWARDED_PROTO
+        Request::HEADER_X_FORWARDED_PROTO |
+        Request::HEADER_X_FORWARDED_AWS_ELB
     );
 
     // API Middleware Group - Prepend ForceJsonResponse
     $middleware->api(prepend: [
       \App\Http\Middleware\ForceJsonResponse::class,
-      //\App\Http\Middleware\AuditMiddleware::class,
     ]);
 
     // API Middleware Group - Append
