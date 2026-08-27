@@ -9,6 +9,7 @@ use App\Models\ApprovalWorkflow;
 use App\Models\Department;
 use App\Models\User;
 use App\Exceptions\Requisitions\WorkflowException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +22,19 @@ use Illuminate\Support\Facades\Auth;
  */
 class ApprovalWorkflowService
 {
+  /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
+   * Constructor
+   */
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Get all workflows
    *
@@ -97,6 +111,12 @@ class ApprovalWorkflowService
 
       $workflow = ApprovalWorkflow::create($data);
 
+      // Audit: Log workflow creation
+      $this->auditLogService->logModelCreated(
+        $workflow,
+        "Approval workflow '{$workflow->name}' created for department #{$workflow->department_id}"
+      );
+
       DB::commit();
 
       return $workflow->fresh();
@@ -121,6 +141,7 @@ class ApprovalWorkflowService
       DB::beginTransaction();
 
       $workflow = $this->getById($id);
+      $oldValues = $workflow->toArray();
 
       // Validate approval levels if provided
       if (isset($data['approval_levels'])) {
@@ -143,6 +164,13 @@ class ApprovalWorkflowService
       }
 
       $workflow->update($data);
+
+      // Audit: Log workflow update
+      $this->auditLogService->logModelUpdated(
+        $workflow,
+        $oldValues,
+        "Approval workflow '{$workflow->name}' updated"
+      );
 
       DB::commit();
 
@@ -174,6 +202,12 @@ class ApprovalWorkflowService
       }
 
       $result = $workflow->delete();
+
+      // Audit: Log workflow deletion
+      $this->auditLogService->logModelDeleted(
+        $workflow,
+        "Approval workflow '{$workflow->name}' deleted"
+      );
 
       DB::commit();
 
@@ -239,6 +273,12 @@ class ApprovalWorkflowService
       $data['created_by'] = Auth::id();
 
       $workflow = ApprovalWorkflow::create($data);
+
+      // Audit: Log workflow clone
+      $this->auditLogService->logModelCreated(
+        $workflow,
+        "Approval workflow '{$workflow->name}' cloned from workflow #{$id}"
+      );
 
       DB::commit();
 
@@ -342,10 +382,20 @@ class ApprovalWorkflowService
       DB::beginTransaction();
 
       $workflow = $this->getById($id);
+      $oldValues = $workflow->toArray();
+
       $workflow->update([
         'is_active' => $status,
         'updated_by' => Auth::id(),
       ]);
+
+      // Audit: Log status toggle
+      $statusText = $status ? 'activated' : 'deactivated';
+      $this->auditLogService->logModelUpdated(
+        $workflow,
+        $oldValues,
+        "Approval workflow '{$workflow->name}' {$statusText}"
+      );
 
       DB::commit();
 
@@ -453,6 +503,7 @@ class ApprovalWorkflowService
       DB::beginTransaction();
 
       $workflow = $this->getById($id);
+      $oldValues = $workflow->toArray();
 
       // Remove other defaults for same department
       ApprovalWorkflow::where('department_id', $workflow->department_id)
@@ -464,6 +515,13 @@ class ApprovalWorkflowService
         'is_default' => true,
         'updated_by' => Auth::id(),
       ]);
+
+      // Audit: Log set as default
+      $this->auditLogService->logModelUpdated(
+        $workflow,
+        $oldValues,
+        "Approval workflow '{$workflow->name}' set as default"
+      );
 
       DB::commit();
 
@@ -488,10 +546,19 @@ class ApprovalWorkflowService
       DB::beginTransaction();
 
       $workflow = $this->getById($id);
+      $oldValues = $workflow->toArray();
+
       $workflow->update([
         'is_default' => false,
         'updated_by' => Auth::id(),
       ]);
+
+      // Audit: Log remove from default
+      $this->auditLogService->logModelUpdated(
+        $workflow,
+        $oldValues,
+        "Approval workflow '{$workflow->name}' removed from default"
+      );
 
       DB::commit();
 

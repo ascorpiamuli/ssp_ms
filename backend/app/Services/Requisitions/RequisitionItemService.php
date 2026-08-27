@@ -8,6 +8,7 @@ namespace App\Services\Requisitions;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Exceptions\Requisitions\RequisitionException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,19 @@ use Illuminate\Support\Facades\Auth;
  */
 class RequisitionItemService
 {
+  /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
+   * Constructor
+   */
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Get all items for a requisition
    *
@@ -104,6 +118,12 @@ class RequisitionItemService
       // Update requisition total
       $requisition->updateTotalAmount();
 
+      // Audit: Log item creation
+      $this->auditLogService->logModelCreated(
+        $item,
+        "Requisition item created: {$item->item_name} for requisition #{$requisitionId}"
+      );
+
       // Log activity
       $this->logItemActivity(
         $requisitionId,
@@ -170,6 +190,13 @@ class RequisitionItemService
       // Update requisition total
       $requisition->updateTotalAmount();
 
+      // Audit: Log item update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Requisition item updated: {$item->item_name} for requisition #{$requisition->id}"
+      );
+
       // Log activity
       $this->logItemActivity(
         $requisition->id,
@@ -220,6 +247,12 @@ class RequisitionItemService
 
       // Update requisition total
       $requisition->updateTotalAmount();
+
+      // Audit: Log item deletion
+      $this->auditLogService->logModelDeleted(
+        $item,
+        "Requisition item deleted: {$itemName} from requisition #{$requisition->id}"
+      );
 
       // Log activity
       $this->logItemActivity(
@@ -275,10 +308,25 @@ class RequisitionItemService
         $item = RequisitionItem::create($itemData);
         $createdItems[] = $item;
         $totalAmount += $item->total_cost;
+
+        // Audit: Log each item creation
+        $this->auditLogService->logModelCreated(
+          $item,
+          "Requisition item created (bulk): {$item->item_name} for requisition #{$requisitionId}"
+        );
       }
 
       // Update requisition total
       $requisition->update(['total_amount' => $totalAmount]);
+
+      // Audit: Log bulk creation
+      $this->auditLogService->logUserAction(
+        Auth::id(),
+        'ITEMS_BULK_ADDED',
+        'REQUISITION_ITEM',
+        "Bulk added " . count($createdItems) . " items to requisition #{$requisitionId}",
+        ['requisition_id' => $requisitionId, 'count' => count($createdItems)]
+      );
 
       // Log activity
       $this->logItemActivity(
@@ -343,6 +391,13 @@ class RequisitionItemService
         ]);
       }
 
+      // Audit: Log item received
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Requisition item received: {$receivedQuantity} {$item->unit_of_measure} of {$item->item_name}"
+      );
+
       // Log activity
       $this->logItemActivity(
         $requisition->id,
@@ -390,6 +445,13 @@ class RequisitionItemService
         'quality_inspected_at' => now(),
         'quality_inspected_by' => Auth::id(),
       ]);
+
+      // Audit: Log quality status update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Quality status updated to: {$status} for requisition item {$item->item_name}"
+      );
 
       // Log activity
       $this->logItemActivity(
@@ -450,6 +512,13 @@ class RequisitionItemService
       }
 
       $item->update($updateData);
+
+      // Audit: Log procurement status update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Requisition item marked as procured: {$item->item_name}"
+      );
 
       // Log activity
       $this->logItemActivity(
@@ -524,6 +593,13 @@ class RequisitionItemService
 
       $item->update($updateData);
 
+      // Audit: Log delivery update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Delivery information updated for requisition item: {$item->item_name}"
+      );
+
       // Log activity
       $this->logItemActivity(
         $requisition->id,
@@ -584,6 +660,13 @@ class RequisitionItemService
       }
 
       $item->update($updateData);
+
+      // Audit: Log warranty update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Warranty information updated for requisition item: {$item->item_name}"
+      );
 
       // Log activity
       $this->logItemActivity(
@@ -755,6 +838,13 @@ class RequisitionItemService
       $item->update([
         'current_stock' => $quantity,
       ]);
+
+      // Audit: Log stock update
+      $this->auditLogService->logModelUpdated(
+        $item,
+        $oldData,
+        "Stock updated to: {$quantity} for requisition item {$item->item_name}"
+      );
 
       // Log activity
       $this->logItemActivity(

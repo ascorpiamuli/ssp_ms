@@ -4,7 +4,6 @@ namespace App\Services\Auth;
 
 use App\Services\BaseService;
 use App\Models\User;
-use App\Models\UserActivityLog;
 use App\Models\UserProfile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -38,9 +37,6 @@ class RegistrationService extends BaseService
         'country' => 'Kenya',
       ]);
 
-      // Log activity
-      $this->logRegistration($user, $data);
-
       return [
         'user' => $user,
         'requires_approval' => true,
@@ -48,20 +44,6 @@ class RegistrationService extends BaseService
     });
   }
 
-  /**
-   * Log registration activity.
-   */
-  protected function logRegistration(User $user, array $data): void
-  {
-    UserActivityLog::create([
-      'user_id' => $user->id,
-      'action' => 'REGISTER',
-      'module' => 'AUTH',
-      'description' => 'User registered with role: ' . $data['role'],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
-  }
 
   /**
    * Create supplier specific data if role is SUPPLIER.

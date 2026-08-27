@@ -4,7 +4,6 @@ namespace App\Services\Auth;
 
 use App\Services\BaseService;
 use App\Models\User;
-use App\Models\UserActivityLog;
 use App\Models\UserSession;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -52,8 +51,6 @@ class LoginService extends BaseService
     // Create session
     $this->createSession($user);
 
-    // Log activity
-    $this->logLogin($user);
 
     return [
       'success' => true,
@@ -77,16 +74,6 @@ class LoginService extends BaseService
       ->where('is_active', true)
       ->update(['is_active' => false]);
 
-    // Log activity
-    UserActivityLog::create([
-      'user_id' => $user->id,
-      'action' => 'LOGOUT',
-      'module' => 'AUTH',
-      'description' => 'User logged out',
-      'ip_address' => $ip,
-      'user_agent' => $userAgent,
-    ]);
-
     // Delete current token
     $user->currentAccessToken()->delete();
   }
@@ -106,20 +93,7 @@ class LoginService extends BaseService
     ]);
   }
 
-  /**
-   * Log login activity.
-   */
-  protected function logLogin(User $user): void
-  {
-    UserActivityLog::create([
-      'user_id' => $user->id,
-      'action' => 'LOGIN',
-      'module' => 'AUTH',
-      'description' => 'User logged in',
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
-  }
+
 
   /**
    * Check if user can login.

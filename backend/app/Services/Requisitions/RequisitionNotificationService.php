@@ -10,6 +10,7 @@ use App\Models\RequisitionNotification;
 use App\Models\User;
 use App\Notifications\RequisitionNotificationMail;
 use App\Exceptions\Requisitions\NotificationException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,19 @@ use Illuminate\Support\Facades\Notification;
  */
 class RequisitionNotificationService
 {
+  /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
+   * Constructor
+   */
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Send notification to a user using Laravel Notification
    *
@@ -62,6 +76,12 @@ class RequisitionNotificationService
         'is_sent' => false,
       ]);
 
+      // Audit: Log notification creation
+      $this->auditLogService->logModelCreated(
+        $notification,
+        "Notification sent to user #{$userId} for requisition #{$requisitionId} - Type: {$type}"
+      );
+
       // Send using Laravel Notification system
       Notification::send($user, new RequisitionNotificationMail(
         $notification,
@@ -71,6 +91,13 @@ class RequisitionNotificationService
       // Mark as sent
       $notification->markAsSent();
       $notification->markAsDelivered();
+
+      // Audit: Log notification sent
+      $this->auditLogService->logModelUpdated(
+        $notification,
+        null,
+        "Notification delivered to user #{$userId} for requisition #{$requisitionId}"
+      );
 
       return $notification->fresh();
     } catch (\Exception $e) {
@@ -476,7 +503,16 @@ class RequisitionNotificationService
   public function markAsRead(int $notificationId): RequisitionNotification
   {
     $notification = RequisitionNotification::findOrFail($notificationId);
+    $oldValues = $notification->toArray();
     $notification->markAsRead();
+
+    // Audit: Log notification marked as read
+    $this->auditLogService->logModelUpdated(
+      $notification,
+      $oldValues,
+      "Notification #{$notification->id} marked as read"
+    );
+
     return $notification->fresh();
   }
 
@@ -488,12 +524,23 @@ class RequisitionNotificationService
    */
   public function markAllAsRead(int $userId): int
   {
-    return RequisitionNotification::forUser($userId)
+    $count = RequisitionNotification::forUser($userId)
       ->where('is_read', false)
       ->update([
         'is_read' => true,
         'read_at' => now(),
       ]);
+
+    // Audit: Log all notifications marked as read
+    $this->auditLogService->logUserAction(
+      $userId,
+      'NOTIFICATIONS_READ_ALL',
+      'NOTIFICATION',
+      "User #{$userId} marked all notifications as read",
+      ['count' => $count]
+    );
+
+    return $count;
   }
 
   /**
@@ -519,6 +566,13 @@ class RequisitionNotificationService
   public function delete(int $notificationId): bool
   {
     $notification = RequisitionNotification::findOrFail($notificationId);
+
+    // Audit: Log notification deletion
+    $this->auditLogService->logModelDeleted(
+      $notification,
+      "Notification #{$notification->id} deleted"
+    );
+
     return $notification->delete();
   }
 
@@ -530,6 +584,17 @@ class RequisitionNotificationService
    */
   public function deleteAllForUser(int $userId): int
   {
+    $count = RequisitionNotification::forUser($userId)->count();
+
+    // Audit: Log all notifications deleted
+    $this->auditLogService->logUserAction(
+      $userId,
+      'NOTIFICATIONS_DELETE_ALL',
+      'NOTIFICATION',
+      "User #{$userId} deleted all notifications",
+      ['count' => $count]
+    );
+
     return RequisitionNotification::forUser($userId)->delete();
   }
 
@@ -599,6 +664,22 @@ class RequisitionNotificationService
       } catch (\Exception $e) {
         Log::warning("Failed to send notification to user {$userId}: " . $e->getMessage());
       }
+    }
+
+    // Audit: Log bulk notifications sent
+    if (!empty($notifications)) {
+      $this->auditLogService->logUserAction(
+        Auth::id(),
+        'NOTIFICATIONS_SENT_BULK',
+        'NOTIFICATION',
+        "Bulk notifications sent to " . count($notifications) . " users for requisition #{$requisitionId}",
+        [
+          'requisition_id' => $requisitionId,
+          'type' => $type,
+          'user_count' => count($notifications),
+          'channels' => $channels
+        ]
+      );
     }
 
     return $notifications;

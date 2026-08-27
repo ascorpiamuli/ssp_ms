@@ -8,6 +8,7 @@ use App\Models\UserProfile;
 use App\Models\UserActivityLog;
 use App\Models\Upload;
 use App\Services\UploadService;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Spatie\Permission\Models\Role;
@@ -15,10 +16,14 @@ use Spatie\Permission\Models\Role;
 class ProfileService extends BaseService
 {
   protected UploadService $uploadService;
+  protected AuditLogService $auditLogService;
 
-  public function __construct(UploadService $uploadService)
-  {
+  public function __construct(
+    UploadService $uploadService,
+    AuditLogService $auditLogService
+  ) {
     $this->uploadService = $uploadService;
+    $this->auditLogService = $auditLogService;
   }
 
   /**
@@ -102,6 +107,13 @@ class ProfileService extends BaseService
       ]
     );
 
+    // Audit: Log profile update
+    $this->auditLogService->logModelUpdated(
+      $profile,
+      null,
+      "User profile updated for user #{$userId}"
+    );
+
     // Log activity
     $this->logActivity($userId, 'PROFILE_UPDATED', 'User profile updated');
 
@@ -143,6 +155,8 @@ class ProfileService extends BaseService
 
     // Upload new photo using UploadService
     try {
+      $oldValues = $user->toArray();
+
       $upload = $this->uploadService->upload(
         $file,                          // File
         $user,                          // Uploadable model
@@ -162,6 +176,13 @@ class ProfileService extends BaseService
         'profile_photo_upload_id' => $upload->id,
         'avatar' => $upload->file_url,
       ]);
+
+      // Audit: Log photo upload
+      $this->auditLogService->logModelUpdated(
+        $user,
+        $oldValues,
+        "Profile photo uploaded for user #{$userId} ({$user->full_name})"
+      );
 
       \Log::info('[ProfileService] Profile photo uploaded successfully', [
         'user_id' => $userId,
@@ -188,6 +209,8 @@ class ProfileService extends BaseService
     if (!$user) {
       return;
     }
+
+    $oldValues = $user->toArray();
 
     // Delete upload record
     if ($user->profile_photo_upload_id) {
@@ -221,6 +244,13 @@ class ProfileService extends BaseService
       'avatar' => null,
     ]);
 
+    // Audit: Log photo deletion
+    $this->auditLogService->logModelUpdated(
+      $user,
+      $oldValues,
+      "Profile photo deleted for user #{$userId} ({$user->full_name})"
+    );
+
     // Log activity
     $this->logActivity($userId, 'PHOTO_DELETED', 'Profile photo deleted');
   }
@@ -231,6 +261,7 @@ class ProfileService extends BaseService
   public function updateUserAndProfile(int $userId, array $data): User
   {
     $user = User::findOrFail($userId);
+    $oldValues = $user->toArray();
 
     // Update user basic info
     $user->update([
@@ -241,6 +272,13 @@ class ProfileService extends BaseService
       'date_of_birth' => $data['date_of_birth'] ?? $user->date_of_birth,
     ]);
 
+    // Audit: Log user update
+    $this->auditLogService->logModelUpdated(
+      $user,
+      $oldValues,
+      "User and profile updated for user #{$userId} ({$user->full_name})"
+    );
+
     // Update profile if profile data exists
     if (isset($data['profile'])) {
       $this->updateProfile($userId, $data['profile']);
@@ -250,7 +288,20 @@ class ProfileService extends BaseService
     if (isset($data['role'])) {
       $role = $this->findRole($data['role']);
       if ($role) {
+        $oldRole = $user->roles()->first();
+        $oldRoleName = $oldRole ? ($oldRole->label ?? $oldRole->name) : 'None';
+        $newRoleName = $role->label ?? $role->name;
+
         $user->syncRoles([$role]);
+
+        // Audit: Log role update
+        $this->auditLogService->logUserAction(
+          $userId,
+          'ROLE_UPDATED',
+          'PROFILE',
+          "User role updated from '{$oldRoleName}' to '{$newRoleName}'",
+          ['old_role' => $oldRoleName, 'new_role' => $newRoleName]
+        );
       }
     }
 
@@ -264,7 +315,18 @@ class ProfileService extends BaseService
         }
       }
       if (!empty($roles)) {
+        $oldRoles = $user->getRoleNames()->toArray();
         $user->syncRoles($roles);
+        $newRoles = $user->getRoleNames()->toArray();
+
+        // Audit: Log roles update
+        $this->auditLogService->logUserAction(
+          $userId,
+          'ROLES_UPDATED',
+          'PROFILE',
+          "User roles updated from " . implode(', ', $oldRoles) . " to " . implode(', ', $newRoles),
+          ['old_roles' => $oldRoles, 'new_roles' => $newRoles]
+        );
       }
     }
 
@@ -379,6 +441,7 @@ class ProfileService extends BaseService
     }
 
     $primaryRole = $user->roles()->first();
+    $primaryRoleLabel = $primaryRole ? ($primaryRole->label ?? $this->formatRoleName($primaryRole->name)) : null;
 
     return [
       'id' => $user->id,
@@ -414,7 +477,7 @@ class ProfileService extends BaseService
       'role' => $primaryRole ? [
         'id' => $primaryRole->id,
         'name' => $primaryRole->name,
-        'label' => $primaryRole->label ?? $this->formatRoleName($primaryRole->name),
+        'label' => $primaryRoleLabel,
         'description' => $primaryRole->description,
         'permissions' => $primaryRole->permissions->pluck('name')->toArray(),
       ] : null,
@@ -446,10 +509,19 @@ class ProfileService extends BaseService
 
     $oldRole = $user->roles()->first();
     $oldRoleName = $oldRole ? ($oldRole->label ?? $oldRole->name) : 'None';
+    $newRoleName = $role->label ?? $role->name;
 
+    $oldValues = $user->toArray();
     $user->syncRoles([$role]);
 
-    $this->logActivity($userId, 'ROLE_UPDATED', 'User role updated from "' . $oldRoleName . '" to "' . ($role->label ?? $role->name) . '"');
+    // Audit: Log role update
+    $this->auditLogService->logModelUpdated(
+      $user,
+      $oldValues,
+      "User role updated from '{$oldRoleName}' to '{$newRoleName}'"
+    );
+
+    $this->logActivity($userId, 'ROLE_UPDATED', 'User role updated from "' . $oldRoleName . '" to "' . $newRoleName . '"');
 
     return $user->fresh(['roles']);
   }
@@ -493,14 +565,14 @@ class ProfileService extends BaseService
   protected function logActivity(int $userId, string $action, string $description): void
   {
     try {
-      UserActivityLog::create([
-        'user_id' => $userId,
-        'action' => $action,
-        'module' => 'PROFILE',
-        'description' => $description,
-        'ip_address' => request()->ip(),
-        'user_agent' => request()->userAgent(),
-      ]);
+      // This method is now using AuditLogService
+      $this->auditLogService->logUserAction(
+        $userId,
+        $action,
+        'PROFILE',
+        $description,
+        ['ip_address' => request()->ip(), 'user_agent' => request()->userAgent()]
+      );
     } catch (\Exception $e) {
       \Log::warning('[ProfileService] Failed to log activity: ' . $e->getMessage());
     }

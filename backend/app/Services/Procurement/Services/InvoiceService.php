@@ -17,6 +17,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\InvoiceDTO;
 use App\Services\Procurement\Exceptions\InvoiceException;
+use App\Services\Admin\AuditLogService;
 
 class InvoiceService extends BaseService implements InvoiceServiceInterface
 {
@@ -24,7 +25,8 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     protected InvoiceRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -85,6 +87,12 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
         'notes' => $dto->notes,
         'metadata' => $dto->metadata,
       ]);
+
+      // Audit: Log invoice creation
+      $this->auditLogService->logModelCreated(
+        $invoice,
+        "Invoice {$invoice->invoice_number} created for PO #{$po->id}"
+      );
 
       foreach ($dto->items as $itemData) {
         $this->repository->createInvoiceItem([
@@ -167,18 +175,36 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
       $grn = $invoice->goodsReceivedNote;
 
       if (!$po) {
+        $oldValues = $invoice->toArray();
         $invoice->update([
           'matching_status' => 'not_applicable',
           'matching_notes' => 'No purchase order found for matching',
         ]);
+
+        // Audit: Log matching status update
+        $this->auditLogService->logModelUpdated(
+          $invoice,
+          $oldValues,
+          "Invoice {$invoice->invoice_number} matching status: not_applicable"
+        );
+
         return $invoice;
       }
 
       if ($po->type === 'lpo' && !$grn) {
+        $oldValues = $invoice->toArray();
         $invoice->update([
           'matching_status' => 'pending',
           'matching_notes' => 'GRN not yet received for matching',
         ]);
+
+        // Audit: Log matching status update
+        $this->auditLogService->logModelUpdated(
+          $invoice,
+          $oldValues,
+          "Invoice {$invoice->invoice_number} matching status: pending (GRN not received)"
+        );
+
         return $invoice;
       }
 
@@ -187,6 +213,8 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
       $invoiceTotal = (float) $invoice->total_amount;
 
       $tolerance = 0.01;
+
+      $oldValues = $invoice->toArray();
 
       if (
         abs($invoiceTotal - $poTotal) <= $tolerance &&
@@ -214,6 +242,13 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
         ]);
       }
 
+      // Audit: Log matching status update
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} matched: {$invoice->matching_status}"
+      );
+
       $this->logHistory(
         $invoice->requisition_id,
         'invoice_matched',
@@ -237,7 +272,20 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $userId, $notes) {
+      $oldValues = $invoice->toArray();
+
       $invoice->markAsVerified($userId, $notes);
+
+      // Audit: Log invoice verification
+      $verificationMessage = "Invoice {$invoice->invoice_number} verified by user #{$userId}";
+      if ($notes) {
+        $verificationMessage .= ": {$notes}";
+      }
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        $verificationMessage
+      );
 
       $this->logHistory(
         $invoice->requisition_id,
@@ -262,7 +310,20 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $userId, $notes) {
+      $oldValues = $invoice->toArray();
+
       $invoice->markAsApproved($userId, $notes);
+
+      // Audit: Log invoice approval
+      $approvalMessage = "Invoice {$invoice->invoice_number} approved by user #{$userId}";
+      if ($notes) {
+        $approvalMessage .= ": {$notes}";
+      }
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        $approvalMessage
+      );
 
       $this->notificationDispatcher->notify('invoice_approved', [
         'invoice_id' => $invoice->id,
@@ -293,7 +354,16 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice) {
+      $oldValues = $invoice->toArray();
+
       $invoice->markAsPaid();
+
+      // Audit: Log invoice paid
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} marked as paid"
+      );
 
       $this->notificationDispatcher->notify('invoice_paid', [
         'invoice_id' => $invoice->id,
@@ -324,7 +394,16 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $reason) {
+      $oldValues = $invoice->toArray();
+
       $invoice->markAsDisputed($reason);
+
+      // Audit: Log invoice disputed
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} disputed. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('invoice_disputed', [
         'invoice_id' => $invoice->id,
@@ -356,7 +435,16 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $reason) {
+      $oldValues = $invoice->toArray();
+
       $invoice->markAsCancelled($reason);
+
+      // Audit: Log invoice cancellation
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} cancelled. Reason: {$reason}"
+      );
 
       $this->logHistory(
         $invoice->requisition_id,
@@ -381,11 +469,20 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $reason) {
+      $oldValues = $invoice->toArray();
+
       $invoice->update([
         'status' => 'pending',
         'notes' => $reason,
         'matching_status' => 'pending',
       ]);
+
+      // Audit: Log invoice sent back
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} sent back. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('invoice_sent_back', [
         'invoice_id' => $invoice->id,
@@ -507,6 +604,8 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
     }
 
     return $this->transaction(function () use ($invoice, $items) {
+      $oldValues = $invoice->toArray();
+
       foreach ($items as $itemData) {
         $item = $invoice->items()->find($itemData['id']);
         if ($item) {
@@ -516,6 +615,13 @@ class InvoiceService extends BaseService implements InvoiceServiceInterface
       }
 
       $invoice->updateTotals();
+
+      // Audit: Log invoice items update
+      $this->auditLogService->logModelUpdated(
+        $invoice,
+        $oldValues,
+        "Invoice {$invoice->invoice_number} items updated"
+      );
 
       $this->logHistory(
         $invoice->requisition_id,

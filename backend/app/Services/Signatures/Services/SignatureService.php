@@ -16,6 +16,7 @@ use App\Services\Signatures\Exceptions\SignatureAlreadyVerifiedException;
 use App\Services\Signatures\Exceptions\InvalidSignatureFileException;
 use App\Services\Signatures\Exceptions\SignatureVerificationFailedException;
 use App\Services\Signatures\Exceptions\InvalidSignatureTokenException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -31,7 +32,8 @@ class SignatureService implements SignatureServiceInterface
     protected SignatureSpecimenRepositoryInterface $specimenRepository,
     protected SignatureVerificationRepositoryInterface $verificationRepository,
     protected SignatureVerificationLogRepositoryInterface $logRepository,
-    protected QRCodeServiceInterface $qrCodeService
+    protected QRCodeServiceInterface $qrCodeService,
+    protected AuditLogService $auditLogService
   ) {}
 
   /**
@@ -229,6 +231,12 @@ class SignatureService implements SignatureServiceInterface
       'user_agent' => $userAgent,
     ]);
 
+    // Audit: Log signature upload
+    $this->auditLogService->logModelCreated(
+      $specimen,
+      "Signature uploaded by user #{$user->id} ({$user->full_name})"
+    );
+
     $this->logRepository->create([
       'signature_verification_id' => null,
       'action' => 'upload',
@@ -278,7 +286,15 @@ class SignatureService implements SignatureServiceInterface
     }
 
     // Verify specimen
+    $oldValues = $specimen->toArray();
     $verified = $this->specimenRepository->verify($specimenId, $verifier->id, $notes);
+
+    // Audit: Log signature verification
+    $this->auditLogService->logModelUpdated(
+      $verified,
+      $oldValues,
+      "Signature #{$specimenId} verified by user #{$verifier->id} ({$verifier->full_name})" . ($notes ? " - Notes: {$notes}" : "")
+    );
 
     // ==========================================
     // 1. GENERATE A UNIQUE SECURE TOKEN
@@ -537,10 +553,19 @@ class SignatureService implements SignatureServiceInterface
     $base64 = 'data:image/png;base64,' . base64_encode(file_get_contents($qrImagePath));
 
     // Update specimen with new image and token
+    $oldValues = $specimen->toArray();
     $this->specimenRepository->update($specimenId, [
       'qr_code_image' => $base64,
       'qr_verification_token' => $newToken,
     ]);
+
+    // Audit: Log QR regeneration
+    $this->auditLogService->logModelUpdated(
+      $specimen,
+      $oldValues,
+      "QR Code regenerated for signature #{$specimenId} by user #{$user->id} ({$user->full_name})"
+    );
+
     $this->qrCodeService->cleanupTempFiles($qrImagePath);
 
     // LOG WITH IP AND USER AGENT
@@ -591,7 +616,15 @@ class SignatureService implements SignatureServiceInterface
       throw new SignatureNotFoundException('Signature specimen not found');
     }
 
+    $oldValues = $specimen->toArray();
     $rejected = $this->specimenRepository->reject($specimenId, $reason);
+
+    // Audit: Log signature rejection
+    $this->auditLogService->logModelUpdated(
+      $rejected,
+      $oldValues,
+      "Signature #{$specimenId} rejected by user #{$rejector->id} ({$rejector->full_name})" . ($reason ? " - Reason: {$reason}" : "")
+    );
 
     // LOG WITH IP AND USER AGENT
     $this->logRepository->create([
@@ -724,6 +757,12 @@ class SignatureService implements SignatureServiceInterface
         'file_path' => $specimen->signature_image_path,
       ]);
     }
+
+    // Audit: Log signature deletion
+    $this->auditLogService->logModelDeleted(
+      $specimen,
+      "Signature #{$specimenId} deleted by user #{$deleter->id} ({$deleter->full_name})"
+    );
 
     $result = $this->specimenRepository->delete($specimenId);
 

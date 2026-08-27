@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Upload;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -10,6 +11,13 @@ use Exception;
 
 class UploadService
 {
+  protected AuditLogService $auditLogService;
+
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Upload a file and create upload record.
    */
@@ -43,6 +51,12 @@ class UploadService
       'uploaded_at' => now(),
       'status' => 'completed',
     ]);
+
+    // Audit: Log upload creation
+    $this->auditLogService->logModelCreated(
+      $upload,
+      "File uploaded: {$upload->original_name} ({$upload->file_type}) - Collection: {$collection}"
+    );
 
     if ($this->isImage($file)) {
       $this->processImageMetadata($upload, $file);
@@ -315,6 +329,12 @@ class UploadService
    */
   public function delete(Upload $upload): bool
   {
+    // Audit: Log upload deletion
+    $this->auditLogService->logModelDeleted(
+      $upload,
+      "File deleted: {$upload->original_name} ({$upload->file_type}) - Collection: {$upload->collection}"
+    );
+
     if (Storage::disk('public')->exists($upload->file_path)) {
       Storage::disk('public')->delete($upload->file_path);
     }
@@ -353,10 +373,19 @@ class UploadService
    */
   public function attachToModel(Upload $upload, $model): Upload
   {
+    $oldValues = $upload->toArray();
+
     $upload->update([
       'uploadable_type' => get_class($model),
       'uploadable_id' => $model->id,
     ]);
+
+    // Audit: Log attachment to model
+    $this->auditLogService->logModelUpdated(
+      $upload,
+      $oldValues,
+      "File attached to model: " . get_class($model) . " #{$model->id} - {$upload->original_name}"
+    );
 
     return $upload;
   }

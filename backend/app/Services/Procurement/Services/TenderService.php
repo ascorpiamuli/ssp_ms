@@ -16,6 +16,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\TenderDTO;
 use App\Services\Procurement\Exceptions\TenderException;
+use App\Services\Admin\AuditLogService;
 
 class TenderService extends BaseService implements TenderServiceInterface
 {
@@ -23,7 +24,8 @@ class TenderService extends BaseService implements TenderServiceInterface
     protected TenderRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -60,6 +62,12 @@ class TenderService extends BaseService implements TenderServiceInterface
         'bidders' => $dto->bidders,
         'metadata' => $dto->metadata,
       ]);
+
+      // Audit: Log tender creation
+      $this->auditLogService->logModelCreated(
+        $tender,
+        "Tender {$tender->tender_number} created for requisition #{$requisition->id}"
+      );
 
       $this->logHistory(
         $requisition->id,
@@ -100,7 +108,16 @@ class TenderService extends BaseService implements TenderServiceInterface
     }
 
     return $this->transaction(function () use ($tender, $userId) {
+      $oldValues = $tender->toArray();
+
       $tender->publish($userId);
+
+      // Audit: Log tender publication
+      $this->auditLogService->logModelUpdated(
+        $tender,
+        $oldValues,
+        "Tender {$tender->tender_number} published by user #{$userId}"
+      );
 
       $suppliers = User::where('role', 'supplier')
         ->where('is_active', true)
@@ -137,7 +154,18 @@ class TenderService extends BaseService implements TenderServiceInterface
       throw new \Exception('Bidders can only be added to published tenders.');
     }
 
+    $oldBidders = $tender->getBidders();
+
     $this->repository->addBidderToTender($tenderId, $supplierId);
+
+    // Audit: Log bidder added
+    $this->auditLogService->logUserAction(
+      $this->getCurrentUserId(),
+      'BIDDER_ADDED',
+      'TENDER',
+      "Bidder #{$supplierId} added to tender {$tender->tender_number}",
+      ['tender_id' => $tender->id, 'supplier_id' => $supplierId]
+    );
 
     $this->logHistory(
       $tender->requisition_id,
@@ -167,6 +195,15 @@ class TenderService extends BaseService implements TenderServiceInterface
 
     $this->repository->removeBidderFromTender($tenderId, $supplierId);
 
+    // Audit: Log bidder removed
+    $this->auditLogService->logUserAction(
+      $this->getCurrentUserId(),
+      'BIDDER_REMOVED',
+      'TENDER',
+      "Bidder #{$supplierId} removed from tender {$tender->tender_number}",
+      ['tender_id' => $tender->id, 'supplier_id' => $supplierId]
+    );
+
     $this->logHistory(
       $tender->requisition_id,
       'bidder_removed',
@@ -193,7 +230,16 @@ class TenderService extends BaseService implements TenderServiceInterface
     }
 
     return $this->transaction(function () use ($tender) {
+      $oldValues = $tender->toArray();
+
       $tender->startEvaluation();
+
+      // Audit: Log tender evaluation started
+      $this->auditLogService->logModelUpdated(
+        $tender,
+        $oldValues,
+        "Tender {$tender->tender_number} evaluation started"
+      );
 
       $this->notificationDispatcher->notify('tender_evaluating', [
         'tender_id' => $tender->id,
@@ -233,7 +279,16 @@ class TenderService extends BaseService implements TenderServiceInterface
     }
 
     return $this->transaction(function () use ($tender, $supplierId, $amount, $notes) {
+      $oldValues = $tender->toArray();
+
       $tender->award($supplierId, $amount, $notes);
+
+      // Audit: Log tender awarded
+      $this->auditLogService->logModelUpdated(
+        $tender,
+        $oldValues,
+        "Tender {$tender->tender_number} awarded to supplier #{$supplierId} for {$amount}"
+      );
 
       $requisition = $tender->requisition;
       if ($requisition) {
@@ -286,7 +341,16 @@ class TenderService extends BaseService implements TenderServiceInterface
     }
 
     return $this->transaction(function () use ($tender, $reason, $userId) {
+      $oldValues = $tender->toArray();
+
       $tender->cancel($reason, $userId);
+
+      // Audit: Log tender cancelled
+      $this->auditLogService->logModelUpdated(
+        $tender,
+        $oldValues,
+        "Tender {$tender->tender_number} cancelled. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('tender_cancelled', [
         'tender_id' => $tender->id,

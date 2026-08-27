@@ -22,6 +22,7 @@ use App\Services\Procurement\Contracts\Repositories\InvoiceRepositoryInterface;
 use App\Services\Procurement\Contracts\Repositories\PaymentRepositoryInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\Exceptions\ProcurementException;
+use App\Services\Admin\AuditLogService;
 use Carbon\Carbon;
 
 class ProcurementService extends BaseService implements ProcurementServiceInterface
@@ -62,7 +63,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
     protected GoodsReceivedRepositoryInterface $goodsReceivedRepository,
     protected InvoiceRepositoryInterface $invoiceRepository,
     protected PaymentRepositoryInterface $paymentRepository,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -101,6 +103,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         }
       }
 
+      $oldValues = $requisition->toArray();
+
       $requisition->update([
         'is_procurement_created' => true,
         'procurement_created_at' => now(),
@@ -116,6 +120,13 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
           ]
         ])
       ]);
+
+      // Audit: Log procurement start
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Procurement started for requisition #{$requisition->id} ({$requisition->reference_number})"
+      );
 
       ProcurementHistory::create([
         'requisition_id' => $requisition->id,
@@ -574,6 +585,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         $userId = $requisition->user_id;
       }
 
+      $oldValues = $requisition->toArray();
+
       $metadata = $requisition->metadata ?? [];
       $metadata['procurement']['completed_at'] = now();
       $metadata['procurement']['status'] = 'completed';
@@ -583,6 +596,13 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         'metadata' => $metadata,
         'status' => 'procurement_completed',
       ]);
+
+      // Audit: Log procurement completion
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Procurement completed for requisition #{$requisition->id} ({$requisition->reference_number})"
+      );
 
       ProcurementHistory::create([
         'requisition_id' => $requisition->id,
@@ -619,6 +639,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         $userId = $requisition->user_id;
       }
 
+      $oldValues = $requisition->toArray();
+
       $metadata = $requisition->metadata ?? [];
       $metadata['procurement']['cancelled_at'] = now();
       $metadata['procurement']['status'] = 'cancelled';
@@ -629,6 +651,13 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         'metadata' => $metadata,
         'is_procurement_created' => false,
       ]);
+
+      // Audit: Log procurement cancellation
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Procurement cancelled for requisition #{$requisition->id} ({$requisition->reference_number}). Reason: {$reason}"
+      );
 
       ProcurementHistory::create([
         'requisition_id' => $requisition->id,
@@ -663,7 +692,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       ];
     })->toArray();
   }
-
 
   public function getProcurementMetrics(int $requisitionId): array
   {
@@ -762,8 +790,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
 
     return $metrics;
   }
-
-  // ... rest of the code ...
 
   public function getProcurementSteps(int $requisitionId): array
   {

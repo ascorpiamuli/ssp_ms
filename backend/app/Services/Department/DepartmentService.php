@@ -6,11 +6,19 @@ use App\Services\BaseService;
 use App\Models\Department;
 use App\Models\User;
 use App\Models\UserActivityLog;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class DepartmentService extends BaseService
 {
+  protected AuditLogService $auditLogService;
+
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Get all departments with filters.
    */
@@ -135,8 +143,11 @@ class DepartmentService extends BaseService
         'code' => $department->code
       ]);
 
-      // Log activity
-      $this->logActivity($department, 'CREATED', 'Department created');
+      // Log activity using AuditLogService
+      $this->auditLogService->logModelCreated(
+        $department,
+        'Department created'
+      );
 
       // If HOD is assigned
       if (isset($data['hod_id']) && $data['hod_id']) {
@@ -163,6 +174,8 @@ class DepartmentService extends BaseService
 
     $department = Department::findOrFail($id);
 
+    $oldValues = $department->toArray();
+
     $department->update([
       'name' => $data['name'] ?? $department->name,
       'code' => $data['code'] ?? $department->code,
@@ -175,8 +188,12 @@ class DepartmentService extends BaseService
       'code' => $department->code
     ]);
 
-    // Log activity
-    $this->logActivity($department, 'UPDATED', 'Department updated');
+    // Log activity using AuditLogService
+    $this->auditLogService->logModelUpdated(
+      $department,
+      $oldValues,
+      'Department updated'
+    );
 
     // If HOD is assigned
     if (isset($data['hod_id']) && $data['hod_id']) {
@@ -208,6 +225,7 @@ class DepartmentService extends BaseService
       // Assign HOD to this department
       $department = Department::find($departmentId);
       if ($department) {
+        $oldValues = $department->toArray();
         $department->update(['hod_id' => $userId]);
         Log::info('✅ DepartmentService::assignHOD - HOD assigned', [
           'department_id' => $departmentId,
@@ -225,8 +243,12 @@ class DepartmentService extends BaseService
           ]);
         }
 
-        // Log activity
-        $this->logActivity($department, 'HOD_ASSIGNED', "HOD assigned to user ID: {$userId}");
+        // Log activity using AuditLogService
+        $this->auditLogService->logModelUpdated(
+          $department,
+          $oldValues,
+          "HOD assigned to user ID: {$userId}"
+        );
       } else {
         Log::warning('⚠️ DepartmentService::assignHOD - Department not found', [
           'department_id' => $departmentId
@@ -245,6 +267,7 @@ class DepartmentService extends BaseService
     ]);
 
     $department = Department::findOrFail($departmentId);
+    $oldValues = $department->toArray();
     $department->update(['hod_id' => null]);
 
     Log::info('✅ DepartmentService::removeHOD - HOD removed', [
@@ -252,7 +275,12 @@ class DepartmentService extends BaseService
       'department_name' => $department->name
     ]);
 
-    $this->logActivity($department, 'HOD_REMOVED', 'HOD removed from department');
+    // Log activity using AuditLogService
+    $this->auditLogService->logModelUpdated(
+      $department,
+      $oldValues,
+      'HOD removed from department'
+    );
   }
 
   /**
@@ -263,6 +291,7 @@ class DepartmentService extends BaseService
     Log::info('🔍 DepartmentService::delete - Deactivating department', ['id' => $id]);
 
     $department = Department::findOrFail($id);
+    $oldValues = $department->toArray();
     $department->update(['is_active' => false]);
 
     Log::info('✅ DepartmentService::delete - Department deactivated', [
@@ -271,7 +300,12 @@ class DepartmentService extends BaseService
       'code' => $department->code
     ]);
 
-    $this->logActivity($department, 'DELETED', 'Department deactivated');
+    // Log activity using AuditLogService
+    $this->auditLogService->logModelUpdated(
+      $department,
+      $oldValues,
+      'Department deactivated'
+    );
   }
 
   /**
@@ -288,6 +322,7 @@ class DepartmentService extends BaseService
       return null;
     }
 
+    $oldValues = $department->toArray();
     $department->update(['is_active' => true]);
 
     Log::info('✅ DepartmentService::activate - Department activated', [
@@ -296,7 +331,12 @@ class DepartmentService extends BaseService
       'code' => $department->code
     ]);
 
-    $this->logActivity($department, 'ACTIVATED', 'Department activated');
+    // Log activity using AuditLogService
+    $this->auditLogService->logModelUpdated(
+      $department,
+      $oldValues,
+      'Department activated'
+    );
 
     return $department;
   }
@@ -315,6 +355,7 @@ class DepartmentService extends BaseService
       return null;
     }
 
+    $oldValues = $department->toArray();
     $department->update(['is_active' => false]);
 
     Log::info('✅ DepartmentService::deactivate - Department deactivated', [
@@ -323,7 +364,12 @@ class DepartmentService extends BaseService
       'code' => $department->code
     ]);
 
-    $this->logActivity($department, 'DEACTIVATED', 'Department deactivated');
+    // Log activity using AuditLogService
+    $this->auditLogService->logModelUpdated(
+      $department,
+      $oldValues,
+      'Department deactivated'
+    );
 
     return $department;
   }
@@ -433,6 +479,7 @@ class DepartmentService extends BaseService
       }
 
       // Assign user to department
+      $oldUserValues = $user->toArray();
       $user->update(['department_id' => $departmentId]);
 
       $userFullName = $user->first_name . ' ' . $user->last_name;
@@ -445,8 +492,14 @@ class DepartmentService extends BaseService
         'hod_id' => $hodId
       ]);
 
-      // Log activity
-      $this->logActivity($department, 'STAFF_ASSIGNED', "Staff assigned to department: {$userFullName} (ID: {$userId})");
+      // Log activity using AuditLogService
+      $this->auditLogService->logUserAction(
+        $hodId,
+        'STAFF_ASSIGNED',
+        'DEPARTMENT',
+        "Staff assigned to department: {$userFullName} (ID: {$userId})",
+        ['department_id' => $departmentId, 'user_id' => $userId]
+      );
     });
   }
 
@@ -485,6 +538,7 @@ class DepartmentService extends BaseService
       }
 
       // Remove user from department
+      $oldUserValues = $user->toArray();
       $user->update(['department_id' => null]);
 
       $userFullName = $user->first_name . ' ' . $user->last_name;
@@ -497,8 +551,14 @@ class DepartmentService extends BaseService
         'hod_id' => $hodId
       ]);
 
-      // Log activity
-      $this->logActivity($department, 'STAFF_REMOVED', "Staff removed from department: {$userFullName} (ID: {$userId})");
+      // Log activity using AuditLogService
+      $this->auditLogService->logUserAction(
+        $hodId,
+        'STAFF_REMOVED',
+        'DEPARTMENT',
+        "Staff removed from department: {$userFullName} (ID: {$userId})",
+        ['department_id' => $departmentId, 'user_id' => $userId]
+      );
     });
   }
 
@@ -687,35 +747,14 @@ class DepartmentService extends BaseService
         'failed_count' => count($failedIds)
       ]);
 
-      // Log activity
-      $this->logActivity($department, 'BULK_STAFF_ASSIGNED', "Bulk assigned {$assignedCount} staff members to department");
+      // Log activity using AuditLogService
+      $this->auditLogService->logUserAction(
+        $hodId,
+        'BULK_STAFF_ASSIGNED',
+        'DEPARTMENT',
+        "Bulk assigned {$assignedCount} staff members to department",
+        ['department_id' => $departmentId, 'assigned_count' => $assignedCount]
+      );
     });
-  }
-
-  /**
-   * Log activity.
-   */
-  protected function logActivity($department, string $action, string $description): void
-  {
-    try {
-      UserActivityLog::create([
-        'user_id' => auth()->id(),
-        'action' => $action,
-        'module' => 'DEPARTMENT',
-        'description' => $description . ' - Department: ' . $department->name,
-        'data' => ['department_id' => $department->id],
-        'ip_address' => request()->ip(),
-        'user_agent' => request()->userAgent(),
-      ]);
-      Log::info('✅ Activity logged', [
-        'action' => $action,
-        'department_id' => $department->id
-      ]);
-    } catch (\Exception $e) {
-      Log::error('❌ Failed to log activity', [
-        'error' => $e->getMessage(),
-        'department_id' => $department->id
-      ]);
-    }
   }
 }

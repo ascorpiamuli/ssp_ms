@@ -23,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
       'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
       'can' => \Illuminate\Auth\Middleware\Authorize::class,
-      'audit' => \App\Http\Middleware\AuditMiddleware::class,
+      //'audit' => \App\Http\Middleware\AuditMiddleware::class,
       'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
       'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
       'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
@@ -45,7 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
     // API Middleware Group - Prepend ForceJsonResponse
     $middleware->api(prepend: [
       \App\Http\Middleware\ForceJsonResponse::class,
-      \App\Http\Middleware\AuditMiddleware::class,
+      //\App\Http\Middleware\AuditMiddleware::class,
     ]);
 
     // API Middleware Group - Append

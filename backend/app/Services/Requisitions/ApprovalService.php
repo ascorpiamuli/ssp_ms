@@ -11,6 +11,7 @@ use App\Models\Approval;
 use App\Models\ApprovalWorkflow;
 use App\Models\User;
 use App\Models\Department;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -28,12 +29,19 @@ class ApprovalService
   protected RequisitionHistoryService $historyService;
 
   /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
    * Constructor
    */
   public function __construct(
-    RequisitionHistoryService $historyService
+    RequisitionHistoryService $historyService,
+    AuditLogService $auditLogService
   ) {
     $this->historyService = $historyService;
+    $this->auditLogService = $auditLogService;
     Log::info('🏗️ ApprovalService initialized');
   }
 
@@ -147,6 +155,14 @@ class ApprovalService
       }
 
       DB::commit();
+
+      // Audit: Log approvals created
+      foreach ($approvals as $approval) {
+        $this->auditLogService->logModelCreated(
+          $approval,
+          "Approval created for requisition #{$requisition->id} at level {$approval->level}"
+        );
+      }
 
       Log::info('✅ Approvals created successfully', [
         'requisition_id' => $requisition->id,
@@ -356,7 +372,7 @@ class ApprovalService
     ];
   }
 
-/**
+  /**
    * Process an approval
    *
    * @param int $requisitionId
@@ -399,7 +415,7 @@ class ApprovalService
 
       // ✅ FIX: Check sequential order
       // Find the current index of this approval in the sequence
-      $currentIndex = $allApprovals->search(function($item) use ($level) {
+      $currentIndex = $allApprovals->search(function ($item) use ($level) {
         return $item->level === $level;
       });
 
@@ -411,7 +427,7 @@ class ApprovalService
         if ($previousApproval->status !== 'approved') {
           throw new ApprovalException(
             "Cannot process level '{$level}' because previous level '{$previousApproval->level}' is not yet approved. " .
-            "Current status: {$previousApproval->status}"
+              "Current status: {$previousApproval->status}"
           );
         }
       }
@@ -427,7 +443,14 @@ class ApprovalService
       // Process based on action
       switch ($action) {
         case 'approved':
+          $oldValues = $approval->toArray();
           $approval->approve($data['comment'] ?? null);
+          // Audit: Log approval
+          $this->auditLogService->logModelUpdated(
+            $approval,
+            $oldValues,
+            "Approval #{$approval->id} for requisition #{$requisitionId} at level {$level} approved"
+          );
           $this->handleApproval($requisition, $level, $data['comment'] ?? null);
           break;
 
@@ -435,7 +458,14 @@ class ApprovalService
           if (empty($data['reason'])) {
             throw new ApprovalException('Reason is required for declining');
           }
+          $oldValues = $approval->toArray();
           $approval->decline($data['reason'], $data['comment'] ?? null);
+          // Audit: Log decline
+          $this->auditLogService->logModelUpdated(
+            $approval,
+            $oldValues,
+            "Approval #{$approval->id} for requisition #{$requisitionId} at level {$level} declined. Reason: {$data['reason']}"
+          );
           $this->handleDecline($requisition, $level, $data['reason'], $data['comment'] ?? null);
           break;
 
@@ -443,7 +473,14 @@ class ApprovalService
           if (empty($data['reason'])) {
             throw new ApprovalException('Reason is required for returning');
           }
+          $oldValues = $approval->toArray();
           $approval->return($data['reason'], $data['comment'] ?? null);
+          // Audit: Log return
+          $this->auditLogService->logModelUpdated(
+            $approval,
+            $oldValues,
+            "Approval #{$approval->id} for requisition #{$requisitionId} at level {$level} returned. Reason: {$data['reason']}"
+          );
           $this->handleReturn($requisition, $level, $data['reason'], $data['comment'] ?? null);
           break;
 
@@ -483,6 +520,7 @@ class ApprovalService
     $newStatus = $statusMap[$level] ?? null;
 
     if ($newStatus) {
+      $oldValues = $requisition->toArray();
       $updateData = ['status' => $newStatus];
       $timestampField = $level . '_approved_at';
       $updateData[$timestampField] = now();
@@ -494,6 +532,13 @@ class ApprovalService
       }
 
       $requisition->update($updateData);
+
+      // Audit: Log requisition status update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition #{$requisition->id} status updated to {$newStatus} via {$level} approval"
+      );
 
       Log::info('Requisition status updated', [
         'requisition_id' => $requisition->id,
@@ -526,6 +571,7 @@ class ApprovalService
     $newStatus = $statusMap[$level] ?? null;
 
     if ($newStatus) {
+      $oldValues = $requisition->toArray();
       $updateData = ['status' => $newStatus];
       $timestampField = $level . '_declined_at';
       $updateData[$timestampField] = now();
@@ -533,6 +579,13 @@ class ApprovalService
       $updateData[$reasonField] = $reason;
 
       $requisition->update($updateData);
+
+      // Audit: Log requisition declined
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition #{$requisition->id} declined at {$level} level. Reason: {$reason}"
+      );
 
       Log::info('Requisition declined', [
         'requisition_id' => $requisition->id,
@@ -556,6 +609,8 @@ class ApprovalService
    */
   protected function handleReturn(Requisition $requisition, string $level, string $reason, ?string $comment = null): void
   {
+    $oldValues = $requisition->toArray();
+
     $requisition->update([
       'status' => 'returned',
       'returned_at' => now(),
@@ -564,6 +619,13 @@ class ApprovalService
       'return_count' => ($requisition->return_count ?? 0) + 1,
       'last_returned_at' => now(),
     ]);
+
+    // Audit: Log requisition returned
+    $this->auditLogService->logModelUpdated(
+      $requisition,
+      $oldValues,
+      "Requisition #{$requisition->id} returned at {$level} level. Reason: {$reason}"
+    );
 
     Approval::where('requisition_id', $requisition->id)
       ->where('status', 'pending')
@@ -654,6 +716,8 @@ class ApprovalService
       // If this is a re-delegation, keep the original approver
       $originalApproverId = $approval->original_approver_id ?? $approval->approver_id;
 
+      $oldValues = $approval->toArray();
+
       $approval->update([
         'status' => 'delegated',
         'delegate_id' => $delegateId,
@@ -661,6 +725,13 @@ class ApprovalService
         'comment' => $comment,
         'original_approver_id' => $originalApproverId,
       ]);
+
+      // Audit: Log delegation
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} delegated to user #{$delegateId}" . ($comment ? " - {$comment}" : "")
+      );
 
       $this->historyService->log(
         $approval->requisition_id,

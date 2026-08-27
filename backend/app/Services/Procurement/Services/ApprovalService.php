@@ -11,13 +11,15 @@ use App\Services\Procurement\Base\BaseService;
 use App\Services\Procurement\Contracts\Services\ApprovalServiceInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\Exceptions\ProcurementException;
+use App\Services\Admin\AuditLogService;
 
 class ApprovalService extends BaseService implements ApprovalServiceInterface
 {
   protected array $levelOrder = ['hod', 'accountant', 'principal', 'final', 'diocesan_accountant', 'procurement'];
 
   public function __construct(
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -36,6 +38,12 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
         'deadline' => $data['deadline'] ?? now()->addDays(3),
         'metadata' => $data['metadata'] ?? null,
       ]);
+
+      // Audit: Log approval creation
+      $this->auditLogService->logModelCreated(
+        $approval,
+        "Approval created for {$data['entity_type']} #{$data['entity_id']} at level {$data['level']}"
+      );
 
       $this->notificationDispatcher->notify('approval_required', [
         'approval_id' => $approval->id,
@@ -83,7 +91,16 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $userId, $comment) {
+      $oldValues = $approval->toArray();
+
       $approval->approve($comment);
+
+      // Audit: Log approval
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} approved by user #{$userId}"
+      );
 
       $this->notificationDispatcher->notify('approval_completed', [
         'approval_id' => $approval->id,
@@ -109,7 +126,16 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $reason) {
+      $oldValues = $approval->toArray();
+
       $approval->decline($reason);
+
+      // Audit: Log decline
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} declined. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('approval_completed', [
         'approval_id' => $approval->id,
@@ -132,7 +158,16 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $reason) {
+      $oldValues = $approval->toArray();
+
       $approval->return($reason);
+
+      // Audit: Log return
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} returned. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('approval_completed', [
         'approval_id' => $approval->id,
@@ -217,9 +252,18 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $delegateId) {
+      $oldValues = $approval->toArray();
+
       $approval->update([
         'delegate_id' => $delegateId,
       ]);
+
+      // Audit: Log delegation
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} delegated to user #{$delegateId}"
+      );
 
       $this->notificationDispatcher->notify('approval_required', [
         'approval_id' => $approval->id,
@@ -299,11 +343,20 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $reason) {
+      $oldValues = $approval->toArray();
+
       $approval->update([
         'status' => 'cancelled',
         'return_reason' => $reason,
         'returned_at' => now(),
       ]);
+
+      // Audit: Log cancellation
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} cancelled. Reason: {$reason}"
+      );
 
       return $approval;
     });
@@ -323,10 +376,19 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     }
 
     return $this->transaction(function () use ($approval, $newApproverId) {
+      $oldValues = $approval->toArray();
+
       $approval->update([
         'approver_id' => $newApproverId,
         'delegate_id' => null,
       ]);
+
+      // Audit: Log reassignment
+      $this->auditLogService->logModelUpdated(
+        $approval,
+        $oldValues,
+        "Approval #{$approval->id} reassigned to user #{$newApproverId}"
+      );
 
       $this->notificationDispatcher->notify('approval_required', [
         'approval_id' => $approval->id,
@@ -365,6 +427,17 @@ class ApprovalService extends BaseService implements ApprovalServiceInterface
     });
 
     if ($allApproved) {
+      // Audit: Log all approvals completed
+      $this->auditLogService->logInfo(
+        'approval',
+        "All approvals completed for {$entityType} #{$entityId}",
+        [
+          'entity_id' => $entityId,
+          'entity_type' => $entityType,
+          'requisition_id' => $allApprovals->first()?->requisition_id,
+        ]
+      );
+
       $this->notificationDispatcher->notify('all_approvals_completed', [
         'entity_id' => $entityId,
         'entity_type' => $entityType,

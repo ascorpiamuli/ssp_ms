@@ -18,6 +18,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\GoodsReceivedDTO;
 use App\Services\Procurement\Exceptions\GoodsReceivedException;
+use App\Services\Admin\AuditLogService;
 
 class GoodsReceivedService extends BaseService implements GoodsReceivedServiceInterface
 {
@@ -26,7 +27,8 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     protected PurchaseOrderRepositoryInterface $poRepository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -71,6 +73,12 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
         'approval_level' => $dto->approvalLevel,
         'metadata' => $dto->metadata,
       ]);
+
+      // Audit: Log GRN creation
+      $this->auditLogService->logModelCreated(
+        $grn,
+        "GRN {$grn->grn_number} created for PO #{$po->id}"
+      );
 
       foreach ($dto->items as $itemData) {
         $poItem = $po->items()->find($itemData['purchase_order_item_id']);
@@ -171,6 +179,12 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
         'metadata' => $dto->metadata,
       ]);
 
+      // Audit: Log SAN creation
+      $this->auditLogService->logModelCreated(
+        $san,
+        "SAN {$san->san_number} created for PO #{$po->id}"
+      );
+
       $po->markPurchaseOrderDelivered($po->id);
 
       $this->logHistory(
@@ -228,7 +242,16 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($grn) {
+      $oldValues = $grn->toArray();
+
       $grn->markAsSubmitted();
+
+      // Audit: Log GRN submission
+      $this->auditLogService->logModelUpdated(
+        $grn,
+        $oldValues,
+        "GRN {$grn->grn_number} submitted for approval"
+      );
 
       $this->notificationDispatcher->notify('grn_approval_required', [
         'grn_id' => $grn->id,
@@ -260,7 +283,16 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($san) {
+      $oldValues = $san->toArray();
+
       $san->markAsSubmitted();
+
+      // Audit: Log SAN submission
+      $this->auditLogService->logModelUpdated(
+        $san,
+        $oldValues,
+        "SAN {$san->san_number} submitted for approval"
+      );
 
       $this->notificationDispatcher->notify('san_approval_required', [
         'san_id' => $san->id,
@@ -292,11 +324,24 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($grn, $userId, $comment) {
+      $oldValues = $grn->toArray();
+
       if ($grn->approval_level === 'hod') {
         $grn->markAsHodApproved($userId, $comment);
       } else {
         $grn->markAsPrincipalApproved($userId, $comment);
       }
+
+      // Audit: Log GRN approval
+      $approvalMessage = "GRN {$grn->grn_number} approved by user #{$userId}";
+      if ($comment) {
+        $approvalMessage .= ": {$comment}";
+      }
+      $this->auditLogService->logModelUpdated(
+        $grn,
+        $oldValues,
+        $approvalMessage
+      );
 
       $this->notificationDispatcher->notify('grn_approved', [
         'grn_id' => $grn->id,
@@ -328,11 +373,24 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($san, $userId, $comment) {
+      $oldValues = $san->toArray();
+
       if ($san->approval_level === 'hod') {
         $san->markAsHodApproved($userId, $comment);
       } else {
         $san->markAsPrincipalApproved($userId, $comment);
       }
+
+      // Audit: Log SAN approval
+      $approvalMessage = "SAN {$san->san_number} approved by user #{$userId}";
+      if ($comment) {
+        $approvalMessage .= ": {$comment}";
+      }
+      $this->auditLogService->logModelUpdated(
+        $san,
+        $oldValues,
+        $approvalMessage
+      );
 
       $this->notificationDispatcher->notify('san_approved', [
         'san_id' => $san->id,
@@ -364,7 +422,16 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($grn, $reason) {
+      $oldValues = $grn->toArray();
+
       $grn->markAsRejected($reason);
+
+      // Audit: Log GRN rejection
+      $this->auditLogService->logModelUpdated(
+        $grn,
+        $oldValues,
+        "GRN {$grn->grn_number} rejected. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('grn_rejected', [
         'grn_id' => $grn->id,
@@ -396,7 +463,16 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($san, $reason) {
+      $oldValues = $san->toArray();
+
       $san->markAsRejected($reason);
+
+      // Audit: Log SAN rejection
+      $this->auditLogService->logModelUpdated(
+        $san,
+        $oldValues,
+        "SAN {$san->san_number} rejected. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('san_rejected', [
         'san_id' => $san->id,
@@ -428,6 +504,8 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($grn, $data) {
+      $oldValues = $grn->toArray();
+
       $grn->updateInspection(
         $data['inspection_result'] ?? 'passed',
         $data['inspection_notes'] ?? null
@@ -442,6 +520,14 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
           ]);
         }
       }
+
+      // Audit: Log GRN inspection
+      $inspectionResult = $data['inspection_result'] ?? 'passed';
+      $this->auditLogService->logModelUpdated(
+        $grn,
+        $oldValues,
+        "GRN {$grn->grn_number} inspected. Result: {$inspectionResult}"
+      );
 
       $this->logHistory(
         $grn->requisition_id,
@@ -462,6 +548,8 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     $san = $this->getSan($sanId);
 
     return $this->transaction(function () use ($san, $data) {
+      $oldValues = $san->toArray();
+
       $san->rateQuality(
         $data['quality_rating'] ?? null,
         $data['quality_notes'] ?? null
@@ -470,6 +558,14 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
       if (isset($data['performance_notes'])) {
         $san->update(['performance_notes' => $data['performance_notes']]);
       }
+
+      // Audit: Log SAN quality rating
+      $qualityRating = $data['quality_rating'] ?? 'N/A';
+      $this->auditLogService->logModelUpdated(
+        $san,
+        $oldValues,
+        "SAN {$san->san_number} quality rated. Rating: {$qualityRating}"
+      );
 
       $this->logHistory(
         $san->requisition_id,
@@ -588,6 +684,8 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
     }
 
     return $this->transaction(function () use ($grn, $items) {
+      $oldValues = $grn->toArray();
+
       foreach ($items as $itemData) {
         $item = $grn->items()->find($itemData['id']);
         if ($item) {
@@ -597,6 +695,13 @@ class GoodsReceivedService extends BaseService implements GoodsReceivedServiceIn
       }
 
       $grn->updateTotals();
+
+      // Audit: Log GRN items update
+      $this->auditLogService->logModelUpdated(
+        $grn,
+        $oldValues,
+        "GRN {$grn->grn_number} items updated"
+      );
 
       $this->logHistory(
         $grn->requisition_id,

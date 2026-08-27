@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Services\Requisitions;
 
 use App\Models\RequisitionHistory;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,19 @@ use Illuminate\Support\Facades\Log;
  */
 class RequisitionHistoryService
 {
+  /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
+   * Constructor
+   */
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Log an activity for a requisition
    *
@@ -56,6 +70,21 @@ class RequisitionHistoryService
         'old_status' => $oldValues['status'] ?? null,
         'new_status' => $newValues['status'] ?? null,
       ]);
+
+      // Audit: Log the history entry creation
+      $this->auditLogService->logUserAction(
+        $userId ?? Auth::id(),
+        $action,
+        'REQUISITION_HISTORY',
+        "Requisition #{$requisitionId} - {$action}" . ($comment ? " - {$comment}" : ""),
+        [
+          'requisition_id' => $requisitionId,
+          'action' => $action,
+          'old_values' => $oldValues,
+          'new_values' => $newValues,
+          'comment' => $comment,
+        ]
+      );
 
       Log::info('RequisitionHistoryService::log - History entry created', [
         'requisition_id' => $requisitionId,

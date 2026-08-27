@@ -18,6 +18,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\PurchaseOrderDTO;
 use App\Services\Procurement\Exceptions\PurchaseOrderException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,7 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
     protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -205,6 +207,12 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         ]),
       ]);
 
+      // Audit: Log PO creation
+      $this->auditLogService->logModelCreated(
+        $po,
+        "Purchase Order {$po->po_number} generated for requisition #{$requisition->id}"
+      );
+
       Log::info('[PurchaseOrderService] Purchase order created', [
         'po_id' => $po->id,
         'po_number' => $po->po_number,
@@ -334,11 +342,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     ]);
 
     try {
-      // ✅ 1. Get the purchase order
-      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Fetching purchase order', [
-        'po_id' => $poId,
-      ]);
-
       $po = $this->getPurchaseOrder($poId);
 
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Purchase order retrieved', [
@@ -351,11 +354,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'endorsed_at' => $po->endorsed_at,
         'approved_by' => $po->approved_by,
         'approved_at' => $po->approved_at,
-      ]);
-
-      // ✅ 2. Validate: User exists
-      Log::debug('[PurchaseOrderService] approvePurchaseOrder - Fetching user', [
-        'user_id' => $userId,
       ]);
 
       $user = \App\Models\User::with('roles')->find($userId);
@@ -375,7 +373,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'user_full_name' => $user->full_name ?? $user->name ?? 'Unknown',
       ]);
 
-      // ✅ 3. Validate: Only Director/Principal can approve
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Checking user role', [
         'user_id' => $user->id,
         'user_email' => $user->email,
@@ -410,7 +407,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'user_email' => $user->email,
       ]);
 
-      // ✅ 4. Validate: PO must be checked by HOD
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO has been checked', [
         'po_id' => $po->id,
         'po_number' => $po->po_number,
@@ -428,7 +424,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         throw new \Exception('Purchase order must be checked by HOD before approval.');
       }
 
-      // ✅ 5. Validate: PO must be endorsed by Accountant
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO has been endorsed', [
         'po_id' => $po->id,
         'po_number' => $po->po_number,
@@ -446,7 +441,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         throw new \Exception('Purchase order must be endorsed by Accountant before approval.');
       }
 
-      // ✅ 6. Validate: PO is not already approved
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Validating PO is not already approved', [
         'po_id' => $po->id,
         'po_number' => $po->po_number,
@@ -473,7 +467,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'endorsed_at' => $po->endorsed_at,
       ]);
 
-      // ✅ 7. Execute approval in transaction
       Log::debug('[PurchaseOrderService] approvePurchaseOrder - Executing approval transaction', [
         'po_id' => $po->id,
         'po_number' => $po->po_number,
@@ -488,8 +481,9 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           'po_number' => $po->po_number,
         ]);
 
+        $oldValues = $po->toArray();
+
         // ✅ Approve the purchase order (ONLY updates approved_by and approved_at)
-        // Status remains as 'draft'
         $po->update([
           'approved_by' => $userId,
           'approved_at' => now(),
@@ -500,10 +494,21 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           ]),
         ]);
 
+        // Audit: Log PO approval
+        $approvalMessage = "Purchase Order {$po->po_number} approved by user #{$userId}";
+        if ($comment) {
+          $approvalMessage .= ": {$comment}";
+        }
+        $this->auditLogService->logModelUpdated(
+          $po,
+          $oldValues,
+          $approvalMessage
+        );
+
         Log::debug('[PurchaseOrderService] approvePurchaseOrder - Repository approval completed', [
           'po_id' => $po->id,
           'po_number' => $po->po_number,
-          'status' => $po->status, // Should still be 'draft'
+          'status' => $po->status,
           'approved_by' => $po->approved_by,
           'approved_at' => $po->approved_at,
           'checked_by' => $po->checked_by,
@@ -512,7 +517,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           'endorsed_at' => $po->endorsed_at,
         ]);
 
-        // ✅ Log history
         Log::debug('[PurchaseOrderService] approvePurchaseOrder - Logging history', [
           'po_id' => $po->id,
           'po_number' => $po->po_number,
@@ -546,7 +550,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           'po_number' => $po->po_number,
         ]);
 
-        // ✅ 8. Notify Procurement that PO is ready for issuance
         Log::debug('[PurchaseOrderService] approvePurchaseOrder - Dispatching notification', [
           'po_id' => $po->id,
           'po_number' => $po->po_number,
@@ -586,7 +589,7 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
       Log::info('[PurchaseOrderService] approvePurchaseOrder - COMPLETED', [
         'po_id' => $result->id,
         'po_number' => $result->po_number,
-        'status' => $result->status, // Should still be 'draft'
+        'status' => $result->status,
         'approved_by' => $result->approved_by,
         'approved_at' => $result->approved_at,
         'user_id' => $userId,
@@ -626,10 +629,19 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'issued',
         'issued_at' => now(),
       ]);
+
+      // Audit: Log PO issuance
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} issued"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -665,10 +677,19 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'sent',
         'sent_at' => now(),
       ]);
+
+      // Audit: Log PO sent to supplier
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} sent to supplier"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -709,10 +730,19 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'acknowledged',
         'acknowledged_at' => now(),
       ]);
+
+      // Audit: Log PO acknowledged
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} acknowledged by supplier"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -748,10 +778,19 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'delivered',
         'actual_delivery_date' => now(),
       ]);
+
+      // Audit: Log PO delivered
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} delivered"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -783,10 +822,19 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     $po = $this->getPurchaseOrder($poId);
 
     return $this->transaction(function () use ($po) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'completed',
         'completed_at' => now(),
       ]);
+
+      // Audit: Log PO completed
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} completed"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -823,11 +871,20 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po, $reason) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'status' => 'cancelled',
         'cancelled_at' => now(),
         'cancellation_reason' => $reason,
       ]);
+
+      // Audit: Log PO cancellation
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} cancelled. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('po_cancelled', [
         'purchase_order_id' => $po->id,
@@ -1020,6 +1077,8 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po, $items) {
+      $oldValues = $po->toArray();
+
       foreach ($items as $itemData) {
         $item = PurchaseOrderItem::find($itemData['id']);
         if ($item && $item->purchase_order_id === $po->id) {
@@ -1029,6 +1088,13 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
       }
 
       $po->updateTotalAmount();
+
+      // Audit: Log PO items update
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        "Purchase Order {$po->po_number} items updated"
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -1249,6 +1315,8 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     }
 
     return $this->transaction(function () use ($po, $userId, $comment) {
+      $oldValues = $po->toArray();
+
       $po->update([
         'checked_by' => $userId,
         'checked_at' => now(),
@@ -1257,6 +1325,17 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           'checked_at' => now()->toIso8601String(),
         ]),
       ]);
+
+      // Audit: Log PO checked
+      $checkMessage = "Purchase Order {$po->po_number} checked by user #{$userId}";
+      if ($comment) {
+        $checkMessage .= ": {$comment}";
+      }
+      $this->auditLogService->logModelUpdated(
+        $po,
+        $oldValues,
+        $checkMessage
+      );
 
       $this->logHistory(
         $po->requisition_id,
@@ -1301,10 +1380,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
     ]);
 
     try {
-      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Fetching purchase order', [
-        'po_id' => $poId,
-      ]);
-
       $po = $this->getPurchaseOrder($poId);
 
       Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Purchase order retrieved', [
@@ -1317,10 +1392,6 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'endorsed_at' => $po->endorsed_at,
         'approved_by' => $po->approved_by,
         'approved_at' => $po->approved_at,
-      ]);
-
-      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Fetching user', [
-        'user_id' => $userId,
       ]);
 
       $user = \App\Models\User::with('roles')->find($userId);
@@ -1428,21 +1499,26 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
         'checked_at' => $po->checked_at,
       ]);
 
-      Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Executing endorsement transaction', [
-        'po_id' => $po->id,
-        'po_number' => $po->po_number,
-        'user_id' => $userId,
-        'has_comment' => !empty($comment),
-        'comment' => $comment,
-      ]);
-
       $result = $this->transaction(function () use ($po, $userId, $comment) {
         Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Transaction START', [
           'po_id' => $po->id,
           'po_number' => $po->po_number,
         ]);
 
+        $oldValues = $po->toArray();
+
         $po = $this->repository->endorsePurchaseOrder($po->id, $userId, $comment);
+
+        // Audit: Log PO endorsed
+        $endorseMessage = "Purchase Order {$po->po_number} endorsed by user #{$userId}";
+        if ($comment) {
+          $endorseMessage .= ": {$comment}";
+        }
+        $this->auditLogService->logModelUpdated(
+          $po,
+          $oldValues,
+          $endorseMessage
+        );
 
         Log::debug('[PurchaseOrderService] endorsePurchaseOrder - Repository endorsement completed', [
           'po_id' => $po->id,

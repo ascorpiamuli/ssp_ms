@@ -6,6 +6,7 @@ namespace App\Services;
 use App\Models\CompanyProfile;
 use App\Models\Upload;
 use App\Services\UploadService;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,10 +14,14 @@ use Illuminate\Support\Facades\Log;
 class CompanyProfileService extends BaseService
 {
   protected UploadService $uploadService;
+  protected AuditLogService $auditLogService;
 
-  public function __construct(UploadService $uploadService)
-  {
+  public function __construct(
+    UploadService $uploadService,
+    AuditLogService $auditLogService
+  ) {
     $this->uploadService = $uploadService;
+    $this->auditLogService = $auditLogService;
   }
 
   /**
@@ -47,6 +52,12 @@ class CompanyProfileService extends BaseService
         'timezone' => 'Africa/Nairobi',
         'is_active' => true,
       ]);
+
+      // Audit: Log company profile creation
+      $this->auditLogService->logModelCreated(
+        $profile,
+        "Company profile created: {$profile->company_name}"
+      );
     }
 
     return $profile;
@@ -59,10 +70,12 @@ class CompanyProfileService extends BaseService
   {
     return DB::transaction(function () use ($data) {
       $profile = CompanyProfile::first();
+      $isNew = false;
 
       if (!$profile) {
         Log::info('[CompanyProfileService] Creating new company profile');
         $profile = new CompanyProfile();
+        $isNew = true;
       } else {
         Log::info('[CompanyProfileService] Updating existing company profile', [
           'profile_id' => $profile->id,
@@ -121,9 +134,26 @@ class CompanyProfileService extends BaseService
         }
       }
 
+      // Get old values before update
+      $oldValues = $profile->exists ? $profile->toArray() : null;
+
       // Fill and save
       $profile->fill($updateData);
       $profile->save();
+
+      // Audit: Log profile save
+      if ($isNew) {
+        $this->auditLogService->logModelCreated(
+          $profile,
+          "Company profile created: {$profile->company_name}"
+        );
+      } else {
+        $this->auditLogService->logModelUpdated(
+          $profile,
+          $oldValues,
+          "Company profile updated: {$profile->company_name}"
+        );
+      }
 
       Log::info('[CompanyProfileService] Profile saved successfully', [
         'profile_id' => $profile->id,
@@ -140,6 +170,7 @@ class CompanyProfileService extends BaseService
   public function update(array $data): CompanyProfile
   {
     $profile = $this->getOrCreate();
+    $oldValues = $profile->toArray();
 
     // Filter out null values
     $updateData = array_filter($data, function ($value) {
@@ -148,6 +179,13 @@ class CompanyProfileService extends BaseService
 
     if (!empty($updateData)) {
       $profile->update($updateData);
+
+      // Audit: Log profile update
+      $this->auditLogService->logModelUpdated(
+        $profile,
+        $oldValues,
+        "Company profile updated: {$profile->company_name}"
+      );
     }
 
     return $profile->fresh();
@@ -174,6 +212,7 @@ class CompanyProfileService extends BaseService
     }
 
     // Upload new logo
+    $oldValues = $profile->toArray();
     $upload = $this->uploadService->upload(
       $file,
       $profile,
@@ -191,6 +230,13 @@ class CompanyProfileService extends BaseService
       'company_logo' => $upload->file_url,
       'company_logo_upload_id' => $upload->id,
     ]);
+
+    // Audit: Log logo upload
+    $this->auditLogService->logModelUpdated(
+      $profile,
+      $oldValues,
+      "Company logo uploaded for: {$profile->company_name}"
+    );
 
     Log::info('[CompanyProfileService] Logo uploaded successfully', [
       'upload_id' => $upload->id,
@@ -224,10 +270,18 @@ class CompanyProfileService extends BaseService
       }
     }
 
+    $oldValues = $profile->toArray();
     $profile->update([
       'company_logo' => null,
       'company_logo_upload_id' => null,
     ]);
+
+    // Audit: Log logo deletion
+    $this->auditLogService->logModelUpdated(
+      $profile,
+      $oldValues,
+      "Company logo deleted for: {$profile->company_name}"
+    );
 
     return true;
   }

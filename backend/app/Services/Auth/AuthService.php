@@ -7,6 +7,7 @@ use App\Services\BaseService;
 use App\Models\User;
 use App\Models\UserActivityLog;
 use App\Models\UserSession;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -17,17 +18,20 @@ class AuthService extends BaseService
   protected LoginService $loginService;
   protected PasswordResetService $passwordResetService;
   protected TwoFactorAuthService $twoFactorAuthService;
+  protected AuditLogService $auditLogService;
 
   public function __construct(
     RegistrationService $registrationService,
     LoginService $loginService,
     PasswordResetService $passwordResetService,
-    TwoFactorAuthService $twoFactorAuthService
+    TwoFactorAuthService $twoFactorAuthService,
+    AuditLogService $auditLogService
   ) {
     $this->registrationService = $registrationService;
     $this->loginService = $loginService;
     $this->passwordResetService = $passwordResetService;
     $this->twoFactorAuthService = $twoFactorAuthService;
+    $this->auditLogService = $auditLogService;
   }
 
   /**
@@ -42,6 +46,14 @@ class AuthService extends BaseService
 
     try {
       $result = $this->registrationService->register($data);
+
+      // Audit: Log registration
+      if (isset($result['user']) && $result['user']) {
+        $this->auditLogService->logRegistration(
+          $result['user']->id,
+          $data
+        );
+      }
 
       Log::info('AuthService::register completed', [
         'success' => true,
@@ -60,8 +72,6 @@ class AuthService extends BaseService
     }
   }
 
-// app/Services/Auth/AuthService.php
-
   /**
    * Login a user.
    */
@@ -78,6 +88,13 @@ class AuthService extends BaseService
       $result = $this->loginService->login($credentials);
 
       if ($result['success']) {
+        // Audit: Log successful login
+        if (isset($result['data']['user'])) {
+          $this->auditLogService->logLogin(
+            $result['data']['user']->id
+          );
+        }
+
         Log::info('AuthService::login successful', [
           'email' => $credentials['email'] ?? null,
           'user_id' => $result['data']['user']->id ?? null,
@@ -118,6 +135,9 @@ class AuthService extends BaseService
     try {
       $this->loginService->logout($user, $ip, $userAgent);
 
+      // Audit: Log logout
+      $this->auditLogService->logLogout($user->id);
+
       Log::info('AuthService::logout successful', [
         'user_id' => $user->id,
         'email' => $user->email,
@@ -141,6 +161,14 @@ class AuthService extends BaseService
 
     try {
       $result = $this->passwordResetService->sendResetLink($email, $ip, $userAgent);
+
+      // Audit: Log password reset request
+      if ($result['success'] ?? false) {
+        $user = User::where('email', $email)->first();
+        if ($user) {
+          $this->auditLogService->logPasswordReset($user->id, $email);
+        }
+      }
 
       Log::info('AuthService::sendPasswordResetLink completed', [
         'email' => $email,
@@ -169,6 +197,14 @@ class AuthService extends BaseService
 
     try {
       $result = $this->passwordResetService->resetPassword($credentials);
+
+      // Audit: Log password reset completion
+      if ($result['success'] ?? false) {
+        $user = User::where('email', $credentials['email'])->first();
+        if ($user) {
+          $this->auditLogService->logPasswordReset($user->id, $credentials['email']);
+        }
+      }
 
       Log::info('AuthService::resetPassword completed', [
         'email' => $credentials['email'] ?? null,
@@ -227,6 +263,9 @@ class AuthService extends BaseService
     try {
       $this->twoFactorAuthService->enable($user, $secretKey);
 
+      // Audit: Log 2FA enable
+      $this->auditLogService->logTwoFactor($user->id, 'enable');
+
       Log::info('AuthService::enableTwoFactor completed', [
         'user_id' => $user->id,
         'email' => $user->email,
@@ -254,6 +293,9 @@ class AuthService extends BaseService
 
     try {
       $this->twoFactorAuthService->disable($user);
+
+      // Audit: Log 2FA disable
+      $this->auditLogService->logTwoFactor($user->id, 'disable');
 
       Log::info('AuthService::disableTwoFactor completed', [
         'user_id' => $user->id,
@@ -452,6 +494,7 @@ class AuthService extends BaseService
       throw $e;
     }
   }
+
   /**
    * Get user permissions.
    */
@@ -504,14 +547,17 @@ class AuthService extends BaseService
         'password' => Hash::make($newPassword),
       ]);
 
-      UserActivityLog::create([
-        'user_id' => $user->id,
-        'action' => 'CHANGE_PASSWORD',
-        'module' => 'SECURITY',
-        'description' => 'User changed password',
-        'ip_address' => $ip,
-        'user_agent' => $userAgent,
-      ]);
+      // Audit: Log password change
+      $this->auditLogService->logUserAction(
+        $user->id,
+        'change_password',
+        'security',
+        'User changed password',
+        [
+          'ip_address' => $ip,
+          'user_agent' => $userAgent,
+        ]
+      );
 
       Log::info('AuthService::changePassword completed', [
         'user_id' => $user->id,
@@ -540,6 +586,10 @@ class AuthService extends BaseService
     ]);
 
     try {
+      // Get old values before update for audit
+      $oldUser = clone $user;
+      $oldValues = $oldUser->toArray();
+
       $user->update($data);
 
       if ($user->profile && isset($data['profile'])) {
@@ -547,6 +597,11 @@ class AuthService extends BaseService
       }
 
       $user->fresh(['department', 'roles', 'profile']);
+
+      // Audit: Log profile update if there were changes
+      if ($user->getChanges()) {
+        $this->auditLogService->logModelUpdated($user, $oldValues);
+      }
 
       Log::info('AuthService::updateProfile completed', [
         'user_id' => $user->id,
@@ -726,14 +781,17 @@ class AuthService extends BaseService
     ]);
 
     try {
-      UserActivityLog::create([
-        'user_id' => $user->id,
-        'action' => $action,
-        'module' => $module,
-        'description' => $description,
-        'ip_address' => $ip,
-        'user_agent' => $userAgent,
-      ]);
+      // Audit: Log user activity using AuditLogService
+      $this->auditLogService->logUserAction(
+        $user->id,
+        $action,
+        $module,
+        $description,
+        [
+          'ip_address' => $ip,
+          'user_agent' => $userAgent,
+        ]
+      );
 
       Log::info('AuthService::logActivity completed', [
         'user_id' => $user->id,
@@ -826,6 +884,16 @@ class AuthService extends BaseService
     try {
       // In production, save hashed recovery codes to database
       // For now, just log
+
+      // Audit: Log recovery codes generation
+      $this->auditLogService->logUserAction(
+        $user->id,
+        'generate_recovery_codes',
+        'security',
+        'User generated new 2FA recovery codes',
+        ['codes_count' => count($codes)]
+      );
+
       Log::info('AuthService::saveRecoveryCodes completed', [
         'user_id' => $user->id,
         'email' => $user->email,

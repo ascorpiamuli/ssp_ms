@@ -15,6 +15,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\ContractDTO;
 use App\Services\Procurement\Exceptions\ContractException;
+use App\Services\Admin\AuditLogService;
 
 class ContractService extends BaseService implements ContractServiceInterface
 {
@@ -22,7 +23,8 @@ class ContractService extends BaseService implements ContractServiceInterface
     protected ContractRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -66,6 +68,12 @@ class ContractService extends BaseService implements ContractServiceInterface
         'renewal_period_months' => $dto->renewalPeriodMonths,
         'metadata' => $dto->metadata,
       ]);
+
+      // Audit: Log contract creation
+      $this->auditLogService->logModelCreated(
+        $contract,
+        "Contract {$contract->contract_number} created for requisition #{$requisition->id}"
+      );
 
       $this->notificationDispatcher->notify('contract_created', [
         'contract_id' => $contract->id,
@@ -118,7 +126,16 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract, $userId) {
+      $oldValues = $contract->toArray();
+
       $contract->approve($userId);
+
+      // Audit: Log contract approval
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} approved by user #{$userId}"
+      );
 
       $this->notificationDispatcher->notify('contract_approved', [
         'contract_id' => $contract->id,
@@ -150,7 +167,16 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract) {
+      $oldValues = $contract->toArray();
+
       $contract->markAsActive();
+
+      // Audit: Log contract activation
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} activated"
+      );
 
       $this->notificationDispatcher->notify('contract_activated', [
         'contract_id' => $contract->id,
@@ -181,7 +207,16 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract) {
+      $oldValues = $contract->toArray();
+
       $contract->markAsCompleted();
+
+      // Audit: Log contract completion
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} completed"
+      );
 
       $this->logHistory(
         $contract->requisition_id,
@@ -206,7 +241,16 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract, $reason) {
+      $oldValues = $contract->toArray();
+
       $contract->markAsTerminated($reason);
+
+      // Audit: Log contract termination
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} terminated. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('contract_terminated', [
         'contract_id' => $contract->id,
@@ -238,7 +282,16 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract, $reason) {
+      $oldValues = $contract->toArray();
+
       $contract->markAsSuspended($reason);
+
+      // Audit: Log contract suspension
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} suspended. Reason: {$reason}"
+      );
 
       $this->logHistory(
         $contract->requisition_id,
@@ -267,8 +320,17 @@ class ContractService extends BaseService implements ContractServiceInterface
     }
 
     return $this->transaction(function () use ($contract) {
+      $oldValues = $contract->toArray();
       $oldEndDate = $contract->end_date->toDateString();
+
       $contract->renew();
+
+      // Audit: Log contract renewal
+      $this->auditLogService->logModelUpdated(
+        $contract,
+        $oldValues,
+        "Contract {$contract->contract_number} renewed (Renewal #{$contract->renewal_count})"
+      );
 
       $this->notificationDispatcher->notify('contract_renewed', [
         'contract_id' => $contract->id,

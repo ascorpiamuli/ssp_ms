@@ -9,6 +9,7 @@ use App\Models\Requisition;
 use App\Models\RequisitionRevision;
 use App\Models\ApprovalWorkflow;
 use App\Exceptions\Requisitions\RevisionException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -32,14 +33,21 @@ class RequisitionRevisionService
   protected RequisitionService $requisitionService;
 
   /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
    * Constructor
    */
   public function __construct(
     RequisitionHistoryService $historyService,
-    RequisitionService $requisitionService
+    RequisitionService $requisitionService,
+    AuditLogService $auditLogService
   ) {
     $this->historyService = $historyService;
     $this->requisitionService = $requisitionService;
+    $this->auditLogService = $auditLogService;
     Log::info('🏗️ RequisitionRevisionService initialized');
   }
 
@@ -129,7 +137,14 @@ class RequisitionRevisionService
         'requested_at' => now(),
       ]);
 
+      // Audit: Log revision creation
+      $this->auditLogService->logModelCreated(
+        $revision,
+        "Revision #{$nextRevisionNumber} created for requisition #{$requisitionId} - Reason: {$data['reason']}"
+      );
+
       // Update requisition
+      $oldValues = $requisition->toArray();
       $requisition->update([
         'status' => 'revised',
         'revision_count' => $requisition->revision_count + 1,
@@ -138,6 +153,13 @@ class RequisitionRevisionService
         'revision_notes' => $data['notes'] ?? null,
         'revision_status' => 'pending',
       ]);
+
+      // Audit: Log requisition status update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition #{$requisitionId} status updated to 'revised' with revision #{$nextRevisionNumber}"
+      );
 
       // Log activity
       $this->historyService->log(
@@ -186,12 +208,27 @@ class RequisitionRevisionService
       // Approve revision
       $revision->approve(Auth::id(), $notes);
 
+      // Audit: Log revision approval
+      $this->auditLogService->logModelUpdated(
+        $revision,
+        $oldData,
+        "Revision #{$revision->revision_number} approved for requisition #{$requisition->id}" . ($notes ? " - Notes: {$notes}" : "")
+      );
+
       // Update requisition
+      $reqOldValues = $requisition->toArray();
       $requisition->update([
         'status' => 'submitted',
         'revision_status' => 'approved',
         'revision_notes' => $notes,
       ]);
+
+      // Audit: Log requisition status update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $reqOldValues,
+        "Requisition #{$requisition->id} status updated to 'submitted' after revision approval"
+      );
 
       // Create new approvals
       $approvalService = app(ApprovalService::class);
@@ -244,11 +281,26 @@ class RequisitionRevisionService
       // Reject revision
       $revision->reject(Auth::id(), $reason);
 
+      // Audit: Log revision rejection
+      $this->auditLogService->logModelUpdated(
+        $revision,
+        $oldData,
+        "Revision #{$revision->revision_number} rejected for requisition #{$requisition->id}. Reason: {$reason}"
+      );
+
       // Update requisition
+      $reqOldValues = $requisition->toArray();
       $requisition->update([
         'revision_status' => 'rejected',
         'revision_notes' => $reason,
       ]);
+
+      // Audit: Log requisition status update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $reqOldValues,
+        "Requisition #{$requisition->id} revision status updated to 'rejected'. Reason: {$reason}"
+      );
 
       // Log activity
       $this->historyService->log(
@@ -297,11 +349,26 @@ class RequisitionRevisionService
       // Cancel revision
       $revision->cancel($reason);
 
+      // Audit: Log revision cancellation
+      $this->auditLogService->logModelUpdated(
+        $revision,
+        $oldData,
+        "Revision #{$revision->revision_number} cancelled for requisition #{$requisition->id}" . ($reason ? " - Reason: {$reason}" : "")
+      );
+
       // Update requisition
+      $reqOldValues = $requisition->toArray();
       $requisition->update([
         'revision_status' => 'cancelled',
         'revision_notes' => $reason ?? 'Revision cancelled',
       ]);
+
+      // Audit: Log requisition status update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $reqOldValues,
+        "Requisition #{$requisition->id} revision status updated to 'cancelled'"
+      );
 
       // Log activity
       $this->historyService->log(

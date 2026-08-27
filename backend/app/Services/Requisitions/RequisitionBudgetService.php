@@ -8,6 +8,7 @@ namespace App\Services\Requisitions;
 use App\Models\Requisition;
 use App\Models\RequisitionBudget;
 use App\Exceptions\Requisitions\BudgetException;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,19 @@ use Illuminate\Support\Facades\Auth;
  */
 class RequisitionBudgetService
 {
+  /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
+   * Constructor
+   */
+  public function __construct(AuditLogService $auditLogService)
+  {
+    $this->auditLogService = $auditLogService;
+  }
+
   /**
    * Get all budgets for a requisition
    *
@@ -104,6 +118,12 @@ class RequisitionBudgetService
         'budget_code' => $budget->budget_code,
       ]);
 
+      // Audit: Log budget creation
+      $this->auditLogService->logModelCreated(
+        $budget,
+        "Budget created for requisition #{$requisitionId} - Code: {$budget->budget_code}"
+      );
+
       // Log activity
       $this->logBudgetActivity(
         $requisitionId,
@@ -165,6 +185,13 @@ class RequisitionBudgetService
         'budget_code' => $budget->budget_code,
       ]);
 
+      // Audit: Log budget update
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} updated for requisition #{$budget->requisition_id}"
+      );
+
       // Log activity
       $this->logBudgetActivity(
         $budget->requisition_id,
@@ -205,6 +232,12 @@ class RequisitionBudgetService
       if ($budget->status !== 'pending') {
         throw new BudgetException('Only pending budgets can be deleted');
       }
+
+      // Audit: Log budget deletion
+      $this->auditLogService->logModelDeleted(
+        $budget,
+        "Budget #{$budget->id} deleted for requisition #{$budget->requisition_id}"
+      );
 
       // Log activity
       $this->logBudgetActivity(
@@ -259,6 +292,13 @@ class RequisitionBudgetService
       $oldData = $budget->toArray();
       $budget->verify(Auth::id(), $notes);
 
+      // Audit: Log budget verification
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} verified for requisition #{$budget->requisition_id}" . ($notes ? " - Notes: {$notes}" : "")
+      );
+
       // Log activity
       $this->logBudgetActivity(
         $budget->requisition_id,
@@ -303,6 +343,13 @@ class RequisitionBudgetService
       $oldData = $budget->toArray();
       $budget->approve(Auth::id(), $notes);
 
+      // Audit: Log budget approval
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} approved for requisition #{$budget->requisition_id}" . ($notes ? " - Notes: {$notes}" : "")
+      );
+
       // Log activity
       $this->logBudgetActivity(
         $budget->requisition_id,
@@ -346,6 +393,13 @@ class RequisitionBudgetService
 
       $oldData = $budget->toArray();
       $budget->reject($reason);
+
+      // Audit: Log budget rejection
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} rejected for requisition #{$budget->requisition_id}. Reason: {$reason}"
+      );
 
       // Log activity
       $this->logBudgetActivity(
@@ -523,6 +577,13 @@ class RequisitionBudgetService
         $budget->markAsExhausted();
       }
 
+      // Audit: Log budget reserve
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} reserved amount: {$amount} for requisition #{$budget->requisition_id}"
+      );
+
       // Log activity
       $this->logBudgetActivity(
         $budget->requisition_id,
@@ -577,6 +638,13 @@ class RequisitionBudgetService
         'remaining_amount' => $budget->allocated_amount - $newUtilized,
         'status' => 'approved', // Reset from exhausted if it was
       ]);
+
+      // Audit: Log budget release
+      $this->auditLogService->logModelUpdated(
+        $budget,
+        $oldData,
+        "Budget #{$budget->id} released amount: {$amount} for requisition #{$budget->requisition_id}"
+      );
 
       // Log activity
       $this->logBudgetActivity(
@@ -759,6 +827,20 @@ class RequisitionBudgetService
 
       // Release amount from source
       $this->releaseAmount($sourceBudget->id, $amount);
+
+      // Audit: Log budget transfer
+      $this->auditLogService->logUserAction(
+        Auth::id(),
+        'BUDGET_TRANSFERRED',
+        'BUDGET',
+        "Budget transferred from #{$sourceBudget->id} to #{$targetBudget->id} - Amount: {$amount}" . ($reason ? " - Reason: {$reason}" : ""),
+        [
+          'from_budget_id' => $sourceBudget->id,
+          'to_budget_id' => $targetBudget->id,
+          'amount' => $amount,
+          'reason' => $reason,
+        ]
+      );
 
       DB::commit();
 

@@ -16,6 +16,7 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\Contracts\Utilities\NotificationDispatcherInterface;
 use App\Services\Procurement\DTOs\PaymentDTO;
 use App\Services\Procurement\Exceptions\PaymentException;
+use App\Services\Admin\AuditLogService;
 
 class PaymentService extends BaseService implements PaymentServiceInterface
 {
@@ -23,7 +24,8 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     protected PaymentRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected PdfGeneratorInterface $pdfGenerator,
-    protected NotificationDispatcherInterface $notificationDispatcher
+    protected NotificationDispatcherInterface $notificationDispatcher,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
   }
@@ -71,6 +73,12 @@ class PaymentService extends BaseService implements PaymentServiceInterface
         'notes' => $dto->notes,
         'metadata' => $dto->metadata,
       ]);
+
+      // Audit: Log voucher creation
+      $this->auditLogService->logModelCreated(
+        $voucher,
+        "Payment Voucher {$voucher->voucher_number} prepared for invoice #{$invoice->id}"
+      );
 
       if ($this->getCurrentUserId()) {
         $voucher->update([
@@ -124,7 +132,16 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($voucher, $userId, $signature) {
+      $oldValues = $voucher->toArray();
+
       $voucher->markAsEndorsed($userId, $signature ?? $voucher->generateDigitalSignature('endorsement', $userId));
+
+      // Audit: Log voucher endorsement
+      $this->auditLogService->logModelUpdated(
+        $voucher,
+        $oldValues,
+        "Payment Voucher {$voucher->voucher_number} endorsed by user #{$userId}"
+      );
 
       $this->notificationDispatcher->notify('voucher_endorsed', [
         'voucher_id' => $voucher->id,
@@ -155,7 +172,16 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($voucher, $userId, $signature) {
+      $oldValues = $voucher->toArray();
+
       $voucher->markAsApproved($userId, $signature ?? $voucher->generateDigitalSignature('approval', $userId));
+
+      // Audit: Log voucher approval
+      $this->auditLogService->logModelUpdated(
+        $voucher,
+        $oldValues,
+        "Payment Voucher {$voucher->voucher_number} approved by user #{$userId}"
+      );
 
       $this->notificationDispatcher->notify('voucher_approved', [
         'voucher_id' => $voucher->id,
@@ -186,8 +212,17 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($voucher, $reference) {
+      $oldValues = $voucher->toArray();
+
       $voucher->markAsPaid($reference);
       $voucher->invoice->markAsPaid();
+
+      // Audit: Log voucher paid
+      $this->auditLogService->logModelUpdated(
+        $voucher,
+        $oldValues,
+        "Payment Voucher {$voucher->voucher_number} marked as paid" . ($reference ? " - Reference: {$reference}" : "")
+      );
 
       $this->notificationDispatcher->notify('voucher_paid', [
         'voucher_id' => $voucher->id,
@@ -219,7 +254,16 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($voucher, $reason) {
+      $oldValues = $voucher->toArray();
+
       $voucher->markAsCancelled($reason);
+
+      // Audit: Log voucher cancellation
+      $this->auditLogService->logModelUpdated(
+        $voucher,
+        $oldValues,
+        "Payment Voucher {$voucher->voucher_number} cancelled. Reason: {$reason}"
+      );
 
       $this->logHistory(
         $voucher->requisition_id,
@@ -266,6 +310,12 @@ class PaymentService extends BaseService implements PaymentServiceInterface
         'metadata' => $dto->metadata,
       ]);
 
+      // Audit: Log cheque creation
+      $this->auditLogService->logModelCreated(
+        $cheque,
+        "Cheque {$cheque->cheque_number} recorded for voucher {$voucher->voucher_number}"
+      );
+
       $voucher->update(['cheque_number' => $cheque->cheque_number]);
 
       $this->notificationDispatcher->notify('cheque_issued', [
@@ -310,11 +360,20 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($cheque) {
+      $oldValues = $cheque->toArray();
+
       $cheque->markAsCashed();
 
       if ($cheque->paymentVoucher->status !== 'paid') {
         $cheque->paymentVoucher->markAsPaid();
       }
+
+      // Audit: Log cheque cashed
+      $this->auditLogService->logModelUpdated(
+        $cheque,
+        $oldValues,
+        "Cheque {$cheque->cheque_number} cashed"
+      );
 
       $this->notificationDispatcher->notify('cheque_cashed', [
         'cheque_id' => $cheque->id,
@@ -345,7 +404,16 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($cheque, $reason) {
+      $oldValues = $cheque->toArray();
+
       $cheque->markAsCancelled($reason);
+
+      // Audit: Log cheque cancellation
+      $this->auditLogService->logModelUpdated(
+        $cheque,
+        $oldValues,
+        "Cheque {$cheque->cheque_number} cancelled. Reason: {$reason}"
+      );
 
       $this->logHistory(
         $cheque->paymentVoucher->requisition_id,
@@ -370,7 +438,16 @@ class PaymentService extends BaseService implements PaymentServiceInterface
     }
 
     return $this->transaction(function () use ($cheque, $reason) {
+      $oldValues = $cheque->toArray();
+
       $cheque->markAsStopped($reason);
+
+      // Audit: Log cheque stopped
+      $this->auditLogService->logModelUpdated(
+        $cheque,
+        $oldValues,
+        "Cheque {$cheque->cheque_number} stopped. Reason: {$reason}"
+      );
 
       $this->logHistory(
         $cheque->paymentVoucher->requisition_id,

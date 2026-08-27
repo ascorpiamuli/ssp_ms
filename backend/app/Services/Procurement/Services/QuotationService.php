@@ -20,6 +20,7 @@ use App\Services\Procurement\DTOs\SupplierQuotationDTO;
 use App\Services\Procurement\Exceptions\QuotationException;
 use App\Services\Procurement\Services\ProcurementService;
 use App\Services\Procurement\Utilities\PdfGenerator;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
@@ -30,7 +31,8 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     protected QuotationRepositoryInterface $repository,
     protected ReferenceNumberGeneratorInterface $referenceGenerator,
     protected NotificationDispatcherInterface $notificationDispatcher,
-    protected ProcurementService $procurementService
+    protected ProcurementService $procurementService,
+    protected AuditLogService $auditLogService
   ) {
     parent::__construct();
     Log::info('[QuotationService] Constructed');
@@ -88,6 +90,12 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'metadata' => $dto->metadata,
       ]);
 
+      // Audit: Log QTN creation
+      $this->auditLogService->logModelCreated(
+        $qtn,
+        "Quotation Request {$qtn->qtn_number} generated for requisition #{$requisition->id}"
+      );
+
       $this->logHistory(
         $requisition->id,
         'qtn_generated',
@@ -121,6 +129,8 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($qtn, $supplierIds) {
+      $oldValues = $qtn->toArray();
+
       $suppliers = \App\Models\Supplier::whereIn('id', $supplierIds)
         ->with('user')
         ->get()
@@ -140,6 +150,13 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'status' => 'sent',
         'sent_at' => now(),
       ]);
+
+      // Audit: Log QTN sent to suppliers
+      $this->auditLogService->logModelUpdated(
+        $qtn,
+        $oldValues,
+        "QTN {$qtn->qtn_number} sent to " . count($supplierIds) . " suppliers"
+      );
 
       $this->notificationDispatcher->notify('qtn_sent', [
         'qtn_id' => $qtn->id,
@@ -244,6 +261,12 @@ class QuotationService extends BaseService implements QuotationServiceInterface
 
       $quotation = $this->repository->createSupplierQuotation($quotationData);
 
+      // Audit: Log supplier quotation submission
+      $this->auditLogService->logModelCreated(
+        $quotation,
+        "Supplier quotation {$quotation->quotation_number} submitted for QTN #{$qtn->id}"
+      );
+
       foreach ($dto->items as $itemData) {
         $itemCreateData = [
           'supplier_quotation_id' => $quotation->id,
@@ -331,12 +354,21 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($quotation, $userId, $status, $notes) {
+      $oldValues = $quotation->toArray();
+
       $quotation->update([
         'verification_status' => $status,
         'verified_by' => $userId,
         'verified_at' => now(),
         'verification_notes' => $notes,
       ]);
+
+      // Audit: Log quotation verification
+      $this->auditLogService->logModelUpdated(
+        $quotation,
+        $oldValues,
+        "Quotation {$quotation->quotation_number} verified. Status: {$status}"
+      );
 
       if ($status === 'verified') {
         $this->checkAndMarkLowest($quotation);
@@ -401,6 +433,8 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($quotation, $score, $notes) {
+      $oldValues = $quotation->toArray();
+
       $quotation->update([
         'status' => 'evaluated',
         'evaluated_by' => $this->getCurrentUserId(),
@@ -408,6 +442,13 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'evaluation_score' => $score,
         'evaluation_notes' => $notes,
       ]);
+
+      // Audit: Log quotation evaluation
+      $this->auditLogService->logModelUpdated(
+        $quotation,
+        $oldValues,
+        "Quotation {$quotation->quotation_number} evaluated with score {$score}%"
+      );
 
       $qtn = $quotation->quotationRequest;
       if ($qtn) {
@@ -494,6 +535,8 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($requisition, $supplierId, $quotation) {
+      $oldValues = $requisition->toArray();
+
       $metadata = $requisition->metadata;
       if (is_string($metadata)) {
         $metadata = json_decode($metadata, true) ?? [];
@@ -515,6 +558,13 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         'supplier_id' => $supplierId,
         'metadata' => $metadata,
       ]);
+
+      // Audit: Log supplier selection
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Supplier selected for requisition #{$requisition->id} - Supplier ID: {$supplierId}"
+      );
 
       $quotation->markAsAccepted();
 
@@ -596,7 +646,16 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($qtn, $reason) {
+      $oldValues = $qtn->toArray();
+
       $qtn->markAsClosed();
+
+      // Audit: Log QTN closed
+      $this->auditLogService->logModelUpdated(
+        $qtn,
+        $oldValues,
+        "QTN {$qtn->qtn_number} closed" . ($reason ? " - Reason: {$reason}" : "")
+      );
 
       $this->logHistory(
         $qtn->requisition_id,
@@ -631,7 +690,16 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     }
 
     return $this->transaction(function () use ($qtn, $reason) {
+      $oldValues = $qtn->toArray();
+
       $qtn->markAsCancelled($reason);
+
+      // Audit: Log QTN cancelled
+      $this->auditLogService->logModelUpdated(
+        $qtn,
+        $oldValues,
+        "QTN {$qtn->qtn_number} cancelled. Reason: {$reason}"
+      );
 
       $this->notificationDispatcher->notify('qtn_cancelled', [
         'qtn_id' => $qtn->id,

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Upload;
 use App\Models\UserActivityLog;
 use App\Services\UploadService;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
@@ -16,10 +17,14 @@ use Illuminate\Support\Facades\Log;
 class SupplierService extends BaseService
 {
   protected UploadService $uploadService;
+  protected AuditLogService $auditLogService;
 
-  public function __construct(UploadService $uploadService)
-  {
+  public function __construct(
+    UploadService $uploadService,
+    AuditLogService $auditLogService
+  ) {
     $this->uploadService = $uploadService;
+    $this->auditLogService = $auditLogService;
   }
 
   /**
@@ -187,6 +192,12 @@ class SupplierService extends BaseService
       // Create the supplier
       $supplier = Supplier::create($supplierData);
 
+      // Audit: Log supplier creation
+      $this->auditLogService->logModelCreated(
+        $supplier,
+        "Supplier created: {$supplier->company_name}"
+      );
+
       // Associate the upload with the supplier
       if ($upload) {
         $this->uploadService->attachToModel($upload, $supplier);
@@ -331,7 +342,15 @@ class SupplierService extends BaseService
     }
 
     // Perform the update
+    $oldValues = $supplier->toArray();
     $supplier->update($updateData);
+
+    // Audit: Log supplier update
+    $this->auditLogService->logModelUpdated(
+      $supplier,
+      $oldValues,
+      "Supplier updated: {$supplier->company_name}"
+    );
 
     Log::info('[SupplierService] Supplier updated successfully', [
       'supplier_id' => $supplier->id,
@@ -383,12 +402,20 @@ class SupplierService extends BaseService
   {
     $supplier = Supplier::findOrFail($id);
 
+    $oldValues = $supplier->toArray();
     $supplier->update([
       'status' => 'BLACKLISTED',
       'blacklist_reason' => $reason,
       'blacklisted_by' => auth()->id(),
       'blacklisted_at' => now(),
     ]);
+
+    // Audit: Log supplier blacklist
+    $this->auditLogService->logModelUpdated(
+      $supplier,
+      $oldValues,
+      "Supplier blacklisted: {$supplier->company_name} - Reason: {$reason}"
+    );
 
     // Deactivate user account
     $user = User::find($supplier->user_id);
@@ -408,12 +435,20 @@ class SupplierService extends BaseService
   {
     $supplier = Supplier::findOrFail($id);
 
+    $oldValues = $supplier->toArray();
     $supplier->update([
       'status' => 'ACTIVE',
       'blacklist_reason' => null,
       'blacklisted_by' => null,
       'blacklisted_at' => null,
     ]);
+
+    // Audit: Log supplier unblacklist
+    $this->auditLogService->logModelUpdated(
+      $supplier,
+      $oldValues,
+      "Supplier removed from blacklist: {$supplier->company_name}"
+    );
 
     // Reactivate user account
     $user = User::find($supplier->user_id);
@@ -432,7 +467,16 @@ class SupplierService extends BaseService
   public function delete(int $id): void
   {
     $supplier = Supplier::findOrFail($id);
+
+    $oldValues = $supplier->toArray();
     $supplier->update(['status' => 'INACTIVE']);
+
+    // Audit: Log supplier deactivation
+    $this->auditLogService->logModelUpdated(
+      $supplier,
+      $oldValues,
+      "Supplier deactivated: {$supplier->company_name}"
+    );
 
     $this->logActivity($supplier, 'DELETED', 'Supplier deactivated');
   }
@@ -443,7 +487,16 @@ class SupplierService extends BaseService
   public function activate(int $id): void
   {
     $supplier = Supplier::findOrFail($id);
+
+    $oldValues = $supplier->toArray();
     $supplier->update(['status' => 'ACTIVE']);
+
+    // Audit: Log supplier activation
+    $this->auditLogService->logModelUpdated(
+      $supplier,
+      $oldValues,
+      "Supplier activated: {$supplier->company_name}"
+    );
 
     $this->logActivity($supplier, 'ACTIVATED', 'Supplier activated');
   }
@@ -471,14 +524,18 @@ class SupplierService extends BaseService
    */
   protected function logActivity($supplier, string $action, string $description): void
   {
-    UserActivityLog::create([
-      'user_id' => auth()->id(),
-      'action' => $action,
-      'module' => 'SUPPLIER',
-      'description' => $description . ' - Supplier: ' . $supplier->company_name,
-      'data' => ['supplier_id' => $supplier->id],
-      'ip_address' => request()->ip(),
-      'user_agent' => request()->userAgent(),
-    ]);
+    // This method is now deprecated - using AuditLogService
+    // Keeping for backward compatibility
+    try {
+      $this->auditLogService->logUserAction(
+        auth()->id(),
+        $action,
+        'SUPPLIER',
+        $description . ' - Supplier: ' . $supplier->company_name,
+        ['supplier_id' => $supplier->id]
+      );
+    } catch (\Exception $e) {
+      Log::warning('Failed to log supplier activity: ' . $e->getMessage());
+    }
   }
 }

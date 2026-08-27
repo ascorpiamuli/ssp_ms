@@ -8,6 +8,7 @@ namespace App\Services\Requisitions;
 use App\Exceptions\Requisitions\RequisitionException;
 use App\Models\Requisition;
 use App\Models\Approval;
+use App\Services\Admin\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -26,12 +27,19 @@ class RequisitionService
   protected RequisitionHistoryService $historyService;
 
   /**
+   * @var AuditLogService
+   */
+  protected AuditLogService $auditLogService;
+
+  /**
    * Constructor with dependency injection
    */
   public function __construct(
-    RequisitionHistoryService $historyService
+    RequisitionHistoryService $historyService,
+    AuditLogService $auditLogService
   ) {
     $this->historyService = $historyService;
+    $this->auditLogService = $auditLogService;
     Log::info('🏗️ RequisitionService initialized');
   }
 
@@ -375,6 +383,12 @@ class RequisitionService
       // Create requisition
       $requisition = Requisition::create($fillableData);
 
+      // Audit: Log requisition creation
+      $this->auditLogService->logModelCreated(
+        $requisition,
+        "Requisition created: {$requisition->reference_number}"
+      );
+
       // ✅ CREATE ITEMS - Include ALL fields
       if (!empty($data['items']) && is_array($data['items'])) {
         $totalAmount = 0;
@@ -558,6 +572,8 @@ class RequisitionService
         throw new RequisitionException('Requisition cannot be edited in current status');
       }
 
+      $oldValues = $requisition->toArray();
+
       $fillableData = array_intersect_key($data, array_flip([
         'department_id',
         'supplier_id',
@@ -585,6 +601,13 @@ class RequisitionService
       ]));
 
       $requisition->update($fillableData);
+
+      // Audit: Log requisition update
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition updated: {$requisition->reference_number}"
+      );
 
       // ✅ Update items with ALL fields
       if (!empty($data['items']) && is_array($data['items'])) {
@@ -699,6 +722,12 @@ class RequisitionService
       // Delete items first
       $requisition->items()->delete();
 
+      // Audit: Log requisition deletion
+      $this->auditLogService->logModelDeleted(
+        $requisition,
+        "Requisition deleted: {$requisition->reference_number}"
+      );
+
       // Log deletion
       $this->historyService->log(
         $requisition->id,
@@ -780,6 +809,8 @@ class RequisitionService
         throw new RequisitionException('Cannot submit requisition without items');
       }
 
+      $oldValues = $requisition->toArray();
+
       // ✅ If it's a returned requisition, clean up previous approvals
       if ($requisition->status === 'returned') {
         Log::info('🔄 Resubmitting returned requisition', [
@@ -815,6 +846,13 @@ class RequisitionService
         'submitted_by' => $userId,
         'sla_started_at' => now(),
       ]);
+
+      // Audit: Log requisition submission
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition submitted for approval: {$requisition->reference_number}"
+      );
 
       // Create approval workflow
       if ($approvalService) {
@@ -927,6 +965,8 @@ class RequisitionService
         );
       }
 
+      $oldValues = $requisition->toArray();
+
       // Update status
       $requisition->update([
         'status' => 'returned',
@@ -936,6 +976,14 @@ class RequisitionService
         'return_count' => $requisition->return_count + 1,
         'last_returned_at' => now(),
       ]);
+
+      // Audit: Log requisition return
+      $returnReason = $data['reason'] ?? 'No reason provided';
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition returned for revision: {$requisition->reference_number} - Reason: {$returnReason}"
+      );
 
       // Update the approval status
       if ($currentApproval) {
@@ -1031,6 +1079,8 @@ class RequisitionService
         throw new RequisitionException('Approved requisitions cannot be cancelled');
       }
 
+      $oldValues = $requisition->toArray();
+
       // Update status
       $requisition->update([
         'status' => 'cancelled',
@@ -1038,6 +1088,14 @@ class RequisitionService
         'cancelled_by' => $user->id,
         'cancellation_reason' => $data['reason'] ?? null,
       ]);
+
+      // Audit: Log requisition cancellation
+      $cancelReason = $data['reason'] ?? 'No reason provided';
+      $this->auditLogService->logModelUpdated(
+        $requisition,
+        $oldValues,
+        "Requisition cancelled: {$requisition->reference_number} - Reason: {$cancelReason}"
+      );
 
       // Cancel all pending approvals - optimized query
       Approval::where('requisition_id', $requisition->id)
@@ -1119,7 +1177,8 @@ class RequisitionService
   /**
    * Get requisitions pending approval for a user - LOADS ITEMS AND APPROVALS
    *
-   * @param int $userId   * @param array $filters
+   * @param int $userId
+   * @param array $filters
    * @param int $perPage
    * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
    */
