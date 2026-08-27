@@ -145,103 +145,18 @@ class AuditLogService
   ];
 
   /**
-   * Get client IP address from request headers.
-   * Handles proxies and Docker/Nginx setups.
+   * Get client IP address from request.
+   * Uses Laravel's built-in ip() method which handles proxies.
    *
    * @return string|null
    */
   protected function getClientIp(): ?string
   {
-    $request = request();
-
-    // First check if Laravel's ip() method returns the correct IP
-    $ip = $request->ip();
-
-    // If IP is private (Docker internal), try to get from headers
-    $isPrivate = $this->isPrivateIp($ip);
-
-    if ($isPrivate) {
-      // Check for forwarded IP headers
-      $headers = [
-        'HTTP_X_FORWARDED_FOR',
-        'HTTP_X_REAL_IP',
-        'HTTP_CLIENT_IP',
-        'HTTP_X_CLUSTER_CLIENT_IP',
-        'HTTP_FORWARDED_FOR',
-        'HTTP_FORWARDED',
-      ];
-
-      foreach ($headers as $header) {
-        $headerValue = $request->server($header);
-        if ($headerValue) {
-          // X-Forwarded-For can contain multiple IPs (client, proxy1, proxy2)
-          // Take the first one which is the original client
-          $ips = array_map('trim', explode(',', $headerValue));
-          $firstIp = $ips[0];
-
-          // Validate the IP address
-          if (filter_var($firstIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6)) {
-            return $firstIp;
-          }
-        }
-      }
+    try {
+      return request()->ip() ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    } catch (\Exception $e) {
+      return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
     }
-
-    return $ip;
-  }
-
-  /**
-   * Check if IP address is private (internal).
-   *
-   * @param string|null $ip
-   * @return bool
-   */
-  protected function isPrivateIp(?string $ip): bool
-  {
-    if (!$ip) {
-      return true;
-    }
-
-    $privateRanges = [
-      '10.0.0.0/8',
-      '172.16.0.0/12',
-      '192.168.0.0/16',
-      '127.0.0.0/8',
-      '169.254.0.0/16',
-      '::1/128',
-      'fc00::/7',
-      'fe80::/10',
-    ];
-
-    foreach ($privateRanges as $range) {
-      if ($this->ipInRange($ip, $range)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Check if IP is in CIDR range.
-   *
-   * @param string $ip
-   * @param string $range
-   * @return bool
-   */
-  protected function ipInRange(string $ip, string $range): bool
-  {
-    if (strpos($range, '/') === false) {
-      return $ip === $range;
-    }
-
-    list($subnet, $bits) = explode('/', $range);
-    $ipLong = ip2long($ip);
-    $subnetLong = ip2long($subnet);
-    $mask = -1 << (32 - $bits);
-    $subnetLong &= $mask;
-
-    return ($ipLong & $mask) == $subnetLong;
   }
 
   /**
@@ -1030,17 +945,6 @@ class AuditLogService
       // Get IP address and user agent with proper handling
       $ipAddress = $data['ip_address'] ?? $this->getClientIp();
       $userAgent = $data['user_agent'] ?? $this->getUserAgent();
-
-      // Debug log to verify IP (remove in production)
-      Log::debug('AuditLogService::log - IP debug', [
-        'provided_ip' => $data['ip_address'] ?? null,
-        'detected_ip' => $ipAddress,
-        'all_headers' => [
-          'HTTP_X_FORWARDED_FOR' => request()->server('HTTP_X_FORWARDED_FOR'),
-          'HTTP_X_REAL_IP' => request()->server('HTTP_X_REAL_IP'),
-          'REMOTE_ADDR' => request()->server('REMOTE_ADDR'),
-        ]
-      ]);
 
       $auditLog = UserActivityLog::create([
         'user_id' => $userId,
