@@ -110,6 +110,8 @@ import {
   MoreHorizontal,
   MoreVertical as MoreVerticalIcon,
   Bell,
+  FileCheck as FileCheckIcon,
+  Handshake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -177,13 +179,30 @@ const getColorForAction = (action: string): { bg: string; border: string; dot: s
     'qtn_closed': { bg: 'bg-purple-500', border: 'border-purple-500', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800' },
     'supplier_selected': { bg: 'bg-amber-600', border: 'border-amber-600', dot: 'bg-amber-600', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800' },
     'po_generated': { bg: 'bg-purple-600', border: 'border-purple-600', dot: 'bg-purple-600', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800' },
+    // ✅ Added SAN event
+    'san_generated': { bg: 'bg-cyan-600', border: 'border-cyan-600', dot: 'bg-cyan-600', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800' },
+    'san_submitted': { bg: 'bg-sky-500', border: 'border-sky-500', dot: 'bg-sky-500', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 border-sky-200 dark:border-sky-800' },
+    'san_approved': { bg: 'bg-emerald-500', border: 'border-emerald-500', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' },
+    'san_rejected': { bg: 'bg-red-500', border: 'border-red-500', dot: 'bg-red-500', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800' },
+    'san_quality_rated': { bg: 'bg-purple-500', border: 'border-purple-500', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800' },
     'grn_generated': { bg: 'bg-teal-600', border: 'border-teal-600', dot: 'bg-teal-600', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800' },
+    'grn_submitted': { bg: 'bg-teal-500', border: 'border-teal-500', dot: 'bg-teal-500', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800' },
+    'grn_approved': { bg: 'bg-emerald-500', border: 'border-emerald-500', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' },
+    'grn_rejected': { bg: 'bg-red-500', border: 'border-red-500', dot: 'bg-red-500', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800' },
+    'grn_inspected': { bg: 'bg-indigo-500', border: 'border-indigo-500', dot: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800' },
     'payment_voucher': { bg: 'bg-rose-500', border: 'border-rose-500', dot: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800' },
+    'payment_made': { bg: 'bg-emerald-500', border: 'border-emerald-500', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' },
+    'delivery_scheduled': { bg: 'bg-blue-400', border: 'border-blue-400', dot: 'bg-blue-400', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800' },
+    'goods_received': { bg: 'bg-teal-500', border: 'border-teal-500', dot: 'bg-teal-500', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800' },
+    'service_acknowledged': { bg: 'bg-cyan-500', border: 'border-cyan-500', dot: 'bg-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800' },
   };
 
   if (colorMap[action]) return colorMap[action];
 
   // Fallback based on keywords
+  if (action.includes('san')) {
+    return { bg: 'bg-cyan-500', border: 'border-cyan-500', dot: 'bg-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800' };
+  }
   if (action.includes('qtn') || action.includes('quotation')) {
     return { bg: 'bg-indigo-500', border: 'border-indigo-500', dot: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800' };
   }
@@ -232,15 +251,28 @@ const getIconForAction = (action: string): any => {
     'qtn_closed': Check,
     'supplier_selected': Target,
     'po_generated': ShoppingCart,
+    // ✅ Added SAN events
+    'san_generated': FileCheckIcon,
+    'san_submitted': Send,
+    'san_approved': CheckCircle,
+    'san_rejected': XCircle,
+    'san_quality_rated': Star,
     'grn_generated': Truck,
+    'grn_submitted': Send,
+    'grn_approved': CheckCircle,
+    'grn_rejected': XCircle,
+    'grn_inspected': Eye,
     'payment_voucher': Receipt,
+    'payment_made': CheckCircle,
     'delivery_scheduled': Calendar,
     'goods_received': Package,
+    'service_acknowledged': Handshake,
   };
 
   if (iconMap[action]) return iconMap[action];
 
   // Fallback based on keywords
+  if (action.includes('san')) return FileCheckIcon;
   if (action.includes('qtn') || action.includes('quotation')) return FileCheck;
   if (action.includes('po') || action.includes('purchase') || action.includes('order')) return ShoppingCart;
   if (action.includes('grn') || action.includes('delivery') || action.includes('receive')) return Truck;
@@ -271,10 +303,22 @@ const getLabelForAction = (action: string, defaultLabel?: string): string => {
     'qtn_closed': 'QTN Closed',
     'supplier_selected': 'Supplier Selected',
     'po_generated': 'PO Generated',
+    // ✅ Added SAN labels
+    'san_generated': 'SAN Generated',
+    'san_submitted': 'SAN Submitted',
+    'san_approved': 'SAN Approved',
+    'san_rejected': 'SAN Rejected',
+    'san_quality_rated': 'Service Quality Rated',
     'grn_generated': 'GRN Generated',
+    'grn_submitted': 'GRN Submitted',
+    'grn_approved': 'GRN Approved',
+    'grn_rejected': 'GRN Rejected',
+    'grn_inspected': 'Goods Inspected',
     'payment_voucher': 'Payment Voucher',
+    'payment_made': 'Payment Made',
     'delivery_scheduled': 'Delivery Scheduled',
     'goods_received': 'Goods Received',
+    'service_acknowledged': 'Service Acknowledged',
   };
 
   return labelMap[action] || defaultLabel || action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -292,6 +336,7 @@ export interface RequisitionProcurementTabProps {
   qtnDetails: any;
   poDetails: any;
   grnDetails: any;
+  sanDetails: any; // ✅ Added SAN details
   paymentDetails: any;
   hasSupplierSelected: boolean;
   quotesCount: number;
@@ -323,6 +368,7 @@ export const RequisitionProcurementTab: React.FC<RequisitionProcurementTabProps>
   qtnDetails,
   poDetails,
   grnDetails,
+  sanDetails, // ✅ Added SAN details
   paymentDetails,
   hasSupplierSelected,
   quotesCount,
@@ -362,6 +408,9 @@ export const RequisitionProcurementTab: React.FC<RequisitionProcurementTabProps>
       </Card>
     );
   }
+
+  // Determine if delivery is completed (GRN or SAN)
+  const hasDelivery = grnDetails?.hasGrn || sanDetails?.hasSan;
 
   return (
     <div className="space-y-6">
@@ -507,10 +556,18 @@ export const RequisitionProcurementTab: React.FC<RequisitionProcurementTabProps>
                 <span className="text-xs font-medium">{poDetails.type || 'PO'}: {poDetails.number}</span>
               </div>
             )}
-            {grnDetails.hasGrn && (
+            {/* ✅ GRN Chip */}
+            {grnDetails?.hasGrn && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 rounded-full border border-teal-200 dark:border-teal-800">
                 <Truck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
                 <span className="text-xs font-medium">GRN: {grnDetails.number}</span>
+              </div>
+            )}
+            {/* ✅ SAN Chip */}
+            {sanDetails?.hasSan && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 rounded-full border border-cyan-200 dark:border-cyan-800">
+                <FileCheckIcon className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                <span className="text-xs font-medium">SAN: {sanDetails.number}</span>
               </div>
             )}
             {paymentDetails.hasPayment && (
@@ -603,7 +660,7 @@ export const RequisitionProcurementTab: React.FC<RequisitionProcurementTabProps>
                               </p>
                             )}
 
-                            {/* User Info - Fixed to show name correctly */}
+                            {/* User Info */}
                             <div className="mt-2 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                               <UserIcon className="h-3 w-3" />
                               <span className="font-medium text-gray-700 dark:text-gray-300">

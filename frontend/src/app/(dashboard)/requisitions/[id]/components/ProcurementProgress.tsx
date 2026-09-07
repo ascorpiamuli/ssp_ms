@@ -205,33 +205,9 @@ export const ProcurementProgress: React.FC<ProcurementProgressProps> = ({
     return map[stageId] || null;
   };
 
-  // Ready state
-  if (!hasProcurementStarted && !isProcurementComplete) {
-    return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
-                <ShoppingCart className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="flex-1">
-                <p className="text-base font-semibold text-gray-900 dark:text-gray-100">Ready for Procurement</p>
-                <p className="text-sm text-muted-foreground">This requisition is approved and ready to be procured</p>
-              </div>
-              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800 rounded-full px-4 py-1.5 text-sm">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Ready
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    );
-  }
 
   // Complete state
-  if (isProcurementComplete) {
+  if (isProcurementComplete && hasProcurementStarted) {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-0 shadow-sm bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl overflow-hidden">

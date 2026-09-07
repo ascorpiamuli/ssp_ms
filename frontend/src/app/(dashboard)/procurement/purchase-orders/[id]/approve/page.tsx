@@ -364,6 +364,10 @@ export default function PurchaseOrderApprovePage() {
   const { success, error } = useToast();
   const { user, isPrincipal, isFinalApprover, isAdmin } = useAuthContext();
 
+  // ============================================
+  // ALL HOOKS - CALLED AT TOP LEVEL
+  // ============================================
+
   // State
   const [approveComment, setApproveComment] = useState('');
   const [showApproveDialog, setShowApproveDialog] = useState(false);
@@ -387,12 +391,218 @@ export default function PurchaseOrderApprovePage() {
 
   const supplierName = getSupplierName(supplier || po?.supplier);
 
+  // Supplier contact info
+  const supplierEmail = useMemo(() => {
+    return supplier?.company_email || supplier?.email || po?.supplier?.email || 'No email';
+  }, [supplier, po]);
+
+  const supplierPhone = useMemo(() => {
+    return supplier?.company_phone || supplier?.phone || po?.supplier?.phone || 'N/A';
+  }, [supplier, po]);
+
+  const supplierAddress = useMemo(() => {
+    return supplier?.company_address || 'N/A';
+  }, [supplier]);
+
   // Determine workflow status
   const isChecked = !!po?.checked_by;
   const isEndorsed = !!po?.endorsed_by;
   const isApproved = !!po?.approved_by;
 
   const canApproveOrder = isChecked && isEndorsed && !isApproved;
+
+  // ============================================
+  // ITEM ANALYSIS - WITH SUPPLIER-ADDED ITEMS
+  // ============================================
+
+  const itemAnalysis = useMemo(() => {
+    if (!po?.items) return {
+      total: 0,
+      verified: 0,
+      supplierAdded: 0,
+      count: 0,
+      matchRate: 0,
+      canApprove: false
+    };
+
+    const poItems = po.items || [];
+    const reqItems = po.requisition?.items || [];
+
+    let verified = 0;
+    let supplierAdded = 0;
+    let count = 0;
+
+    poItems.forEach((item: any) => {
+      // Supplier-added items - no requisition_item_id
+      if (!item.requisition_item_id) {
+        supplierAdded++;
+        verified++; // Count as verified for approval
+        return;
+      }
+
+      const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
+      if (reqItem) {
+        count++;
+        const nameMatch = item.item_name?.toLowerCase() === reqItem.item_name?.toLowerCase();
+        const qtyMatch = item.quantity === reqItem.quantity;
+        const unitMatch = item.unit_of_measure === reqItem.unit_of_measure;
+        if (nameMatch && qtyMatch && unitMatch) verified++;
+      }
+    });
+
+    const totalItems = poItems.length;
+    const totalAcceptable = verified;
+    const totalItemsForRate = totalItems > 0 ? totalItems : 1;
+
+    // Can approve if all items are either verified OR supplier-added
+    const canApprove = totalItems === (verified);
+
+    return {
+      total: totalItems,
+      verified,
+      supplierAdded,
+      count,
+      matchRate: Math.round((totalAcceptable / totalItemsForRate) * 100),
+      canApprove
+    };
+  }, [po]);
+
+  // ============================================
+  // FINANCIAL ANALYSIS - WITH SUPPLIER-ADDED ITEMS
+  // ============================================
+
+  const financialAnalysis = useMemo(() => {
+    if (!po?.items || !po?.requisition?.items) {
+      return {
+        estimatedTotal: 0,
+        actualTotal: 0,
+        difference: 0,
+        savings: 0,
+        isSaving: false,
+        percentVariance: 0,
+        itemCount: 0,
+        averagePriceDiff: 0,
+        budgetStatus: 'unknown' as 'on_budget' | 'under_budget' | 'over_budget',
+        supplierAddedTotal: 0,
+      };
+    }
+
+    const poItems = po.items || [];
+    const reqItems = po.requisition.items || [];
+
+    let estimatedTotal = 0;
+    let actualTotal = 0;
+    let supplierAddedTotal = 0;
+    let count = 0;
+    let totalPriceDiff = 0;
+
+    poItems.forEach((item: any) => {
+      const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
+      const isSupplierAdded = !item.requisition_item_id;
+
+      if (isSupplierAdded) {
+        supplierAddedTotal += (item.unit_price || 0) * (item.quantity || 0);
+        actualTotal += (item.unit_price || 0) * (item.quantity || 0);
+      } else if (reqItem) {
+        const estCost = (reqItem.estimated_unit_cost || 0) * (item.quantity || 0);
+        const actCost = (item.unit_price || 0) * (item.quantity || 0);
+        estimatedTotal += estCost;
+        actualTotal += actCost;
+        totalPriceDiff += (item.unit_price || 0) - (reqItem.estimated_unit_cost || 0);
+        count++;
+      } else {
+        actualTotal += (item.unit_price || 0) * (item.quantity || 0);
+      }
+    });
+
+    const difference = actualTotal - estimatedTotal;
+    const savings = difference < 0 ? Math.abs(difference) : 0;
+    const isSaving = difference < 0;
+    const percentVariance = estimatedTotal > 0 ? (difference / estimatedTotal) * 100 : 0;
+    const averagePriceDiff = count > 0 ? totalPriceDiff / count : 0;
+
+    let budgetStatus: 'on_budget' | 'under_budget' | 'over_budget' = 'on_budget';
+    if (Math.abs(percentVariance) < 5) budgetStatus = 'on_budget';
+    else if (percentVariance < 0) budgetStatus = 'under_budget';
+    else budgetStatus = 'over_budget';
+
+    return {
+      estimatedTotal,
+      actualTotal,
+      difference,
+      savings,
+      isSaving,
+      percentVariance,
+      itemCount: count,
+      averagePriceDiff,
+      budgetStatus,
+      supplierAddedTotal,
+    };
+  }, [po]);
+
+  // ============================================
+  // PRICE COMPARISON ITEMS - WITH SUPPLIER-ADDED
+  // ============================================
+
+  const priceComparisonItems = useMemo(() => {
+    if (!po?.items || !po?.requisition?.items) return [];
+
+    const poItems = po.items || [];
+    const reqItems = po.requisition.items || [];
+
+    const results: any[] = [];
+
+    poItems.forEach((item: any) => {
+      const isSupplierAdded = !item.requisition_item_id;
+      const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
+
+      if (isSupplierAdded) {
+        results.push({
+          itemName: item.item_name,
+          quantity: item.quantity,
+          estimatedPrice: 0,
+          actualPrice: item.unit_price || 0,
+          difference: 0,
+          percentDifference: 0,
+          isSaving: false,
+          totalEstimated: 0,
+          totalActual: (item.unit_price || 0) * (item.quantity || 0),
+          reqItem: null,
+          isSupplierAdded: true,
+        });
+      } else if (reqItem) {
+        const estPrice = reqItem.estimated_unit_cost || 0;
+        const actPrice = item.unit_price || 0;
+        const diff = actPrice - estPrice;
+        const percentDiff = estPrice > 0 ? (diff / estPrice) * 100 : 0;
+
+        results.push({
+          itemName: item.item_name,
+          quantity: item.quantity,
+          estimatedPrice: estPrice,
+          actualPrice: actPrice,
+          difference: diff,
+          percentDifference: percentDiff,
+          isSaving: diff < 0,
+          totalEstimated: estPrice * (item.quantity || 0),
+          totalActual: actPrice * (item.quantity || 0),
+          reqItem,
+          isSupplierAdded: false,
+        });
+      }
+    });
+
+    return results;
+  }, [po]);
+
+  // Total savings and premiums
+  const totalSavings = useMemo(() => {
+    return priceComparisonItems.reduce((sum, item) => sum + (item.difference < 0 ? Math.abs(item.difference) * item.quantity : 0), 0);
+  }, [priceComparisonItems]);
+
+  const totalPremiums = useMemo(() => {
+    return priceComparisonItems.reduce((sum, item) => sum + (item.difference > 0 ? item.difference * item.quantity : 0), 0);
+  }, [priceComparisonItems]);
 
   // ============================================
   // HANDLERS
@@ -421,6 +631,10 @@ export default function PurchaseOrderApprovePage() {
       );
     }
   };
+
+  // ============================================
+  // CONDITIONAL RETURNS - AFTER ALL HOOKS
+  // ============================================
 
   // Loading state
   if (isLoading) {
@@ -624,9 +838,9 @@ export default function PurchaseOrderApprovePage() {
     );
   }
 
-  const supplierEmail = supplier?.company_email || supplier?.email || po?.supplier?.email || 'No email';
-  const supplierPhone = supplier?.company_phone || supplier?.phone || po?.supplier?.phone || 'N/A';
-  const supplierAddress = supplier?.company_address || 'N/A';
+  // ============================================
+  // MAIN RENDER
+  // ============================================
 
   return (
     <PageTemplate
@@ -655,6 +869,14 @@ export default function PurchaseOrderApprovePage() {
             </Tooltip>
           </TooltipProvider>
 
+          {/* ✅ Show supplier-added items count */}
+          {itemAnalysis.supplierAdded > 0 && (
+            <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 rounded-full px-3 py-1.5">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              {itemAnalysis.supplierAdded} Supplier-Added Items
+            </Badge>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -668,21 +890,21 @@ export default function PurchaseOrderApprovePage() {
           <Button
             className="h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all duration-300"
             onClick={handleApprove}
-            disabled={approveMutation.isPending}
+            disabled={approveMutation.isPending || !itemAnalysis.canApprove}
           >
             {approveMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Shield className="h-4 w-4 mr-2" />
             )}
-            Approve Order
+            {itemAnalysis.canApprove ? 'Approve Order' : 'Resolve Issues First'}
           </Button>
         </div>
       }
     >
       <div className="space-y-6">
         {/* ============================================ */}
-        {/* STATUS ALERT */}
+        {/* STATUS ALERT - Updated for Supplier-Added Items */}
         {/* ============================================ */}
         <AnimatePresence>
           <motion.div
@@ -690,15 +912,27 @@ export default function PurchaseOrderApprovePage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
           >
-            <Alert className="rounded-xl bg-purple-50/80 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50 shadow-sm">
+            <Alert className={cn(
+              "rounded-xl shadow-sm",
+              itemAnalysis.supplierAdded > 0
+                ? "bg-purple-50/80 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50"
+                : "bg-purple-50/80 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50"
+            )}>
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/40">
                   <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="flex-1">
-                  <AlertTitle className="text-purple-700 dark:text-purple-300 font-semibold">Ready for Final Approval</AlertTitle>
+                  <AlertTitle className="text-purple-700 dark:text-purple-300 font-semibold">
+                    {itemAnalysis.supplierAdded > 0
+                      ? `Ready for Final Approval (${itemAnalysis.supplierAdded} Supplier-Added Items)`
+                      : 'Ready for Final Approval'
+                    }
+                  </AlertTitle>
                   <AlertDescription className="text-purple-600 dark:text-purple-400">
-                    This purchase order has been checked by HOD and endorsed by the Accountant. Review the details below and approve to authorize issuance.
+                    This purchase order has been checked by HOD and endorsed by the Accountant.
+                    {itemAnalysis.supplierAdded > 0 && ` ${itemAnalysis.supplierAdded} supplier-added items are included and have been reviewed.`}
+                    Review the details below and approve to authorize issuance.
                   </AlertDescription>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
@@ -934,7 +1168,7 @@ export default function PurchaseOrderApprovePage() {
         </motion.div>
 
         {/* ============================================ */}
-        {/* ITEMS TABLE */}
+        {/* ITEMS TABLE - WITH SUPPLIER-ADDED INDICATOR */}
         {/* ============================================ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -943,15 +1177,21 @@ export default function PurchaseOrderApprovePage() {
         >
           <Card className="border-0 shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="pb-3 border-b bg-gradient-to-r from-gray-50/50 to-gray-100/50 dark:from-gray-900/30 dark:to-gray-800/30">
-              <CardTitle className="text-base flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
                   <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 </div>
-                Order Items
+                <CardTitle className="text-base">Order Items</CardTitle>
                 <Badge variant="outline" className="text-xs rounded-full">
                   {po.items?.length || 0} items
                 </Badge>
-              </CardTitle>
+                {itemAnalysis.supplierAdded > 0 && (
+                  <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full text-xs">
+                    <Sparkles className="h-3 w-3 mr-0.5" />
+                    {itemAnalysis.supplierAdded} Added
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-4">
               {!po.items || po.items.length === 0 ? (
@@ -969,23 +1209,48 @@ export default function PurchaseOrderApprovePage() {
                         <TableHead className="text-center">Unit</TableHead>
                         <TableHead className="text-right">Unit Price</TableHead>
                         <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-center">Source</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {po.items.map((item: any, index: number) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="text-center text-xs text-muted-foreground">{index + 1}</TableCell>
-                          <TableCell className="font-medium">{item.item_name}</TableCell>
-                          <TableCell className="text-center">{item.formatted_quantity || item.quantity}</TableCell>
-                          <TableCell className="text-center">{item.unit_of_measure || '—'}</TableCell>
-                          <TableCell className="text-right font-medium text-blue-600 dark:text-blue-400">
-                            {formatCurrency(item.unit_price)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency((item.unit_price || 0) * (item.quantity || 0))}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {po.items.map((item: any, index: number) => {
+                        const isSupplierAdded = !item.requisition_item_id;
+                        return (
+                          <TableRow key={item.id} className={isSupplierAdded ? "bg-purple-50/20 dark:bg-purple-950/10" : ""}>
+                            <TableCell className="text-center text-xs text-muted-foreground">{index + 1}</TableCell>
+                            <TableCell className="font-medium">
+                              {item.item_name}
+                              {isSupplierAdded && (
+                                <Badge className="ml-2 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full text-[10px]">
+                                  <Sparkles className="h-3 w-3 mr-0.5" />
+                                  Supplier Added
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">{item.formatted_quantity || item.quantity}</TableCell>
+                            <TableCell className="text-center">{item.unit_of_measure || '—'}</TableCell>
+                            <TableCell className="text-right font-medium text-blue-600 dark:text-blue-400">
+                              {formatCurrency(item.unit_price)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency((item.unit_price || 0) * (item.quantity || 0))}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isSupplierAdded ? (
+                                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full text-[10px]">
+                                  <Sparkles className="h-3 w-3 mr-0.5" />
+                                  Added
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 rounded-full text-[10px]">
+                                  <Check className="h-3 w-3 mr-0.5" />
+                                  Requisition
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </UITable>
                 </div>
@@ -1030,6 +1295,19 @@ export default function PurchaseOrderApprovePage() {
                   <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{formatCurrency(po.total_amount || 0)}</p>
                 </div>
               </div>
+
+              {/* ✅ Supplier-Added Items Total */}
+              {financialAnalysis.supplierAddedTotal > 0 && (
+                <div className="mt-3 p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/50">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm text-purple-700 dark:text-purple-300">
+                      <strong>{itemAnalysis.supplierAdded}</strong> supplier-added items totaling{' '}
+                      <strong>{formatCurrency(financialAnalysis.supplierAddedTotal)}</strong> are included in this order.
+                    </span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -1094,23 +1372,31 @@ export default function PurchaseOrderApprovePage() {
         )}
 
         {/* ============================================ */}
-        {/* FINAL AUTHORIZATION SUMMARY */}
+        {/* FINAL AUTHORIZATION SUMMARY - Updated */}
         {/* ============================================ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
         >
-          <Card className="border-0 shadow-sm rounded-xl overflow-hidden border-l-[6px] border-l-purple-500">
+          <Card className={cn(
+            "border-0 shadow-sm rounded-xl overflow-hidden border-l-[6px]",
+            itemAnalysis.supplierAdded > 0 ? "border-l-purple-500" : "border-l-purple-500"
+          )}>
             <CardContent className="p-6">
               <div className="flex items-start gap-5">
                 <div className="p-3 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex-shrink-0">
                   <Shield className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-lg text-gray-900 dark:text-white">Final Authorization</h4>
+                  <h4 className="font-bold text-lg text-gray-900 dark:text-white">
+                    {itemAnalysis.supplierAdded > 0 ? 'Final Authorization (Supplier-Added Items Included)' : 'Final Authorization'}
+                  </h4>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                     By approving this purchase order, you are authorizing the issuance of <span className="font-bold text-purple-600 dark:text-purple-400">{po.po_number}</span> to <span className="font-medium">{supplierName}</span> for the total amount of <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(po.total_amount)}</span>.
+                    {itemAnalysis.supplierAdded > 0 && (
+                      <> This includes <span className="font-medium text-purple-600 dark:text-purple-400">{itemAnalysis.supplierAdded} supplier-added items</span> totaling <span className="font-bold text-purple-600 dark:text-purple-400">{formatCurrency(financialAnalysis.supplierAddedTotal)}</span>.</>
+                    )}
                   </p>
                   <div className="flex flex-wrap items-center gap-5 mt-3 text-sm">
                     <div className="flex items-center gap-2">
@@ -1131,6 +1417,14 @@ export default function PurchaseOrderApprovePage() {
                         Your Action: <span className="font-medium text-purple-600 dark:text-purple-400">Pending Approval</span>
                       </span>
                     </div>
+                    {itemAnalysis.supplierAdded > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                        <span className="text-gray-700 dark:text-gray-300">
+                          Supplier Added: <span className="font-medium text-purple-600 dark:text-purple-400">{itemAnalysis.supplierAdded} items</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1140,7 +1434,7 @@ export default function PurchaseOrderApprovePage() {
       </div>
 
       {/* ============================================ */}
-      {/* APPROVE DIALOG */}
+      {/* APPROVE DIALOG - Updated */}
       {/* ============================================ */}
 
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
@@ -1189,6 +1483,19 @@ export default function PurchaseOrderApprovePage() {
               </div>
             </div>
 
+            {/* ✅ Supplier-Added Items Summary in Dialog */}
+            {itemAnalysis.supplierAdded > 0 && (
+              <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/50">
+                <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span>
+                    <strong>{itemAnalysis.supplierAdded}</strong> supplier-added items totaling{' '}
+                    <strong>{formatCurrency(financialAnalysis.supplierAddedTotal)}</strong> are included in this order.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Workflow Summary */}
             <div className="p-3 bg-muted/30 rounded-xl">
               <div className="flex items-center justify-between text-sm">
@@ -1221,7 +1528,10 @@ export default function PurchaseOrderApprovePage() {
 
             <div className="flex items-center gap-2.5 p-3.5 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/50 text-xs text-muted-foreground">
               <Info className="h-4 w-4 text-purple-500 flex-shrink-0" />
-              <span className="leading-relaxed">By approving, you authorize the issuance of this purchase order and commit the funds.</span>
+              <span className="leading-relaxed">
+                By approving, you authorize the issuance of this purchase order and commit the funds.
+                {itemAnalysis.supplierAdded > 0 && ' Supplier-added items have been reviewed and approved by HOD and Accountant.'}
+              </span>
             </div>
           </div>
 

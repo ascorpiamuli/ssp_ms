@@ -107,6 +107,54 @@ export const requisitionService = {
     return api.post<Requisition>(`${BASE_URL}/${id}/cancel`, data);
   },
 
+  // ============================================
+  // NEW: SERVICE AND GOODS SPECIFIC ENDPOINTS
+  // ============================================
+
+  /**
+   * Get only service requisitions (LSO)
+   */
+  getServices: async (filters?: RequisitionFilters): Promise<PaginatedResponse<Requisition>> => {
+    return api.get<PaginatedResponse<Requisition>>(`${BASE_URL}/services`, { params: filters });
+  },
+
+  /**
+   * Get only goods requisitions (LPO)
+   */
+  getGoods: async (filters?: RequisitionFilters): Promise<PaginatedResponse<Requisition>> => {
+    return api.get<PaginatedResponse<Requisition>>(`${BASE_URL}/goods`, { params: filters });
+  },
+
+  /**
+   * Get requisitions by service category
+   */
+  getByServiceCategory: async (
+    category: string,
+    filters?: RequisitionFilters
+  ): Promise<PaginatedResponse<Requisition>> => {
+    return api.get<PaginatedResponse<Requisition>>(`${BASE_URL}/by-service-category/${category}`, {
+      params: filters,
+    });
+  },
+
+  /**
+   * Get requisitions ready for LPO generation (goods)
+   */
+  getForLpo: async (filters?: RequisitionFilters): Promise<PaginatedResponse<Requisition>> => {
+    return api.get<PaginatedResponse<Requisition>>(`${BASE_URL}/for-lpo`, { params: filters });
+  },
+
+  /**
+   * Get requisitions ready for LSO generation (services)
+   */
+  getForLso: async (filters?: RequisitionFilters): Promise<PaginatedResponse<Requisition>> => {
+    return api.get<PaginatedResponse<Requisition>>(`${BASE_URL}/for-lso`, { params: filters });
+  },
+
+  // ============================================
+  // ADMIN ENDPOINTS
+  // ============================================
+
   /**
    * Admin - Get all requisitions (admin only)
    */

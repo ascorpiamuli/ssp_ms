@@ -197,6 +197,53 @@ export interface CreateGoodsReceivedData {
   metadata?: Record<string, any>;
 }
 
+export interface CreateServiceAcknowledgmentItemData {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  notes?: string;
+}
+
+/**
+ * Payload for creating a Service Acknowledgment Note (SAN).
+ * SANs describe services rendered, so their line items are free-form
+ * (description / quantity / unit price) rather than PO-item based like GRNs.
+ */
+export interface CreateServiceAcknowledgmentData {
+  purchase_order_id: number;
+  requisition_id?: number;
+  received_date?: string;
+  received_time?: string;
+  service_quality_rating?:number;
+  notes: string;
+  supplier_id?: number;
+  service_quality_notes?: string;
+  service_performance_notes?: string;
+  acknowledged_by?: number;
+  san_number?: string;
+  reference_number?: string;
+  acknowledgment_date: string;
+  acknowledgment_time?: string;
+  service_description: string;
+  service_provider?: string;
+  service_start_date?: string;
+  service_end_date?: string;
+  service_deliverables?: string;
+  quality_rating?: number;
+  quality_notes?: string;
+  performance_notes?: string;
+  approval_level?: string;
+  additional_notes?: string;
+  status?: string;
+  total_value?: number;
+  total_tax?: number;
+  total_discount?: number;
+  net_total?: number;
+  items: CreateServiceAcknowledgmentItemData[];
+  metadata?: Record<string, any>;
+}
+
 export interface InspectGoodsData {
   inspection_result: InspectionResult;
   inspection_notes?: string;

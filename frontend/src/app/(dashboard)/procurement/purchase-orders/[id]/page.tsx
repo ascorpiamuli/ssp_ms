@@ -157,7 +157,6 @@ import {
   useCancelPurchaseOrder,
   useGetPurchaseOrderPdf,
   useCompletePurchaseOrder,
-  useMarkPurchaseOrderDelivered,
   useCheckPurchaseOrder,
   useEndorsePurchaseOrder,
   useApprovePurchaseOrder,
@@ -950,7 +949,6 @@ export default function PurchaseOrderDetailPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showIssueDialog, setShowIssueDialog] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
-  const [showDeliveredDialog, setShowDeliveredDialog] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [checkComment, setCheckComment] = useState('');
@@ -972,7 +970,6 @@ export default function PurchaseOrderDetailPage() {
   const issueMutation = useIssuePurchaseOrder();
   const sendMutation = useSendPurchaseOrderToSupplier();
   const cancelMutation = useCancelPurchaseOrder();
-  const markDeliveredMutation = useMarkPurchaseOrderDelivered();
   const completeMutation = useCompletePurchaseOrder();
 
   // PDF Download Hook with Retry Logic
@@ -1017,10 +1014,6 @@ export default function PurchaseOrderDetailPage() {
 
   const canIssue = po?.status === 'draft' && hasAllSignatures;
   const canSend = po?.status === 'issued';
-  const canMarkDelivered =
-    po?.status === 'sent' ||
-    po?.status === 'acknowledged' ||
-    po?.status === 'partial';
   const canComplete = po?.status === 'delivered';
   const canCancel =
     po?.status !== 'completed' &&
@@ -1188,19 +1181,6 @@ export default function PurchaseOrderDetailPage() {
         onSuccess: () => {
           success(`Purchase Order ${po.po_number} sent to supplier`);
           setShowSendDialog(false);
-          handleRefresh();
-        }
-      });
-    }
-  };
-
-  const handleMarkDelivered = () => setShowDeliveredDialog(true);
-  const handleConfirmMarkDelivered = () => {
-    if (po) {
-      markDeliveredMutation.mutate(po.id, {
-        onSuccess: () => {
-          success(`Purchase Order ${po.po_number} marked as delivered`);
-          setShowDeliveredDialog(false);
           handleRefresh();
         }
       });
@@ -1433,9 +1413,6 @@ export default function PurchaseOrderDetailPage() {
     if (canSend) {
       return { label: 'Send to Supplier', onClick: handleSend, pending: sendMutation.isPending };
     }
-    if (canMarkDelivered) {
-      return { label: 'Mark Delivered', onClick: handleMarkDelivered, pending: markDeliveredMutation.isPending };
-    }
     if (canComplete) {
       return { label: 'Complete Order', onClick: handleComplete, pending: completeMutation.isPending };
     }
@@ -1594,11 +1571,6 @@ export default function PurchaseOrderDetailPage() {
               {canSend && (
                 <DropdownMenuItem onClick={handleSend} className="text-indigo-600 dark:text-indigo-400 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50">
                   <Mail className="h-4 w-4 mr-3" />Send to Supplier
-                </DropdownMenuItem>
-              )}
-              {canMarkDelivered && (
-                <DropdownMenuItem onClick={handleMarkDelivered} className="text-emerald-600 dark:text-emerald-400 rounded-xl py-2 px-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50">
-                  <Truck className="h-4 w-4 mr-3" />Mark Delivered
                 </DropdownMenuItem>
               )}
               {canComplete && (
@@ -2936,28 +2908,11 @@ export default function PurchaseOrderDetailPage() {
                         </motion.div>
                       )}
 
-                      {canMarkDelivered && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2, type: 'spring', stiffness: 300 }}
-                        >
-                          <Button
-                            onClick={handleMarkDelivered}
-                            className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:scale-[1.02] group relative overflow-hidden"
-                          >
-                            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                            <Truck className="h-4 w-4 mr-2 group-hover:translate-x-1 transition-transform" />
-                            Mark Delivered
-                          </Button>
-                        </motion.div>
-                      )}
-
                       {canComplete && (
                         <motion.div
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.25, type: 'spring', stiffness: 300 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 300 }}
                         >
                           <Button
                             onClick={handleComplete}
@@ -3399,27 +3354,6 @@ export default function PurchaseOrderDetailPage() {
             <Button variant="outline" onClick={() => setShowSendDialog(false)} className="rounded-xl">Cancel</Button>
             <Button onClick={handleConfirmSend} disabled={sendMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/20 transition-all duration-300 hover:scale-[1.02]">
               {sendMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending...</> : <>Send</>}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Mark Delivered Dialog */}
-      <Dialog open={showDeliveredDialog} onOpenChange={setShowDeliveredDialog}>
-        <DialogContent className="rounded-xl max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <Truck className="h-5 w-5 text-emerald-600" />
-              Mark as Delivered
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Mark "{po?.po_number}" as delivered by {supplierName}.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeliveredDialog(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleConfirmMarkDelivered} disabled={markDeliveredMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg shadow-emerald-600/20 transition-all duration-300 hover:scale-[1.02]">
-              {markDeliveredMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Marking...</> : <>Mark Delivered</>}
             </Button>
           </DialogFooter>
         </DialogContent>

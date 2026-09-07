@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -18,7 +18,7 @@ import {
   User,
   Mail,
   Calendar as CalendarIcon,
-  Info,
+  Info as InfoIcon,
   AlertCircle,
   Loader2,
   CheckCircle,
@@ -51,6 +51,16 @@ import {
   Users,
   Briefcase as BriefcaseIcon,
   ShoppingCart,
+  Lightbulb,
+  FileCheck,
+  Wrench,
+  MapPin,
+  Calendar,
+  UserCog,
+  CreditCard,
+  Construction,
+  Laptop,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,11 +80,12 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
 
 // Hooks
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -85,375 +96,1437 @@ import { useSuppliers } from '@/hooks/useSuppliers';
 
 // Types
 import type { Department } from '@/types/common.types';
-import type { UpdateRequisitionData } from '@/types/requisition.types';
+import type {
+  Requisition,
+  UpdateRequisitionData,
+  RequisitionTypeEnum,
+  RequisitionPriority,
+  RequisitionType,
+  RequisitionUrgency,
+  ProcurementMethod,
+  RiskLevel,
+  ServiceCategory,
+} from '@/types/requisition.types';
+
+// ============================================
+// FORM TYPES
+// ============================================
+
+interface FormItem {
+  id?: number;
+  item_name: string;
+  description: string;
+  unit_of_measure: string;
+  quantity: number;
+  estimated_unit_cost: number;
+  specifications: string;
+  catalog_number: string;
+  manufacturer: string;
+  model_number: string;
+  supplier_id: number | null;
+  is_inventory_item: boolean;
+  inventory_code: string;
+  tax_rate: number;
+  discount_percentage: number;
+}
+
+interface FormData {
+  requisition_type: RequisitionTypeEnum;
+  title: string;
+  description: string;
+  department_id: string;
+  priority: RequisitionPriority;
+  type: RequisitionType;
+  urgency: RequisitionUrgency;
+  justification: string;
+  required_by_date: string;
+  required_delivery_date: string;
+  service_category: ServiceCategory | '';
+  service_scope_of_work: string;
+  service_deliverables_expected: string;
+  service_expected_start_date: string;
+  service_expected_end_date: string;
+  service_estimated_duration_days: number | '';
+  service_requires_onsite_visit: boolean;
+  service_special_requirements: string;
+  service_qualifications_required: string;
+  goods_category: string;
+  goods_warehouse_location: string;
+  goods_storage_requirements: string;
+  goods_expected_delivery_date: string;
+  budget_code: string;
+  budget_source: string;
+  funding_source: string;
+  project_code: string;
+  procurement_method: ProcurementMethod | '';
+  is_framework_agreement: boolean;
+  framework_agreement_id: string;
+  risk_level: RiskLevel;
+  risk_mitigation: string;
+  is_compliant: boolean;
+  compliance_notes: string;
+  currency: string;
+  exchange_rate: number;
+  items: FormItem[];
+}
+
+const EMPTY_ITEM: FormItem = {
+  item_name: '',
+  description: '',
+  unit_of_measure: '',
+  quantity: 1,
+  estimated_unit_cost: 0,
+  specifications: '',
+  catalog_number: '',
+  manufacturer: '',
+  model_number: '',
+  supplier_id: null,
+  is_inventory_item: false,
+  inventory_code: '',
+  tax_rate: 0,
+  discount_percentage: 0,
+};
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-const UNITS = [
-  { value: 'each', label: 'Each', icon: Package },
-  { value: 'box', label: 'Box', icon: Box },
-  { value: 'carton', label: 'Carton', icon: Package },
-  { value: 'kg', label: 'Kilogram (kg)', icon: Package },
-  { value: 'g', label: 'Gram (g)', icon: Package },
-  { value: 'l', label: 'Litre (L)', icon: Package },
-  { value: 'ml', label: 'Millilitre (ml)', icon: Package },
-  { value: 'm', label: 'Metre (m)', icon: Package },
-  { value: 'cm', label: 'Centimetre (cm)', icon: Package },
-  { value: 'piece', label: 'Piece', icon: Package },
-  { value: 'set', label: 'Set', icon: Package },
-  { value: 'pack', label: 'Pack', icon: Package },
-  { value: 'roll', label: 'Roll', icon: Package },
-  { value: 'ream', label: 'Ream', icon: Package },
-  { value: 'dozen', label: 'Dozen', icon: Package },
-  { value: 'pair', label: 'Pair', icon: Package },
-  { value: 'bundle', label: 'Bundle', icon: Package },
-  { value: 'case', label: 'Case', icon: Package },
-  { value: 'bottle', label: 'Bottle', icon: Package },
-  { value: 'tin', label: 'Tin', icon: Package },
-  { value: 'bag', label: 'Bag', icon: Package },
-  { value: 'sack', label: 'Sack', icon: Package },
-  { value: 'drum', label: 'Drum', icon: Package },
+// Service Categories
+const SERVICE_CATEGORIES: ServiceCategory[] = [
+  'consultancy',
+  'maintenance',
+  'training',
+  'installation',
+  'cleaning',
+  'security',
+  'transport',
+  'construction',
+  'professional_services',
+  'it_services',
+  'other',
 ];
 
+const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
+  consultancy: 'Consultancy',
+  maintenance: 'Maintenance',
+  training: 'Training',
+  installation: 'Installation',
+  cleaning: 'Cleaning',
+  security: 'Security',
+  transport: 'Transport',
+  construction: 'Construction',
+  professional_services: 'Professional Services',
+  it_services: 'IT Services',
+  other: 'Other',
+};
+
+// Goods Categories
+const GOODS_CATEGORIES = [
+  'office_supplies',
+  'equipment',
+  'furniture',
+  'it_hardware',
+  'vehicles',
+  'consumables',
+  'raw_materials',
+  'other',
+];
+
+const GOODS_CATEGORY_LABELS: Record<string, string> = {
+  office_supplies: 'Office Supplies',
+  equipment: 'Equipment',
+  furniture: 'Furniture',
+  it_hardware: 'IT Hardware',
+  vehicles: 'Vehicles',
+  consumables: 'Consumables',
+  raw_materials: 'Raw Materials',
+  other: 'Other',
+};
+
 const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low', icon: Leaf, color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
-  { value: 'medium', label: 'Medium', icon: MinusCircle, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-  { value: 'high', label: 'High', icon: Flame, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  { value: 'emergency', label: 'Emergency', icon: Zap, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
+  { value: 'low', label: 'Low - Routine request, can wait' },
+  { value: 'medium', label: 'Medium - Important, process in time' },
+  { value: 'high', label: 'High - Urgent, needs prompt attention' },
+  { value: 'emergency', label: 'Emergency - Immediate action required' },
 ];
 
 const URGENCY_OPTIONS = [
-  { value: 'routine', label: 'Routine', icon: Clock, color: 'text-gray-400' },
-  { value: 'urgent', label: 'Urgent', icon: Zap, color: 'text-amber-500' },
-  { value: 'critical', label: 'Critical', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'routine', label: 'Routine - Regular processing' },
+  { value: 'urgent', label: 'Urgent - Faster than routine' },
+  { value: 'critical', label: 'Critical - Immediate attention' },
 ];
 
 const TYPE_OPTIONS = [
-  { value: 'normal', label: 'Normal', icon: FileText, color: 'text-blue-500' },
-  { value: 'emergency', label: 'Emergency', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'normal', label: 'Normal - Standard requisition' },
+  { value: 'emergency', label: 'Emergency - Needs accelerated processing' },
 ];
 
 const RISK_LEVELS = [
-  { value: 'low', label: 'Low', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-  { value: 'medium', label: 'Medium', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  { value: 'high', label: 'High', icon: Shield, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
-  { value: 'critical', label: 'Critical', icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-200 dark:bg-red-900/50' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'critical', label: 'Critical' },
 ];
 
 const BUDGET_SOURCES = [
-  { value: 'recurrent', label: 'Recurrent', icon: RefreshCw, color: 'text-blue-500' },
-  { value: 'development', label: 'Development', icon: TrendingUp, color: 'text-emerald-500' },
-  { value: 'donor', label: 'Donor Funded', icon: Globe, color: 'text-purple-500' },
-  { value: 'internal', label: 'Internal', icon: Home, color: 'text-amber-500' },
+  { value: 'recurrent', label: 'Recurrent' },
+  { value: 'development', label: 'Development' },
+  { value: 'donor', label: 'Donor Funded' },
+  { value: 'internal', label: 'Internal' },
 ];
 
 const FUNDING_SOURCES = [
-  { value: 'government', label: 'Government', icon: Building2, color: 'text-blue-500' },
-  { value: 'donor', label: 'Donor', icon: Heart, color: 'text-red-500' },
-  { value: 'internal', label: 'Internal', icon: Home, color: 'text-emerald-500' },
-  { value: 'private', label: 'Private Sector', icon: BriefcaseIcon, color: 'text-purple-500' },
+  { value: 'government', label: 'Government' },
+  { value: 'donor', label: 'Donor' },
+  { value: 'internal', label: 'Internal' },
+  { value: 'private', label: 'Private Sector' },
 ];
 
 const PROCUREMENT_METHODS = [
-  { value: 'direct_purchase', label: 'Direct Purchase', icon: ShoppingCart, color: 'text-blue-500' },
-  { value: 'request_for_quotation', label: 'Request for Quotation', icon: FileText, color: 'text-amber-500' },
-  { value: 'tender', label: 'Tender', icon: Target, color: 'text-emerald-500' },
-  { value: 'framework_agreement', label: 'Framework Agreement', icon: Award, color: 'text-purple-500' },
-  { value: 'emergency_procurement', label: 'Emergency Procurement', icon: AlertCircle, color: 'text-red-500' },
+  { value: 'direct_purchase', label: 'Direct Purchase' },
+  { value: 'request_for_quotation', label: 'Request for Quotation' },
+  { value: 'tender', label: 'Tender' },
+  { value: 'framework_agreement', label: 'Framework Agreement' },
+  { value: 'emergency_procurement', label: 'Emergency Procurement' },
 ];
 
 // ============================================
-// ICON SELECT COMPONENT
+// TOOLTIP WRAPPER
 // ============================================
 
-interface IconSelectProps {
+const FieldTooltip = ({ children, content }: { children?: React.ReactNode; content: string }) => (
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center gap-1 cursor-help">
+          {children}
+          <InfoIcon className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs rounded-xl p-3 bg-gray-900 text-white dark:bg-gray-800">
+        <p className="text-xs leading-relaxed">{content}</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
+// ============================================
+// STEP INDICATOR
+// ============================================
+
+const StepIndicator = memo(({ currentStep, totalSteps, labels }: {
+  currentStep: number;
+  totalSteps: number;
+  labels: string[];
+}) => {
+  return (
+    <div className="flex items-center gap-2 mb-6">
+      {Array.from({ length: totalSteps }).map((_, index) => {
+        const step = index + 1;
+        const isActive = step === currentStep;
+        const isCompleted = step < currentStep;
+        const isUpcoming = step > currentStep;
+
+        return (
+          <div key={index} className="flex items-center gap-2">
+            <div className={cn(
+              "flex items-center gap-2",
+              isActive && "text-blue-600 dark:text-blue-400",
+              isCompleted && "text-emerald-600 dark:text-emerald-400",
+              isUpcoming && "text-gray-400 dark:text-gray-600"
+            )}>
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                isActive && "bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500",
+                isCompleted && "bg-emerald-100 dark:bg-emerald-900/30 border-2 border-emerald-500",
+                isUpcoming && "bg-gray-100 dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600"
+              )}>
+                {isCompleted ? <CheckCircle className="h-4 w-4" /> : step}
+              </div>
+              <span className={cn(
+                "text-xs font-medium hidden sm:inline",
+                isActive && "text-blue-600 dark:text-blue-400",
+                isCompleted && "text-emerald-600 dark:text-emerald-400",
+                isUpcoming && "text-gray-400 dark:text-gray-500"
+              )}>
+                {labels[index]}
+              </span>
+            </div>
+            {index < totalSteps - 1 && (
+              <div className={cn(
+                "w-8 h-0.5",
+                step <= currentStep ? "bg-blue-400 dark:bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
+              )} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+StepIndicator.displayName = 'StepIndicator';
+
+// ============================================
+// SIMPLE SELECT COMPONENT
+// ============================================
+
+interface SimpleSelectProps {
   value: string;
   onValueChange: (value: string) => void;
   placeholder: string;
-  options: { value: string; label: string; icon: any; color?: string; bg?: string }[];
+  options: { value: string; label: string }[];
   disabled?: boolean;
   className?: string;
 }
 
-const IconSelect = ({ value, onValueChange, placeholder, options, disabled, className }: IconSelectProps) => {
-  const selectedOption = options.find(opt => opt.value === value);
-  const SelectedIcon = selectedOption?.icon;
-
+const SimpleSelect = memo(({ value, onValueChange, placeholder, options, disabled, className }: SimpleSelectProps) => {
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger className={cn("h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl", className)}>
-        <div className="flex items-center gap-2 truncate">
-          {SelectedIcon && (
-            <SelectedIcon className={cn("h-4 w-4 flex-shrink-0", selectedOption?.color)} />
-          )}
-          <SelectValue placeholder={placeholder} />
-        </div>
+      <SelectTrigger className={cn("h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700", className)}>
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-        {options.map((option) => {
-          const Icon = option.icon;
-          return (
-            <SelectItem key={option.value} value={option.value} className="py-2.5">
-              <div className="flex items-center gap-2.5">
-                <Icon className={cn("h-4 w-4 flex-shrink-0", option.color)} />
-                <span>{option.label}</span>
-                {option.bg && (
-                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", option.bg)}>
-                    {option.value}
-                  </Badge>
-                )}
-              </div>
-            </SelectItem>
-          );
-        })}
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} className="py-2">
+            {option.label}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
-};
+});
+
+SimpleSelect.displayName = 'SimpleSelect';
 
 // ============================================
-// ITEM ROW COMPONENT
+// STEP 1: BASIC INFORMATION
 // ============================================
 
-interface ItemRowProps {
-  index: number;
-  item: any;
-  onChange: (index: number, field: string, value: any) => void;
-  onRemove: (index: number) => void;
-  canRemove: boolean;
-  suppliers: any[];
+interface BasicInfoStepProps {
+  formData: FormData;
+  handleChange: (field: string, value: any) => void;
+  departments: Department[];
+  isHOD: boolean;
+  isStaff: boolean;
+  userDepartmentName: string;
+  userDepartmentId: string;
+  disabled: boolean;
+  errors: Record<string, string>;
+  requisition: Requisition;
 }
 
-const ItemRow = ({ index, item, onChange, onRemove, canRemove, suppliers }: ItemRowProps) => {
-  const total = (item.quantity || 0) * (item.estimated_unit_cost || 0);
-
+const BasicInfoStep = memo(({
+  formData,
+  handleChange,
+  departments,
+  isHOD,
+  isStaff,
+  userDepartmentName,
+  userDepartmentId,
+  disabled,
+  errors,
+  requisition,
+}: BasicInfoStepProps) => {
   return (
-    <div className="border rounded-xl p-5 bg-white dark:bg-gray-900 hover:shadow-md transition-all duration-200 relative group">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => onRemove(index)}
-        disabled={!canRemove}
-        className="absolute top-3 right-3 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Step 1: Basic Information</h3>
+        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-[10px] ml-2">
+          Required
+        </Badge>
+      </div>
 
-      <div className="grid grid-cols-12 gap-4 items-end">
-        <div className="col-span-12 md:col-span-3 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            Item Name <span className="text-red-500">*</span>
+      {/* Requester Info - Read Only */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Hash className="h-3.5 w-3.5" />
+            Requisition Number
           </Label>
-          <div className="relative">
-            <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Enter item name"
-              value={item.item_name || ''}
-              onChange={(e) => onChange(index, 'item_name', e.target.value)}
-              className="pl-9 h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
+          <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+            <span className="text-sm font-mono font-medium text-gray-700 dark:text-gray-300">{requisition?.reference_number}</span>
           </div>
         </div>
-
-        <div className="col-span-12 md:col-span-3 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Description</Label>
-          <Input
-            placeholder="Item description"
-            value={item.description || ''}
-            onChange={(e) => onChange(index, 'description', e.target.value)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            Qty <span className="text-red-500">*</span>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5" />
+            Requester
           </Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="0"
-            value={item.quantity || ''}
-            onChange={(e) => onChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl text-center"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            Unit <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={item.unit_of_measure || undefined}
-            onValueChange={(value) => onChange(index, 'unit_of_measure', value)}
-          >
-            <SelectTrigger className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl">
-              <SelectValue placeholder="Unit" />
-            </SelectTrigger>
-            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-              {UNITS.map((unit) => {
-                const Icon = unit.icon;
-                return (
-                  <SelectItem key={unit.value} value={unit.value}>
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      {unit.label}
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            Unit Cost <span className="text-red-500">*</span>
-          </Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">KES</span>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={item.estimated_unit_cost || ''}
-              onChange={(e) => onChange(index, 'estimated_unit_cost', parseFloat(e.target.value) || 0)}
-              className="pl-12 h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
+          <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{requisition?.user?.full_name || 'Unknown'}</span>
           </div>
         </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Tax %</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="0"
-            value={item.tax_rate || 0}
-            onChange={(e) => onChange(index, 'tax_rate', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Discount %</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="0"
-            value={item.discount_percentage || 0}
-            onChange={(e) => onChange(index, 'discount_percentage', parseFloat(e.target.value) || 0)}
-            className="h-11 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-          />
-        </div>
-
-        <div className="col-span-3 md:col-span-1 space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Total</Label>
-          <div className="h-11 flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3">
-            KES {total.toFixed(2)}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <CheckCircle className="h-3.5 w-3.5" />
+            Status
+          </Label>
+          <div className="px-3 py-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+            <Badge variant={requisition?.status === 'draft' ? 'secondary' : 'warning'} className="text-xs">
+              {requisition?.status_label || requisition?.status}
+            </Badge>
           </div>
         </div>
       </div>
 
-      {/* Expandable details */}
-      <details className="mt-4">
-        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 transition-colors flex items-center gap-1">
-          <ChevronDown className="h-3 w-3" />
-          More options
-        </summary>
-        <div className="mt-4 grid grid-cols-12 gap-4 pt-4 border-t border-dashed border-gray-200 dark:border-gray-700">
-          <div className="col-span-12 md:col-span-3 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Specifications</Label>
-            <Input
-              placeholder="Specifications"
-              value={item.specifications || ''}
-              onChange={(e) => onChange(index, 'specifications', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Title */}
+        <div className="md:col-span-2 space-y-1.5">
+          <Label htmlFor="title" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            Requisition Title <span className="text-red-500">*</span>
+            <FieldTooltip content="Give your requisition a clear, descriptive title that summarizes what you need." />
+          </Label>
+          <Input
+            id="title"
+            placeholder="e.g., Supply of Office Stationery, CCTV Installation, IT Equipment"
+            value={formData.title}
+            onChange={(e) => handleChange('title', e.target.value)}
+            disabled={disabled}
+            className={cn(
+              "h-11 text-base rounded-xl dark:bg-gray-900 dark:border-gray-700",
+              errors.title && "border-red-500"
+            )}
+          />
+          {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title}</p>}
+        </div>
+
+        {/* Department */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            Department <span className="text-red-500">*</span>
+            <FieldTooltip content="Select the department that will be responsible for this requisition." />
+          </Label>
+          <Select
+            value={formData.department_id || undefined}
+            onValueChange={(value) => {
+              if (isHOD || isStaff) return;
+              handleChange('department_id', value);
+            }}
+            disabled={isHOD || isStaff || disabled}
+          >
+            <SelectTrigger className={cn(
+              "h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+              (isHOD || isStaff) && "bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-80",
+              errors.department_id && "border-red-500"
+            )}>
+              <SelectValue placeholder={isHOD ? `${userDepartmentName} (HOD)` : isStaff ? `${userDepartmentName} (Staff)` : "Select department"} />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              {(isHOD || isStaff) && userDepartmentId && departments.find(d => d.id.toString() === userDepartmentId) && (
+                <SelectItem value={userDepartmentId}>
+                  {departments.find(d => d.id.toString() === userDepartmentId)?.name}
+                  <Badge className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
+                    {isHOD ? 'HOD' : 'Staff'}
+                  </Badge>
+                </SelectItem>
+              )}
+              {!isHOD && !isStaff && departments.length > 0 && departments.map((dept: Department) => (
+                <SelectItem key={dept.id} value={dept.id.toString()}>
+                  {dept.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(isHOD || isStaff) && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+              <Shield className="h-3 w-3 text-blue-500" />
+              As {isHOD ? 'HOD' : 'Staff'}, you can only create requisitions for <strong className="text-gray-700 dark:text-gray-300">{userDepartmentName}</strong>
+            </p>
+          )}
+          {errors.department_id && <p className="text-sm text-red-500 mt-1">{errors.department_id}</p>}
+        </div>
+
+        {/* Description */}
+        <div className="space-y-1.5">
+          <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <InfoIcon className="h-4 w-4 text-muted-foreground" />
+            Description
+            <FieldTooltip content="Provide a detailed description of what you need. This helps approvers understand the requisition." />
+          </Label>
+          <Textarea
+            id="description"
+            placeholder="Describe what you need and why..."
+            value={formData.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            disabled={disabled}
+            className="min-h-[80px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            rows={2}
+          />
+        </div>
+
+        {/* Justification */}
+        <div className="md:col-span-2 space-y-1.5">
+          <Label htmlFor="justification" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            Justification
+            <FieldTooltip content="Explain why this requisition is necessary. Strong justification helps with approval." />
+          </Label>
+          <Textarea
+            id="justification"
+            placeholder="Why do you need this? What problem does it solve?"
+            value={formData.justification}
+            onChange={(e) => handleChange('justification', e.target.value)}
+            disabled={disabled}
+            className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            rows={2}
+          />
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <span>Tip: Include benefits, urgency, and consequences if not approved.</span>
           </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Catalog #</Label>
-            <Input
-              placeholder="Catalog"
-              value={item.catalog_number || ''}
-              onChange={(e) => onChange(index, 'catalog_number', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
-          </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Manufacturer</Label>
-            <Input
-              placeholder="Manufacturer"
-              value={item.manufacturer || ''}
-              onChange={(e) => onChange(index, 'manufacturer', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
-          </div>
-          <div className="col-span-4 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Model</Label>
-            <Input
-              placeholder="Model"
-              value={item.model_number || ''}
-              onChange={(e) => onChange(index, 'model_number', e.target.value)}
-              className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl"
-            />
-          </div>
-          <div className="col-span-12 md:col-span-2 space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Supplier</Label>
+        </div>
+
+        {/* Priority, Type, Urgency */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            Priority
+            <FieldTooltip content="Set the priority level. Emergency requests will be fast-tracked." />
+          </Label>
+          <SimpleSelect
+            value={formData.priority}
+            onValueChange={(value) => handleChange('priority', value)}
+            placeholder="Select priority"
+            options={PRIORITY_OPTIONS}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Tag className="h-4 w-4 text-muted-foreground" />
+            Type
+            <FieldTooltip content="Choose 'Normal' for standard requisitions or 'Emergency' for urgent needs." />
+          </Label>
+          <SimpleSelect
+            value={formData.type}
+            onValueChange={(value) => handleChange('type', value)}
+            placeholder="Select type"
+            options={TYPE_OPTIONS}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Urgency
+            <FieldTooltip content="How urgent is this requisition? This affects processing speed." />
+          </Label>
+          <SimpleSelect
+            value={formData.urgency}
+            onValueChange={(value) => handleChange('urgency', value)}
+            placeholder="Select urgency"
+            options={URGENCY_OPTIONS}
+            disabled={disabled}
+          />
+        </div>
+
+        {/* Dates */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            Required By Date
+            <FieldTooltip content="When do you need this requisition to be completed?" />
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                  !formData.required_by_date && "text-muted-foreground"
+                )}
+                disabled={disabled}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {formData.required_by_date ? format(new Date(formData.required_by_date), "PPP") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-xl">
+              <CalendarComponent
+                mode="single"
+                selected={formData.required_by_date ? new Date(formData.required_by_date) : undefined}
+                onSelect={(date) => handleChange('required_by_date', date ? format(date, 'yyyy-MM-dd') : '')}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            Required Delivery Date
+            <FieldTooltip content="When do you need delivery? This helps suppliers plan." />
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                  !formData.required_delivery_date && "text-muted-foreground"
+                )}
+                disabled={disabled}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {formData.required_delivery_date ? format(new Date(formData.required_delivery_date), "PPP") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-xl">
+              <CalendarComponent
+                mode="single"
+                selected={formData.required_delivery_date ? new Date(formData.required_delivery_date) : undefined}
+                onSelect={(date) => handleChange('required_delivery_date', date ? format(date, 'yyyy-MM-dd') : '')}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+BasicInfoStep.displayName = 'BasicInfoStep';
+
+// ============================================
+// STEP 2: TYPE-SPECIFIC DETAILS
+// ============================================
+
+interface TypeDetailsStepProps {
+  formData: FormData;
+  handleChange: (field: string, value: any) => void;
+  disabled: boolean;
+  isService: boolean;
+  errors: Record<string, string>;
+}
+
+const TypeDetailsStep = memo(({
+  formData,
+  handleChange,
+  disabled,
+  isService,
+  errors,
+}: TypeDetailsStepProps) => {
+  // Auto-calculate duration when dates change
+  useEffect(() => {
+    if (formData.service_expected_start_date && formData.service_expected_end_date) {
+      const start = new Date(formData.service_expected_start_date);
+      const end = new Date(formData.service_expected_end_date);
+      const days = differenceInDays(end, start);
+      if (days > 0) {
+        handleChange('service_estimated_duration_days', days);
+      }
+    }
+  }, [formData.service_expected_start_date, formData.service_expected_end_date, handleChange]);
+
+  if (isService) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Briefcase className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Step 2: Service Details</h3>
+          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full text-[10px] ml-2">
+            LSO
+          </Badge>
+        </div>
+
+        <Alert className="border-purple-200 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl">
+          <Lightbulb className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          <AlertDescription className="text-purple-700 dark:text-purple-300 text-sm">
+            <strong>Don't worry about technical details!</strong> Just describe what you want done.
+            Suppliers will provide the technical breakdown in their quotations.
+          </AlertDescription>
+        </Alert>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Service Category */}
+          <div className="md:col-span-2 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              Service Category <span className="text-red-500">*</span>
+              <FieldTooltip content="Select the type of service you need." />
+            </Label>
             <Select
-              value={item.supplier_id?.toString() || undefined}
-              onValueChange={(value) => onChange(index, 'supplier_id', value && value !== 'none' ? parseInt(value) : null)}
+              value={formData.service_category || ''}
+              onValueChange={(value) => handleChange('service_category', value as ServiceCategory)}
+              disabled={disabled}
             >
-              <SelectTrigger className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl">
-                <SelectValue placeholder="Supplier" />
+              <SelectTrigger className={cn(
+                "h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                errors.service_category && "border-red-500"
+              )}>
+                <SelectValue placeholder="What type of service do you need?" />
               </SelectTrigger>
               <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                <SelectItem value="none">None</SelectItem>
-                {suppliers.map((s: any) => (
-                  <SelectItem key={s.id} value={s.id.toString()}>
-                    {s.company_name || s.name || 'Unknown'}
+                {SERVICE_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {SERVICE_CATEGORY_LABELS[cat]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {errors.service_category && <p className="text-sm text-red-500 mt-1">{errors.service_category}</p>}
           </div>
-          <div className="col-span-12 md:col-span-2 space-y-1.5 flex items-center gap-3 pt-2">
-            <input
-              type="checkbox"
-              id={`item-${index}-inventory`}
-              checked={item.is_inventory_item || false}
-              onChange={(e) => onChange(index, 'is_inventory_item', e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <Label htmlFor={`item-${index}-inventory`} className="text-xs font-medium cursor-pointer">
-              Inventory
+
+          {/* Scope of Work */}
+          <div className="md:col-span-2 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              Scope of Work <span className="text-red-500">*</span>
+              <FieldTooltip content="Describe what you want the service provider to do." />
             </Label>
-            {item.is_inventory_item && (
-              <Input
-                placeholder="Inv code"
-                value={item.inventory_code || ''}
-                onChange={(e) => onChange(index, 'inventory_code', e.target.value)}
-                className="h-10 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-xl flex-1"
+            <div className="relative">
+              <Textarea
+                placeholder="What work do you want done? Describe the tasks, deliverables, and any special requirements..."
+                value={formData.service_scope_of_work || ''}
+                onChange={(e) => handleChange('service_scope_of_work', e.target.value)}
+                disabled={disabled}
+                className="min-h-[120px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700 pr-20"
+                rows={4}
               />
-            )}
+              <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
+                {(formData.service_scope_of_work || '').length} characters
+              </div>
+            </div>
+            <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <span>Tip: Include specific tasks, deliverables, quality standards, and any special requirements.</span>
+            </div>
+            {errors.service_scope_of_work && <p className="text-sm text-red-500 mt-1">{errors.service_scope_of_work}</p>}
+          </div>
+
+          {/* Expected Deliverables */}
+          <div className="md:col-span-2 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              Expected Deliverables
+              <FieldTooltip content="What will the service provider deliver?" />
+            </Label>
+            <div className="relative">
+              <Textarea
+                placeholder="List what you expect to receive (e.g., reports, installations, training, etc.)"
+                value={formData.service_deliverables_expected || ''}
+                onChange={(e) => handleChange('service_deliverables_expected', e.target.value)}
+                disabled={disabled}
+                className="min-h-[80px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700 pr-20"
+                rows={2}
+              />
+              <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
+                {(formData.service_deliverables_expected || '').length} characters
+              </div>
+            </div>
+          </div>
+
+          {/* Service Period */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              Service Start Date
+              <FieldTooltip content="When should work begin?" />
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                    !formData.service_expected_start_date && "text-muted-foreground"
+                  )}
+                  disabled={disabled}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.service_expected_start_date ? format(new Date(formData.service_expected_start_date), "PPP") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-xl">
+                <CalendarComponent
+                  mode="single"
+                  selected={formData.service_expected_start_date ? new Date(formData.service_expected_start_date) : undefined}
+                  onSelect={(date) => handleChange('service_expected_start_date', date ? format(date, 'yyyy-MM-dd') : '')}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              Service End Date
+              <FieldTooltip content="When should work be completed?" />
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                    !formData.service_expected_end_date && "text-muted-foreground"
+                  )}
+                  disabled={disabled}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.service_expected_end_date ? format(new Date(formData.service_expected_end_date), "PPP") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-xl">
+                <CalendarComponent
+                  mode="single"
+                  selected={formData.service_expected_end_date ? new Date(formData.service_expected_end_date) : undefined}
+                  onSelect={(date) => handleChange('service_expected_end_date', date ? format(date, 'yyyy-MM-dd') : '')}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Estimated Duration - Auto-calculated */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              Estimated Duration (Days)
+              <FieldTooltip content="Auto-calculated from start and end dates." />
+            </Label>
+            <div className="h-11 px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {formData.service_estimated_duration_days || '—'} days
+              </span>
+              {formData.service_estimated_duration_days && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  (auto-calculated)
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Requires Onsite Visit */}
+          <div className="space-y-1.5 flex items-end">
+            <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+              <input
+                type="checkbox"
+                id="onsite_visit"
+                checked={formData.service_requires_onsite_visit || false}
+                onChange={(e) => handleChange('service_requires_onsite_visit', e.target.checked)}
+                disabled={disabled}
+                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <Label htmlFor="onsite_visit" className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300">
+                Requires Onsite Visit
+              </Label>
+              <FieldTooltip content="Check this if the service provider needs to visit your location." />
+            </div>
+          </div>
+
+          {/* Special Requirements */}
+          <div className="md:col-span-2 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              Special Requirements
+              <FieldTooltip content="Any special requirements the service provider must meet." />
+            </Label>
+            <div className="relative">
+              <Textarea
+                placeholder="Special requirements (e.g., security clearances, certifications, specific equipment, etc.)"
+                value={formData.service_special_requirements || ''}
+                onChange={(e) => handleChange('service_special_requirements', e.target.value)}
+                disabled={disabled}
+                className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700 pr-20"
+                rows={2}
+              />
+              <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
+                {(formData.service_special_requirements || '').length} characters
+              </div>
+            </div>
+          </div>
+
+          {/* Qualifications Required */}
+          <div className="md:col-span-2 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <UserCog className="h-4 w-4 text-muted-foreground" />
+              Qualifications Required
+              <FieldTooltip content="What qualifications, certifications, or experience should the service provider have?" />
+            </Label>
+            <Input
+              placeholder="e.g., ISO Certified, Licensed, 5+ years experience"
+              value={formData.service_qualifications_required || ''}
+              onChange={(e) => handleChange('service_qualifications_required', e.target.value)}
+              disabled={disabled}
+              className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            />
           </div>
         </div>
-      </details>
+      </div>
+    );
+  }
+
+  // Goods details
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Step 2: Goods Details</h3>
+        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-[10px] ml-2">
+          LPO
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Goods Category */}
+        <div className="md:col-span-2 space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            Goods Category <span className="text-red-500">*</span>
+            <FieldTooltip content="Select the category that best describes the goods you need." />
+          </Label>
+          <Select
+            value={formData.goods_category || ''}
+            onValueChange={(value) => handleChange('goods_category', value)}
+            disabled={disabled}
+          >
+            <SelectTrigger className={cn(
+              "h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+              errors.goods_category && "border-red-500"
+            )}>
+              <SelectValue placeholder="What type of goods do you need?" />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              {GOODS_CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {GOODS_CATEGORY_LABELS[cat]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.goods_category && <p className="text-sm text-red-500 mt-1">{errors.goods_category}</p>}
+        </div>
+
+        {/* Warehouse Location */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            Warehouse Location
+            <FieldTooltip content="Where should the goods be delivered or stored?" />
+          </Label>
+          <Input
+            placeholder="e.g., Main Store, Room 101, Warehouse A"
+            value={formData.goods_warehouse_location || ''}
+            onChange={(e) => handleChange('goods_warehouse_location', e.target.value)}
+            disabled={disabled}
+            className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+          />
+        </div>
+
+        {/* Storage Requirements */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Box className="h-4 w-4 text-muted-foreground" />
+            Storage Requirements
+            <FieldTooltip content="Special storage conditions required." />
+          </Label>
+          <Input
+            placeholder="e.g., Temperature controlled, Dry storage"
+            value={formData.goods_storage_requirements || ''}
+            onChange={(e) => handleChange('goods_storage_requirements', e.target.value)}
+            disabled={disabled}
+            className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+          />
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <span>Tip: Specify storage conditions to ensure goods arrive in good condition.</span>
+          </div>
+        </div>
+
+        {/* Expected Delivery Date */}
+        <div className="md:col-span-2 space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            Expected Delivery Date
+            <FieldTooltip content="When do you expect the goods to be delivered?" />
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
+                  !formData.goods_expected_delivery_date && "text-muted-foreground"
+                )}
+                disabled={disabled}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {formData.goods_expected_delivery_date ? format(new Date(formData.goods_expected_delivery_date), "PPP") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-xl">
+              <CalendarComponent
+                mode="single"
+                selected={formData.goods_expected_delivery_date ? new Date(formData.goods_expected_delivery_date) : undefined}
+                onSelect={(date) => handleChange('goods_expected_delivery_date', date ? format(date, 'yyyy-MM-dd') : '')}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <Alert className="border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl">
+        <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+          <strong>Don't know exact specifications?</strong> Just provide what you know.
+          Procurement will work with suppliers to get the right items.
+        </AlertDescription>
+      </Alert>
     </div>
   );
-};
+});
+
+TypeDetailsStep.displayName = 'TypeDetailsStep';
 
 // ============================================
-// MAIN PAGE COMPONENT
+// STEP 3: ITEMS / ESTIMATES (HIDDEN FOR SERVICES)
+// ============================================
+
+interface ItemsStepProps {
+  formData: FormData;
+  items: FormItem[];
+  handleItemChange: (index: number, field: string, value: any) => void;
+  addItem: () => void;
+  removeItem: (index: number) => void;
+  totalAmount: number;
+  isService: boolean;
+  disabled: boolean;
+}
+
+const ItemsStep = memo(({
+  formData,
+  items,
+  handleItemChange,
+  addItem,
+  removeItem,
+  totalAmount,
+  isService,
+  disabled,
+}: ItemsStepProps) => {
+  // For services, this component is NOT rendered - the items are auto-created
+  // in the background. So this component only renders for Goods.
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Package className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Step 3: Items
+        </h3>
+        <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5">
+          {items.filter((i: any) => i.item_name?.trim()).length}
+        </Badge>
+      </div>
+
+      <Alert className="border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl">
+        <Lightbulb className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <AlertDescription className="text-emerald-700 dark:text-emerald-300 text-sm">
+          <strong>Don't know exact prices?</strong> Leave as 0 or provide estimates.
+          Suppliers will provide accurate pricing in their quotations.
+        </AlertDescription>
+      </Alert>
+
+      {/* Items Table Header */}
+      <div className="grid grid-cols-12 gap-2 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs font-medium text-muted-foreground">
+        <div className="col-span-1">#</div>
+        <div className="col-span-3">Item Name <span className="text-red-500">*</span></div>
+        <div className="col-span-3">Description</div>
+        <div className="col-span-1 text-center">Qty <span className="text-red-500">*</span></div>
+        <div className="col-span-1 text-center">Unit</div>
+        <div className="col-span-1 text-center">Est. Cost <span className="text-red-500">*</span></div>
+        <div className="col-span-1 text-center">Total</div>
+        <div className="col-span-1 text-right">Actions</div>
+      </div>
+
+      {/* Items Rows */}
+      {items.map((item: any, index: number) => {
+        const total = (item.quantity || 0) * (item.estimated_unit_cost || 0);
+        const isFirst = index === 0 && !item.item_name?.trim();
+        return (
+          <div
+            key={index}
+            className={cn(
+              "border-b border-gray-200 dark:border-gray-700 py-2 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors",
+              isFirst && "bg-blue-50/30 dark:bg-blue-900/10"
+            )}
+          >
+            <div className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-1">
+                <span className="text-xs font-medium text-muted-foreground">{index + 1}.</span>
+              </div>
+
+              <div className="col-span-3">
+                <Input
+                  placeholder="Item name"
+                  value={item.item_name || ''}
+                  onChange={(e) => handleItemChange(index, 'item_name', e.target.value)}
+                  disabled={disabled}
+                  className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+                />
+              </div>
+
+              <div className="col-span-3">
+                <Input
+                  placeholder="Description"
+                  value={item.description || ''}
+                  onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                  disabled={disabled}
+                  className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+                />
+              </div>
+
+              <div className="col-span-1">
+                <Input
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="Qty"
+                  value={item.quantity || ''}
+                  onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 1)}
+                  disabled={disabled}
+                  className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg text-center"
+                />
+              </div>
+
+              <div className="col-span-1">
+                <Input
+                  placeholder="Unit"
+                  value={item.unit_of_measure || ''}
+                  onChange={(e) => handleItemChange(index, 'unit_of_measure', e.target.value)}
+                  disabled={disabled}
+                  className="h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+                />
+              </div>
+
+              <div className="col-span-1">
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">KES</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={item.estimated_unit_cost || ''}
+                    onChange={(e) => handleItemChange(index, 'estimated_unit_cost', parseFloat(e.target.value) || 0)}
+                    disabled={disabled}
+                    className="pl-8 h-8 text-sm dark:bg-gray-900 dark:border-gray-700 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div className="col-span-1">
+                <div className="h-8 flex items-center text-sm font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-2">
+                  {total.toFixed(2)}
+                </div>
+              </div>
+
+              <div className="col-span-1 flex items-center justify-end gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addItem}
+                  disabled={disabled}
+                  className="h-7 w-7 p-0 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 text-muted-foreground"
+                  title="Add new item"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeItem(index)}
+                  disabled={items.length <= 1 || disabled}
+                  className="h-7 w-7 p-0 rounded-lg hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 disabled:opacity-30"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Total Summary */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Items: <span className="font-medium text-gray-700 dark:text-gray-300">{items.filter((i: any) => i.item_name?.trim()).length}</span>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Total Quantity: <span className="font-medium text-gray-700 dark:text-gray-300">
+              {items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0)}
+            </span>
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">Estimated Total</p>
+          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+            KES {totalAmount.toFixed(2)}
+          </p>
+          <p className="text-xs text-muted-foreground">* Estimates only - final cost from suppliers may vary</p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ItemsStep.displayName = 'ItemsStep';
+
+// ============================================
+// STEP 3 ALTERNATIVE: SERVICE COMPONENTS (HIDDEN)
+// ============================================
+
+const ServiceComponentsInfo = memo(({ title }: { title: string }) => {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Briefcase className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Step 3: Service Components
+        </h3>
+        <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+          Auto-generated
+        </Badge>
+      </div>
+
+      <Alert className="border-purple-200 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl">
+        <Lightbulb className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+        <AlertDescription className="text-purple-700 dark:text-purple-300 text-sm">
+          <strong>Service components will be auto-created when you submit this requisition.</strong>
+          <br />
+          <br />
+          You don't need to specify any items or components. The supplier will provide
+          the detailed breakdown of what's needed in their quotation.
+          <br />
+          <br />
+          <span className="text-xs">
+            The system will automatically create a service item:
+            <br />
+            • <strong>Item:</strong> Service: {title || 'Service Requisition'}
+            <br />
+            • <strong>Quantity:</strong> 1 Lot
+            <br />
+            • <strong>Unit Cost:</strong> 0.00 (supplier will quote)
+          </span>
+        </AlertDescription>
+      </Alert>
+
+      <div className="p-6 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="p-4 rounded-full bg-purple-100 dark:bg-purple-900/20">
+            <Briefcase className="h-10 w-10 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <p className="font-medium text-gray-900 dark:text-white">
+              Service Item (Auto-created)
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Service: {title || 'Service Requisition'}
+            </p>
+            <div className="flex items-center justify-center gap-4 mt-2 text-sm">
+              <span className="text-muted-foreground">Quantity: <strong className="text-gray-700 dark:text-gray-300">1 Lot</strong></span>
+              <span className="text-muted-foreground">|</span>
+              <span className="text-muted-foreground">Unit Cost: <strong className="text-gray-700 dark:text-gray-300">To be quoted by supplier</strong></span>
+            </div>
+          </div>
+          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full">
+            No user input required
+          </Badge>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ServiceComponentsInfo.displayName = 'ServiceComponentsInfo';
+
+// ============================================
+// STEP 4: ADVANCED OPTIONS
+// ============================================
+
+interface AdvancedOptionsStepProps {
+  formData: FormData;
+  handleChange: (field: string, value: any) => void;
+  disabled: boolean;
+}
+
+const AdvancedOptionsStep = memo(({
+  formData,
+  handleChange,
+  disabled,
+}: AdvancedOptionsStepProps) => {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Layers className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Step 4: Advanced Options</h3>
+        <Badge variant="outline" className="rounded-full text-[10px]">
+          Optional
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Hash className="h-4 w-4 text-muted-foreground" />
+            Budget Code
+            <FieldTooltip content="Enter the budget code if you have one." />
+          </Label>
+          <Input
+            placeholder="Enter budget code"
+            value={formData.budget_code}
+            onChange={(e) => handleChange('budget_code', e.target.value)}
+            disabled={disabled}
+            className="h-10 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            Budget Source
+            <FieldTooltip content="Where is this requisition budget coming from?" />
+          </Label>
+          <SimpleSelect
+            value={formData.budget_source || ''}
+            onValueChange={(value) => handleChange('budget_source', value)}
+            placeholder="Select budget source"
+            options={BUDGET_SOURCES}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            Funding Source
+            <FieldTooltip content="What is the source of funding?" />
+          </Label>
+          <SimpleSelect
+            value={formData.funding_source || ''}
+            onValueChange={(value) => handleChange('funding_source', value)}
+            placeholder="Select funding source"
+            options={FUNDING_SOURCES}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Hash className="h-4 w-4 text-muted-foreground" />
+            Project Code
+            <FieldTooltip content="If this is for a specific project, enter the code." />
+          </Label>
+          <Input
+            placeholder="Enter project code"
+            value={formData.project_code}
+            onChange={(e) => handleChange('project_code', e.target.value)}
+            disabled={disabled}
+            className="h-10 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            Procurement Method
+            <FieldTooltip content="How should procurement handle this?" />
+          </Label>
+          <SimpleSelect
+            value={formData.procurement_method || ''}
+            onValueChange={(value) => handleChange('procurement_method', value)}
+            placeholder="Select procurement method"
+            options={PROCUREMENT_METHODS}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5 flex items-end gap-3 pt-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="framework_agreement"
+              checked={formData.is_framework_agreement}
+              onChange={(e) => handleChange('is_framework_agreement', e.target.checked)}
+              disabled={disabled}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <Label htmlFor="framework_agreement" className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300">
+              Framework Agreement
+            </Label>
+            <FieldTooltip content="Is this covered under an existing framework agreement?" />
+          </div>
+          {formData.is_framework_agreement && (
+            <div className="flex-1">
+              <Input
+                placeholder="Framework ID"
+                value={formData.framework_agreement_id}
+                onChange={(e) => handleChange('framework_agreement_id', e.target.value)}
+                disabled={disabled}
+                className="h-10 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            Risk Level
+            <FieldTooltip content="What is the risk level of this requisition?" />
+          </Label>
+          <SimpleSelect
+            value={formData.risk_level}
+            onValueChange={(value) => handleChange('risk_level', value)}
+            placeholder="Select risk level"
+            options={RISK_LEVELS}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            Risk Mitigation
+            <FieldTooltip content="How will you mitigate the risks?" />
+          </Label>
+          <Textarea
+            placeholder="Describe risk mitigation measures..."
+            value={formData.risk_mitigation}
+            onChange={(e) => handleChange('risk_mitigation', e.target.value)}
+            disabled={disabled}
+            className="min-h-[50px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-1.5 md:col-span-2">
+          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            Compliance Notes
+            <FieldTooltip content="Any compliance or regulatory notes." />
+          </Label>
+          <Textarea
+            placeholder="Enter compliance notes..."
+            value={formData.compliance_notes}
+            onChange={(e) => handleChange('compliance_notes', e.target.value)}
+            disabled={disabled}
+            className="min-h-[50px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            rows={2}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+AdvancedOptionsStep.displayName = 'AdvancedOptionsStep';
+
+// ============================================
+// MAIN COMPONENT
 // ============================================
 
 export default function EditRequisitionPage() {
@@ -471,39 +1544,66 @@ export default function EditRequisitionPage() {
   const { data: departmentsData, isLoading: departmentsLoading } = useAllDepartments();
   const { data: suppliersData, isLoading: suppliersLoading } = useAllSuppliers();
 
-  // Memoize departments and suppliers - FIXED type issues
+  // Memoize departments and suppliers
   const departments = useMemo((): Department[] => {
     if (!departmentsData) return [];
     if (Array.isArray(departmentsData)) return departmentsData;
-    // Handle different response shapes safely
     if (departmentsData && typeof departmentsData === 'object') {
-      // @ts-ignore - safely access data property
       if ('data' in departmentsData && Array.isArray(departmentsData.data)) return departmentsData.data;
-      // @ts-ignore - safely access items property
       if ('items' in departmentsData && Array.isArray(departmentsData.items)) return departmentsData.items;
     }
     return [];
   }, [departmentsData]);
 
   const suppliers = useMemo((): any[] => {
-    if (!suppliersData) return [];
-    if (Array.isArray(suppliersData)) return suppliersData;
-    // Handle different response shapes safely
-    if (suppliersData && typeof suppliersData === 'object') {
-      // @ts-ignore - safely access data property
-      if ('data' in suppliersData && Array.isArray(suppliersData.data)) return suppliersData.data;
-      // @ts-ignore - safely access items property
-      if ('items' in suppliersData && Array.isArray(suppliersData.items)) return suppliersData.items;
-    }
-    return [];
+    return Array.isArray(suppliersData) ? suppliersData : [];
   }, [suppliersData]);
 
-  // State
-  const [formData, setFormData] = useState<any>(null);
+  const [formData, setFormData] = useState<FormData | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+
+  const isHOD = useMemo(() => {
+    if (!user) return false;
+    if (user.roles && Array.isArray(user.roles)) {
+      return user.roles.some((r: any) => ['hod', 'head_of_department'].includes(r?.toLowerCase?.() || r?.name?.toLowerCase?.() || ''));
+    }
+    return false;
+  }, [user]);
+
+  const isStaff = useMemo(() => {
+    if (!user) return false;
+    if (user.roles && Array.isArray(user.roles)) {
+      return user.roles.some((r: any) => ['staff'].includes(r?.toLowerCase?.() || r?.name?.toLowerCase?.() || ''));
+    }
+    return false;
+  }, [user]);
+
+  const userDepartmentId = useMemo(() => {
+    if (user?.department_id) {
+      return user.department_id.toString();
+    }
+    return '';
+  }, [user]);
+
+  const userDepartmentName = useMemo(() => {
+    if (user?.department_id) {
+      const dept = departments.find(d => d.id === user.department_id);
+      return dept?.name || '';
+    }
+    return '';
+  }, [user, departments]);
+
+  // Step labels - dynamically generated based on requisition type
+  const stepLabels = useMemo(() => {
+    const isService = formData && formData.requisition_type === 'services';
+    if (isService) {
+      return ['Basic Info', 'Service Details', 'Components (Auto)', 'Advanced'];
+    }
+    return ['Basic Info', 'Goods Details', 'Items', 'Advanced'];
+  }, [formData]);
 
   // Initialize form data from requisition
   useEffect(() => {
@@ -514,17 +1614,36 @@ export default function EditRequisitionPage() {
         return;
       }
 
+      // Determine if this is a service requisition
+      const isService = requisition.requisition_type === 'services';
+
       setFormData({
+        requisition_type: requisition.requisition_type || 'goods',
         title: requisition.title || '',
         description: requisition.description || '',
         department_id: requisition.department?.id?.toString() || '',
-        supplier_id: requisition.supplier?.id?.toString() || '',
         priority: requisition.priority || 'medium',
         type: requisition.type || 'normal',
         urgency: requisition.urgency || 'routine',
         justification: requisition.justification || '',
         required_by_date: requisition.required_by_date || '',
         required_delivery_date: requisition.required_delivery_date || '',
+        // Service fields
+        service_category: requisition.service_category || '',
+        service_scope_of_work: requisition.service_scope_of_work || '',
+        service_deliverables_expected: requisition.service_deliverables_expected || '',
+        service_expected_start_date: requisition.service_expected_start_date || '',
+        service_expected_end_date: requisition.service_expected_end_date || '',
+        service_estimated_duration_days: requisition.service_estimated_duration_days || '',
+        service_requires_onsite_visit: requisition.service_requires_onsite_visit || false,
+        service_special_requirements: requisition.service_special_requirements || '',
+        service_qualifications_required: requisition.service_qualifications_required || '',
+        // Goods fields
+        goods_category: requisition.goods_category || '',
+        goods_warehouse_location: requisition.goods_warehouse_location || '',
+        goods_storage_requirements: requisition.goods_storage_requirements || '',
+        goods_expected_delivery_date: requisition.goods_expected_delivery_date || '',
+        // Advanced fields
         budget_code: requisition.budget_code || '',
         budget_source: requisition.budget_source || '',
         funding_source: requisition.funding_source || '',
@@ -538,7 +1657,9 @@ export default function EditRequisitionPage() {
         compliance_notes: requisition.compliance_notes || '',
         currency: requisition.currency || 'KES',
         exchange_rate: requisition.exchange_rate || 1,
-        items: requisition.items?.map((item: any) => ({
+        // Items - For services, we'll create a single item in the background
+        // For goods, we use the existing items
+        items: isService ? [] : (requisition.items?.map((item: any) => ({
           id: item.id,
           item_name: item.item_name || '',
           description: item.description || '',
@@ -554,145 +1675,212 @@ export default function EditRequisitionPage() {
           inventory_code: item.inventory_code || '',
           tax_rate: item.tax_rate || 0,
           discount_percentage: item.discount_percentage || 0,
-        })) || [
-            {
-              item_name: '',
-              description: '',
-              unit_of_measure: '',
-              quantity: 1,
-              estimated_unit_cost: 0,
-              specifications: '',
-              catalog_number: '',
-              manufacturer: '',
-              model_number: '',
-              supplier_id: null,
-              is_inventory_item: false,
-              inventory_code: '',
-              tax_rate: 0,
-              discount_percentage: 0,
-            },
-          ],
+        })) || [{ ...EMPTY_ITEM }]),
       });
     }
   }, [requisition, id, router]);
 
   // Handle form field changes
   const handleChange = useCallback((field: string, value: any) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+    setFormData((prev) => prev ? { ...prev, [field]: value } : null);
     if (formErrors[field]) {
       setFormErrors((prev) => ({ ...prev, [field]: '' }));
     }
   }, [formErrors]);
 
-  // Handle item changes
+  // Handle item changes (only for goods)
   const handleItemChange = useCallback((index: number, field: string, value: any) => {
-    setFormData((prev: any) => {
+    setFormData((prev) => {
+      if (!prev) return null;
       const updatedItems = [...prev.items];
       updatedItems[index] = { ...updatedItems[index], [field]: value };
       return { ...prev, items: updatedItems };
     });
   }, []);
 
-  // Add item
+  // Add item (only for goods)
   const addItem = useCallback(() => {
-    setFormData((prev: any) => ({
-      ...prev,
-      items: [
-        ...prev.items,
-        {
-          item_name: '',
-          description: '',
-          unit_of_measure: '',
-          quantity: 1,
-          estimated_unit_cost: 0,
-          specifications: '',
-          catalog_number: '',
-          manufacturer: '',
-          model_number: '',
-          supplier_id: null,
-          is_inventory_item: false,
-          inventory_code: '',
-          tax_rate: 0,
-          discount_percentage: 0,
-        },
-      ],
-    }));
+    setFormData((prev) => {
+      if (!prev) return null;
+      return { ...prev, items: [...prev.items, { ...EMPTY_ITEM }] };
+    });
   }, []);
 
-  // Remove item
+  // Remove item (only for goods)
   const removeItem = useCallback((index: number) => {
-    setFormData((prev: any) => {
-      if (prev.items.length <= 1) return prev;
-      const updatedItems = prev.items.filter((_: any, i: number) => i !== index);
+    setFormData((prev) => {
+      if (!prev || prev.items.length <= 1) return prev;
+      const updatedItems = prev.items.filter((_: FormItem, i: number) => i !== index);
       return { ...prev, items: updatedItems };
     });
   }, []);
 
   // Calculate total amount
   const totalAmount = useMemo(() => {
-    if (!formData?.items) return 0;
-    return formData.items.reduce((sum: number, item: any) => {
+    if (!formData || !formData.items) return 0;
+    return formData.items.reduce((sum: number, item: FormItem) => {
       return sum + ((item.quantity || 0) * (item.estimated_unit_cost || 0));
     }, 0);
   }, [formData]);
 
-  // Validate form
-  const validateForm = useCallback(() => {
+  // Validate step
+  const validateStep = useCallback((step: number): boolean => {
+    if (!formData) return false;
+
     const errors: Record<string, string> = {};
 
-    if (!formData?.title?.trim()) {
-      errors.title = 'Title is required';
-    }
-    if (!formData?.department_id) {
-      errors.department_id = 'Department is required';
+    if (step === 1) {
+      if (!formData.title?.trim()) {
+        errors.title = 'Title is required';
+      }
+      if (!formData.department_id) {
+        errors.department_id = 'Department is required';
+      }
+      if (!formData.requisition_type) {
+        errors.requisition_type = 'Requisition type is required';
+      }
     }
 
-    const itemErrors: string[] = [];
-    formData?.items?.forEach((item: any, index: number) => {
-      if (!item.item_name?.trim()) {
-        itemErrors.push(`Item ${index + 1}: Name is required`);
+    if (step === 2) {
+      if (formData.requisition_type === 'services') {
+        if (!formData.service_category) {
+          errors.service_category = 'Service category is required';
+        }
+        if (!formData.service_scope_of_work?.trim()) {
+          errors.service_scope_of_work = 'Scope of work is required';
+        }
+      } else if (formData.requisition_type === 'goods') {
+        if (!formData.goods_category) {
+          errors.goods_category = 'Goods category is required';
+        }
       }
-      if (!item.unit_of_measure?.trim()) {
-        itemErrors.push(`Item ${index + 1}: Unit of measure is required`);
-      }
-      if (item.quantity <= 0) {
-        itemErrors.push(`Item ${index + 1}: Quantity must be greater than 0`);
-      }
-      if (item.estimated_unit_cost < 0) {
-        itemErrors.push(`Item ${index + 1}: Unit cost must be 0 or greater`);
-      }
-    });
+    }
 
-    if (itemErrors.length > 0) {
-      errors.items = itemErrors.join('; ');
+    if (step === 3) {
+      // Only validate items for goods
+      if (formData.requisition_type === 'goods') {
+        const itemErrors: string[] = [];
+        formData.items?.forEach((item: FormItem, index: number) => {
+          if (!item.item_name?.trim()) {
+            itemErrors.push(`Item ${index + 1}: Name is required`);
+          }
+          if (!item.unit_of_measure?.trim()) {
+            itemErrors.push(`Item ${index + 1}: Unit of measure is required`);
+          }
+          if (item.quantity <= 0) {
+            itemErrors.push(`Item ${index + 1}: Quantity must be greater than 0`);
+          }
+          if (item.estimated_unit_cost < 0) {
+            itemErrors.push(`Item ${index + 1}: Unit cost must be 0 or greater`);
+          }
+        });
+        if (itemErrors.length > 0) {
+          errors.items = itemErrors.join('; ');
+        }
+      }
+      // For services, no validation needed - items auto-created
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData]);
 
+  // Navigation
+  const goToNextStep = useCallback(() => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(Math.min(currentStep + 1, 4));
+    }
+  }, [currentStep, validateStep]);
+
+  const goToPreviousStep = useCallback(() => {
+    setCurrentStep(Math.max(currentStep - 1, 1));
+  }, []);
+
   // Handle submit
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!formData || !validateStep(3) || !validateStep(2) || !validateStep(1)) {
       return;
     }
 
     setIsSubmitting(true);
     setSuccess(false);
 
+    const isService = formData.requisition_type === 'services';
+
+    // Prepare items
+    let items: any[] = [];
+
+    if (isService) {
+      // For services: Auto-create a single item
+      items = [{
+        item_name: `Service: ${formData.title || 'Service Requisition'}`,
+        description: formData.description || 'Service to be quoted by supplier',
+        unit_of_measure: 'Lot',
+        quantity: 1,
+        estimated_unit_cost: 0,
+        specifications: null,
+        catalog_number: null,
+        manufacturer: null,
+        model_number: null,
+        supplier_id: null,
+        is_inventory_item: false,
+        inventory_code: null,
+        tax_rate: 0,
+        discount_percentage: 0,
+      }];
+    } else {
+      // For goods: Use the user-defined items
+      items = formData.items
+        .filter((item: any) => item.item_name?.trim() !== '')
+        .map((item: any) => ({
+          id: item.id,
+          item_name: item.item_name,
+          description: item.description || undefined,
+          unit_of_measure: item.unit_of_measure || 'Unit',
+          quantity: item.quantity,
+          estimated_unit_cost: item.estimated_unit_cost,
+          specifications: item.specifications || undefined,
+          catalog_number: item.catalog_number || undefined,
+          manufacturer: item.manufacturer || undefined,
+          model_number: item.model_number || undefined,
+          supplier_id: item.supplier_id || undefined,
+          is_inventory_item: item.is_inventory_item,
+          inventory_code: item.inventory_code || undefined,
+          tax_rate: item.tax_rate || 0,
+          discount_percentage: item.discount_percentage || 0,
+        }));
+    }
+
     const submitData: UpdateRequisitionData = {
       title: formData.title,
       description: formData.description || undefined,
       department_id: parseInt(formData.department_id),
-      supplier_id: formData.supplier_id ? parseInt(formData.supplier_id) : undefined,
+      requisition_type: formData.requisition_type,
+      // Service fields
+      service_category: formData.service_category as ServiceCategory || undefined,
+      service_scope_of_work: formData.service_scope_of_work || undefined,
+      service_deliverables_expected: formData.service_deliverables_expected || undefined,
+      service_expected_start_date: formData.service_expected_start_date || undefined,
+      service_expected_end_date: formData.service_expected_end_date || undefined,
+      service_estimated_duration_days: formData.service_estimated_duration_days ? Number(formData.service_estimated_duration_days) : undefined,
+      service_requires_onsite_visit: formData.service_requires_onsite_visit,
+      service_special_requirements: formData.service_special_requirements || undefined,
+      service_qualifications_required: formData.service_qualifications_required || undefined,
+      // Goods fields
+      goods_category: formData.goods_category || undefined,
+      goods_warehouse_location: formData.goods_warehouse_location || undefined,
+      goods_storage_requirements: formData.goods_storage_requirements || undefined,
+      goods_expected_delivery_date: formData.goods_expected_delivery_date || undefined,
+      // Priority & Type
       priority: formData.priority,
       type: formData.type,
       urgency: formData.urgency,
       justification: formData.justification || undefined,
       required_by_date: formData.required_by_date || undefined,
       required_delivery_date: formData.required_delivery_date || undefined,
+      // Advanced fields
       budget_code: formData.budget_code || undefined,
       budget_source: formData.budget_source || undefined,
       funding_source: formData.funding_source || undefined,
@@ -706,25 +1894,7 @@ export default function EditRequisitionPage() {
       compliance_notes: formData.compliance_notes || undefined,
       currency: formData.currency,
       exchange_rate: formData.exchange_rate,
-      items: formData.items
-        .filter((item: any) => item.item_name?.trim() !== '')
-        .map((item: any) => ({
-          id: item.id,
-          item_name: item.item_name,
-          description: item.description || undefined,
-          unit_of_measure: item.unit_of_measure,
-          quantity: item.quantity,
-          estimated_unit_cost: item.estimated_unit_cost,
-          specifications: item.specifications || undefined,
-          catalog_number: item.catalog_number || undefined,
-          manufacturer: item.manufacturer || undefined,
-          model_number: item.model_number || undefined,
-          supplier_id: item.supplier_id || undefined,
-          is_inventory_item: item.is_inventory_item,
-          inventory_code: item.inventory_code || undefined,
-          tax_rate: item.tax_rate,
-          discount_percentage: item.discount_percentage,
-        })),
+      items: items,
     };
 
     updateRequisition(
@@ -742,7 +1912,9 @@ export default function EditRequisitionPage() {
         },
       }
     );
-  }, [formData, validateForm, updateRequisition, id, router]);
+  }, [formData, validateStep, updateRequisition, id, router]);
+
+  const isService = formData?.requisition_type === 'services';
 
   // Loading state
   if (isLoading || departmentsLoading || suppliersLoading) {
@@ -850,7 +2022,7 @@ export default function EditRequisitionPage() {
   return (
     <PageTemplate
       title="Edit Requisition"
-      description={`Editing: ${requisition.reference_number} - ${requisition.title}`}
+      description={`Editing: ${requisition.reference_number}`}
       icon={<FileText className="h-5 w-5 text-blue-600" />}
       background="gradient"
       variant="default"
@@ -902,560 +2074,198 @@ export default function EditRequisitionPage() {
         </div>
       }
     >
-      {success && (
-        <Alert className="mb-6 rounded-xl border-green-500/50 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
-            ✅ Requisition updated successfully! Redirecting...
-          </AlertDescription>
-        </Alert>
-      )}
+      <Card className="shadow-lg border-0 bg-white dark:bg-gray-900 rounded-xl overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+        <WrappedCornerTag label="EDIT" color="blue" position="top-left" size="lg" />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950">
-          <CardHeader className="pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
-            <CardTitle className="flex items-center gap-2.5 text-xl">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20">
-                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              Requisition Details
-            </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              Edit the requisition details below. All fields marked with <span className="text-red-500">*</span> are required.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="pt-6">
-            {/* Requester Info - Read Only */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-gradient-to-r from-gray-50/80 to-blue-50/30 dark:from-gray-800/50 dark:to-blue-900/20 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 mb-6">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Hash className="h-3.5 w-3.5" />
-                  Requisition Number
-                </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <span className="text-sm font-mono font-medium text-gray-700 dark:text-gray-300">{requisition.reference_number}</span>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5" />
-                  Requester
-                </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{requisition.user?.full_name || 'Unknown'}</span>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Status
-                </Label>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <Badge variant={requisition.status === 'draft' ? 'secondary' : 'warning'} className="text-xs">
-                    {requisition.status_label || requisition.status}
-                  </Badge>
-                </div>
-              </div>
+        <CardHeader className="pb-4 pt-8 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-
-            <Separator className="mb-6 dark:border-gray-700/50" />
-
-            {/* Basic Information */}
-            <div className="space-y-5">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <h3 className="text-sm font-semibold">Basic Information</h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="md:col-span-2 space-y-1.5">
-                  <Label htmlFor="title" className="text-sm font-medium flex items-center gap-1.5">
-                    Requisition Title <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
-                    <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="title"
-                      placeholder="Enter a clear and descriptive requisition title"
-                      value={formData.title}
-                      onChange={(e) => handleChange('title', e.target.value)}
-                      className={cn(
-                        "pl-10 h-12 text-base rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                        formErrors.title && "border-red-500 focus-visible:ring-red-500"
-                      )}
-                      disabled={isSubmitting || isUpdating || success}
-                    />
-                  </div>
-                  {formErrors.title && <p className="text-sm text-red-500 mt-1">{formErrors.title}</p>}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    Department <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Select
-                      value={formData.department_id || undefined}
-                      onValueChange={(value) => handleChange('department_id', value)}
-                      disabled={isSubmitting || isUpdating || success}
-                    >
-                      <SelectTrigger className={cn(
-                        "pl-10 h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                        formErrors.department_id && "border-red-500"
-                      )}>
-                        <SelectValue placeholder="Select department" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                        {departments.map((dept: Department) => (
-                          <SelectItem key={dept.id} value={dept.id.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              {dept.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {formErrors.department_id && <p className="text-sm text-red-500 mt-1">{formErrors.department_id}</p>}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
-                    Preferred Supplier
-                  </Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Select
-                      value={formData.supplier_id || undefined}
-                      onValueChange={(value) => handleChange('supplier_id', value)}
-                      disabled={isSubmitting || isUpdating || success}
-                    >
-                      <SelectTrigger className="pl-10 h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700">
-                        <SelectValue placeholder="Select supplier (optional)" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                        {suppliers.map((supplier: any) => (
-                          <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              {supplier.company_name || supplier.name || 'Unknown Supplier'}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                    Priority
-                  </Label>
-                  <IconSelect
-                    value={formData.priority}
-                    onValueChange={(value) => handleChange('priority', value)}
-                    placeholder="Select priority"
-                    options={PRIORITY_OPTIONS}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Tag className="h-4 w-4 text-muted-foreground" />
-                    Type
-                  </Label>
-                  <IconSelect
-                    value={formData.type}
-                    onValueChange={(value) => handleChange('type', value)}
-                    placeholder="Select type"
-                    options={TYPE_OPTIONS}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    Urgency
-                  </Label>
-                  <IconSelect
-                    value={formData.urgency}
-                    onValueChange={(value) => handleChange('urgency', value)}
-                    placeholder="Select urgency"
-                    options={URGENCY_OPTIONS}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                    Required By Date
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                          !formData.required_by_date && "text-muted-foreground"
-                        )}
-                        disabled={isSubmitting || isUpdating || success}
-                      >
-                        <CalendarIcon className="mr-2.5 h-4 w-4" />
-                        {formData.required_by_date ? format(new Date(formData.required_by_date), "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
-                      <CalendarComponent
-                        mode="single"
-                        selected={formData.required_by_date ? new Date(formData.required_by_date) : undefined}
-                        onSelect={(date) => handleChange('required_by_date', date ? format(date, 'yyyy-MM-dd') : '')}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    Required Delivery Date
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-12 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700",
-                          !formData.required_delivery_date && "text-muted-foreground"
-                        )}
-                        disabled={isSubmitting || isUpdating || success}
-                      >
-                        <CalendarIcon className="mr-2.5 h-4 w-4" />
-                        {formData.required_delivery_date ? format(new Date(formData.required_delivery_date), "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
-                      <CalendarComponent
-                        mode="single"
-                        selected={formData.required_delivery_date ? new Date(formData.required_delivery_date) : undefined}
-                        onSelect={(date) => handleChange('required_delivery_date', date ? format(date, 'yyyy-MM-dd') : '')}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="description" className="text-sm font-medium flex items-center gap-1.5">
-                  <Info className="h-4 w-4 text-muted-foreground" />
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  placeholder="Enter detailed description of the requisition..."
-                  value={formData.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  disabled={isSubmitting || isUpdating || success}
-                  className="min-h-[80px] resize-none text-base rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="justification" className="text-sm font-medium flex items-center gap-1.5">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  Justification
-                </Label>
-                <Textarea
-                  id="justification"
-                  placeholder="Explain why this requisition is needed..."
-                  value={formData.justification}
-                  onChange={(e) => handleChange('justification', e.target.value)}
-                  disabled={isSubmitting || isUpdating || success}
-                  className="min-h-[60px] resize-none text-base rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  rows={2}
-                />
-              </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900 dark:text-white">
+                Edit Requisition
+              </CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
+                Update the requisition details below
+              </CardDescription>
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] rounded-full px-3 py-1 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+                <Clock className="h-3 w-3 mr-1" />
+                Auto-save
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
 
-            <Separator className="my-6 dark:border-gray-700/50" />
+        <CardContent className="pt-6">
+          {success && (
+            <Alert className="mb-6 rounded-xl border-green-500/50 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
+                ✅ Requisition updated successfully! Redirecting...
+              </AlertDescription>
+            </Alert>
+          )}
 
-            {/* Items Section */}
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20">
-                    <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold">Requisition Items</h3>
-                  <Badge variant="secondary" className="ml-1 rounded-full px-3 py-0.5">
-                    {formData.items?.filter((i: any) => i.item_name?.trim()).length || 0}
-                  </Badge>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addItem}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Step Indicator */}
+            <StepIndicator
+              currentStep={currentStep}
+              totalSteps={4}
+              labels={stepLabels}
+            />
+
+            {/* Step Content */}
+            <div className="min-h-[400px]">
+              {currentStep === 1 && (
+                <BasicInfoStep
+                  formData={formData}
+                  handleChange={handleChange}
+                  departments={departments}
+                  isHOD={isHOD}
+                  isStaff={isStaff}
+                  userDepartmentName={userDepartmentName}
+                  userDepartmentId={userDepartmentId}
                   disabled={isSubmitting || isUpdating || success}
-                  className="gap-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Item
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {formData.items?.map((item: any, index: number) => (
-                  <ItemRow
-                    key={index}
-                    index={index}
-                    item={item}
-                    onChange={handleItemChange}
-                    onRemove={removeItem}
-                    canRemove={formData.items.length > 1}
-                    suppliers={suppliers}
-                  />
-                ))}
-              </div>
-
-              {formErrors.items && (
-                <p className="text-sm text-red-500">{formErrors.items}</p>
+                  errors={formErrors}
+                  requisition={requisition}
+                />
               )}
 
-              <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Total Items: <span className="font-medium">{formData.items?.filter((i: any) => i.item_name?.trim()).length || 0}</span>
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Grand Total</p>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    KES {totalAmount.toFixed(2)}
-                  </p>
-                </div>
-              </div>
+              {currentStep === 2 && (
+                <TypeDetailsStep
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={isSubmitting || isUpdating || success}
+                  isService={isService}
+                  errors={formErrors}
+                />
+              )}
+
+              {currentStep === 3 && formData && (
+                isService ? (
+                  <ServiceComponentsInfo title={formData.title} />
+                ) : (
+                  <ItemsStep
+                    formData={formData}
+                    items={formData.items}
+                    handleItemChange={handleItemChange}
+                    addItem={addItem}
+                    removeItem={removeItem}
+                    totalAmount={totalAmount}
+                    isService={isService}
+                    disabled={isSubmitting || isUpdating || success}
+                  />
+                )
+              )}
+
+              {currentStep === 4 && (
+                <AdvancedOptionsStep
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={isSubmitting || isUpdating || success}
+                />
+              )}
             </div>
 
-            <Separator className="my-6 dark:border-gray-700/50" />
-
-            {/* Advanced Options */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full h-12 text-base rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
-              disabled={isSubmitting || isUpdating || success}
-            >
-              <div className="flex items-center gap-2.5">
-                <Layers className="h-4 w-4" />
-                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
-                {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {/* Navigation Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                {currentStep > 1 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={goToPreviousStep}
+                    disabled={isSubmitting || isUpdating || success}
+                    className="gap-2 h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                )}
               </div>
-            </Button>
 
-            {showAdvanced && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Hash className="h-4 w-4 text-muted-foreground" />
-                    Budget Code
-                  </Label>
-                  <Input
-                    placeholder="Enter budget code"
-                    value={formData.budget_code}
-                    onChange={(e) => handleChange('budget_code', e.target.value)}
-                    disabled={isSubmitting || isUpdating || success}
-                    className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    Budget Source
-                  </Label>
-                  <IconSelect
-                    value={formData.budget_source || ''}
-                    onValueChange={(value) => handleChange('budget_source', value)}
-                    placeholder="Select budget source"
-                    options={BUDGET_SOURCES}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    Funding Source
-                  </Label>
-                  <IconSelect
-                    value={formData.funding_source || ''}
-                    onValueChange={(value) => handleChange('funding_source', value)}
-                    placeholder="Select funding source"
-                    options={FUNDING_SOURCES}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Hash className="h-4 w-4 text-muted-foreground" />
-                    Project Code
-                  </Label>
-                  <Input
-                    placeholder="Enter project code"
-                    value={formData.project_code}
-                    onChange={(e) => handleChange('project_code', e.target.value)}
-                    disabled={isSubmitting || isUpdating || success}
-                    className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    Procurement Method
-                  </Label>
-                  <IconSelect
-                    value={formData.procurement_method || ''}
-                    onValueChange={(value) => handleChange('procurement_method', value)}
-                    placeholder="Select procurement method"
-                    options={PROCUREMENT_METHODS}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5 flex items-end gap-3 pt-2">
-                  <div className="flex items-center gap-2.5">
-                    <input
-                      type="checkbox"
-                      id="framework_agreement"
-                      checked={formData.is_framework_agreement}
-                      onChange={(e) => handleChange('is_framework_agreement', e.target.checked)}
-                      disabled={isSubmitting || isUpdating || success}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <Label htmlFor="framework_agreement" className="text-sm font-medium cursor-pointer">
-                      Framework Agreement
-                    </Label>
-                  </div>
-                  {formData.is_framework_agreement && (
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Framework ID"
-                        value={formData.framework_agreement_id}
-                        onChange={(e) => handleChange('framework_agreement_id', e.target.value)}
-                        disabled={isSubmitting || isUpdating || success}
-                        className="h-11 text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Shield className="h-4 w-4 text-muted-foreground" />
-                    Risk Level
-                  </Label>
-                  <IconSelect
-                    value={formData.risk_level}
-                    onValueChange={(value) => handleChange('risk_level', value)}
-                    placeholder="Select risk level"
-                    options={RISK_LEVELS}
-                    disabled={isSubmitting || isUpdating || success}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <Shield className="h-4 w-4 text-muted-foreground" />
-                    Risk Mitigation
-                  </Label>
-                  <Textarea
-                    placeholder="Describe risk mitigation measures..."
-                    value={formData.risk_mitigation}
-                    onChange={(e) => handleChange('risk_mitigation', e.target.value)}
-                    disabled={isSubmitting || isUpdating || success}
-                    className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-sm font-medium flex items-center gap-1.5">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                    Compliance Notes
-                  </Label>
-                  <Textarea
-                    placeholder="Enter compliance notes..."
-                    value={formData.compliance_notes}
-                    onChange={(e) => handleChange('compliance_notes', e.target.value)}
-                    disabled={isSubmitting || isUpdating || success}
-                    className="min-h-[60px] resize-none text-sm rounded-xl dark:bg-gray-900 dark:border-gray-700"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-
-          <CardFooter className="border-t border-gray-200/50 dark:border-gray-700/50 py-4 px-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-b-2xl">
-            <div className="flex justify-between items-center w-full">
-              <p className="text-xs text-muted-foreground">
-                <span className="text-red-500">*</span> Required fields. Only draft requisitions can be edited.
-              </p>
               <div className="flex items-center gap-3">
+                {currentStep < 4 && (
+                  <Button
+                    type="button"
+                    onClick={goToNextStep}
+                    disabled={isSubmitting || isUpdating || success}
+                    className="gap-2 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+
+                {currentStep === 4 && (
+                  <Button
+                    type="submit"
+                    className="gap-2 px-8 min-w-[160px] h-11 text-base rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-600/20"
+                    disabled={isSubmitting || isUpdating || success}
+                  >
+                    {isSubmitting || isUpdating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : success ? (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        Saved!
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={() => router.push(`/requisitions/${id}`)}
                   disabled={isSubmitting || isUpdating || success}
-                  className="rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
+                  className="h-10 rounded-xl dark:border-gray-700 dark:hover:bg-gray-800"
                 >
-                  <X className="h-4 w-4 mr-2" />
+                  <X className="h-4 w-4" />
                   Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20"
-                  disabled={isSubmitting || isUpdating || success}
-                >
-                  {isSubmitting || isUpdating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : success ? (
-                    <>
-                      <CheckCircle className="h-4 w-4" />
-                      Saved!
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
                 </Button>
               </div>
             </div>
-          </CardFooter>
-        </Card>
-      </form>
+          </form>
+        </CardContent>
+
+        <CardFooter className="border-t border-gray-200 dark:border-gray-700 py-3 px-6 bg-gray-50 dark:bg-gray-800/30 rounded-b-xl">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="text-red-500">*</span> Required fields. Only draft requisitions can be edited.
+            </p>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-[10px] rounded-full px-2.5 py-0 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+                <Shield className="h-3 w-3 mr-1" />
+                Secure
+              </Badge>
+              {formData && formData.requisition_type === 'services' ? (
+                <Badge className="text-[10px] rounded-full px-2.5 py-0 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                  <Briefcase className="h-3 w-3 mr-1" />
+                  LSO
+                </Badge>
+              ) : (
+                <Badge className="text-[10px] rounded-full px-2.5 py-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                  <Package className="h-3 w-3 mr-1" />
+                  LPO
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardFooter>
+      </Card>
     </PageTemplate>
   );
 }

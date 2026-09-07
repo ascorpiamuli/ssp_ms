@@ -58,6 +58,7 @@ import {
   Shield,
   Award as AwardIcon,
   Users,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -162,6 +163,23 @@ const PRIORITY_CONFIG: Record<string, { color: string; icon: any; label: string;
   medium: { color: 'text-yellow-600 dark:text-yellow-400', icon: MinusCircle, label: 'Medium', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
   high: { color: 'text-orange-600 dark:text-orange-400', icon: Flame, label: 'High', bg: 'bg-orange-50 dark:bg-orange-950/30' },
   emergency: { color: 'text-red-600 dark:text-red-400', icon: Zap, label: 'Emergency', bg: 'bg-red-50 dark:bg-red-950/30' },
+};
+
+const REQUISITION_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string; badge: string }> = {
+  goods: {
+    label: 'Goods (LPO)',
+    icon: Package,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    badge: 'LPO',
+  },
+  services: {
+    label: 'Services (LSO)',
+    icon: Briefcase,
+    color: 'text-purple-600 dark:text-purple-400',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+    badge: 'LSO',
+  },
 };
 
 const HISTORY_ACTION_CONFIG: Record<string, { color: string; icon: any; label: string; description: string }> = {
@@ -337,60 +355,45 @@ const hasProcurementStarted = (requisition: Requisition): boolean => {
 };
 
 const isProcurementComplete = (requisition: Requisition, summary?: any): boolean => {
-  // Use backend data first
   if (summary) {
     const isCompleted = safeGet(summary, 'procurement.is_completed', false);
     if (isCompleted) return true;
   }
-  // Fallback to local check
   return requisition.is_procurement_created === true &&
     requisition.status === 'final_approved' &&
     (requisition.metadata?.payment_completed === true ||
       requisition.metadata?.cheque_issued === true);
 };
 
-// Get procurement progress from backend
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
-
-  // Use backend completion rate from metrics
   const completionRate = safeGet(summary, 'metrics.completion_rate', null);
   if (completionRate !== null && completionRate !== undefined) {
     return Math.min(Math.max(completionRate, 0), 100);
   }
-
-  // Fallback to stage-based calculation
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 100;
-
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
-
   if (status && STAGE_WEIGHTS[status]) {
     let progress = STAGE_WEIGHTS[status];
-
     const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
     if (status === 'evaluating_quotations' && String(sqStatus) === 'completed') {
       progress += 5;
     }
-
     const pgStatus = safeGet(steps, 'po_generation.status', '');
     if (status === 'supplier_selected' && (String(pgStatus) === 'completed' || String(pgStatus) === 'in_progress')) {
       progress += 5;
     }
-
     return Math.min(progress, 99);
   }
-
   let progress = 0;
-
   const qtnStatus = safeGet(steps, 'quotation.status', '');
   if (String(qtnStatus) === 'closed' || String(qtnStatus) === 'completed') {
     progress += 20;
   } else if (String(qtnStatus) === 'sent' || String(qtnStatus) === 'responded') {
     progress += 15;
   }
-
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const sqReceived = safeGet(steps, 'supplier_quotations.quotes_received', 0);
   if (String(sqStatus) === 'completed') {
@@ -398,47 +401,39 @@ const getProcurementProgress = (summary: any): number => {
   } else if (Number(sqReceived) > 0) {
     progress += 15;
   }
-
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   if (String(ssStatus) === 'completed') {
     progress += 20;
   } else if (String(ssStatus) === 'in_progress') {
     progress += 10;
   }
-
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   if (String(pgStatus) === 'completed') {
     progress += 15;
   } else if (String(pgStatus) === 'in_progress') {
     progress += 10;
   }
-
   const delStatus = safeGet(steps, 'delivery.status', '');
   if (String(delStatus) === 'completed') {
     progress += 15;
   } else if (String(delStatus) === 'in_progress') {
     progress += 10;
   }
-
   const payStatus = safeGet(steps, 'payment.status', '');
   if (String(payStatus) === 'completed') {
     progress += 10;
   } else if (String(payStatus) === 'in_progress') {
     progress += 5;
   }
-
   return Math.min(progress, 99);
 };
 
 const getProcurementStatusLabel = (summary: any): string => {
   if (!summary) return 'Not Started';
-
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 'Complete';
-
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
-
   const statusMap: Record<string, string> = {
     'initiated': 'Initiated',
     'quotation_in_progress': 'Quotation in Progress',
@@ -450,22 +445,18 @@ const getProcurementStatusLabel = (summary: any): string => {
     'payment_pending': 'Payment Pending',
     'completed': 'Completed',
   };
-
   if (statusMap[status]) return statusMap[status];
-
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   const delStatus = safeGet(steps, 'delivery.status', '');
   const payStatus = safeGet(steps, 'payment.status', '');
-
   if (String(payStatus) === 'completed') return 'Payment Processed';
   if (String(delStatus) === 'completed') return 'Goods Received';
   if (String(pgStatus) === 'completed') return 'LPO/LSO Issued';
   if (String(ssStatus) === 'completed') return 'Supplier Selected';
   if (String(sqStatus) === 'completed') return 'Quotes Evaluated';
   if (String(sqStatus) === 'in_progress') return 'Awaiting Quotes';
-
   return status?.replace(/_/g, ' ') || 'In Progress';
 };
 
@@ -501,6 +492,18 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
     <Badge variant="outline" className={cn("flex items-center gap-1 text-xs rounded-full", config.bg, config.color)}>
       <Icon className="h-3 w-3" />
       {config.label}
+    </Badge>
+  );
+};
+
+const RequisitionTypeBadge = ({ type }: { type: string }) => {
+  const config = REQUISITION_TYPE_CONFIG[type] || REQUISITION_TYPE_CONFIG.goods;
+  const Icon = config.icon;
+
+  return (
+    <Badge variant="outline" className={cn("flex items-center gap-1 text-[10px] rounded-full", config.bg, config.color)}>
+      <Icon className="h-3 w-3" />
+      {config.badge}
     </Badge>
   );
 };
@@ -987,7 +990,7 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1035,6 +1038,20 @@ const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="emergency">Emergency</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.requisition_type as string || 'all'}
+            onValueChange={(value) => onFilterChange('requisition_type', value === 'all' ? undefined : value)}
+          >
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="goods">Goods (LPO)</SelectItem>
+              <SelectItem value="services">Services (LSO)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1139,6 +1156,26 @@ const HistoryTable = ({
     return requisition.user?.id === userId;
   };
 
+  const isServiceRequisition = (requisition: Requisition) => {
+    return requisition.requisition_type === 'services';
+  };
+
+  const getAmountDisplay = (requisition: Requisition) => {
+    if (isServiceRequisition(requisition)) {
+      return (
+        <span className="text-amber-600 dark:text-amber-400 flex items-center justify-end gap-1.5 text-sm">
+          <Sparkles className="h-3.5 w-3.5" />
+          TBD
+        </span>
+      );
+    }
+    return (
+      <span className="font-medium">
+        {formatCurrency(requisition.total_amount || 0)}
+      </span>
+    );
+  };
+
   const isRequisitionDeclined = (requisition: Requisition) => {
     return hasBeenDeclined(requisition) || isDeclinedStatus(requisition.status);
   };
@@ -1146,6 +1183,9 @@ const HistoryTable = ({
   const canViewProcurement = userRoles.some(role =>
     role === 'procurement' || role === 'accountant' || role === 'admin' || role === 'super_admin'
   );
+
+  const typeConfig = (type: string) => REQUISITION_TYPE_CONFIG[type] || REQUISITION_TYPE_CONFIG.goods;
+  const TypeIcon = (type: string) => typeConfig(type).icon;
 
   return (
     <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm">
@@ -1155,11 +1195,12 @@ const HistoryTable = ({
             <TableRow className="bg-muted/50 dark:bg-gray-800/50">
               <TableHead className="w-[40px]">#</TableHead>
               <TableHead className="min-w-[200px]">Requisition</TableHead>
+              <TableHead className="w-[80px]">Type</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead className="min-w-[300px]">Approval Flow</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-center min-w-[120px]">Actions</TableHead>
+              <TableHead className="text-right w-[120px]">Amount</TableHead>
+              <TableHead className="text-center min-w-[140px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1172,6 +1213,7 @@ const HistoryTable = ({
               const isHistoryExpanded = expandedHistoryId === req.id;
               const procurementStarted = hasProcurementStarted(req);
               const procurementComplete = isProcurementComplete(req);
+              const isService = isServiceRequisition(req);
               const statusColor = isApproved ? 'emerald' :
                 isCancelledStatus ? 'gray' :
                   isDeclined ? 'red' :
@@ -1180,6 +1222,9 @@ const HistoryTable = ({
                         req.status === 'hod_approved' ? 'indigo' :
                           req.status === 'accountant_approved' ? 'purple' :
                             req.status === 'principal_approved' ? 'teal' : 'gray';
+
+              const reqTypeConfig = typeConfig(req.requisition_type);
+              const TypeIconComponent = reqTypeConfig.icon;
 
               return (
                 <React.Fragment key={req.id}>
@@ -1190,7 +1235,8 @@ const HistoryTable = ({
                       isCancelledStatus && "bg-gray-100/50 dark:bg-gray-800/30",
                       isDeclined && "bg-red-50/30 dark:bg-red-950/20",
                       isReturned && "bg-amber-50/30 dark:bg-amber-950/20",
-                      isOwn && "border-l-4 border-l-blue-400 dark:border-l-blue-600"
+                      isOwn && "border-l-4 border-l-blue-400 dark:border-l-blue-600",
+                      isService && "border-l-4 border-l-purple-400 dark:border-l-purple-600"
                     )}
                     onClick={() => onView(req.id)}
                   >
@@ -1241,6 +1287,16 @@ const HistoryTable = ({
                       </div>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline" className={cn(
+                        "flex items-center gap-1 text-[10px] rounded-full",
+                        reqTypeConfig.bg,
+                        reqTypeConfig.color
+                      )}>
+                        <TypeIconComponent className="h-3 w-3" />
+                        {reqTypeConfig.badge}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1">
                         <Building2 className="h-3 w-3 text-muted-foreground" />
                         <span className="text-sm">{req.department?.name || 'N/A'}</span>
@@ -1256,7 +1312,7 @@ const HistoryTable = ({
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(req.total_amount || 0)}
+                      {getAmountDisplay(req)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
@@ -1337,7 +1393,7 @@ const HistoryTable = ({
                   </TableRow>
                   {isHistoryExpanded && (
                     <TableRow>
-                      <TableCell colSpan={7} className="p-0">
+                      <TableCell colSpan={8} className="p-0">
                         <HistoryDetailsCard
                           requisitionId={req.id}
                           onClose={() => onViewHistory(req.id)}
@@ -1449,10 +1505,13 @@ export default function RequisitionHistoryPage() {
   const data = filterSubmittedOnly(rawData);
   const isLoading = allRequisitionsQuery.isLoading || departmentsLoading;
 
-  // Build stats for StatsCards component - using backend data
+  // Stats with type breakdown
   const statsItems: StatCardItem[] = useMemo(() => {
     const submitted = rawData.filter(r => r.status !== 'draft' && r.status !== 'cancelled');
     const total = submitted.length;
+    const goodsCount = submitted.filter(r => r.requisition_type === 'goods').length;
+    const servicesCount = submitted.filter(r => r.requisition_type === 'services').length;
+
     const pending = submitted.filter(r =>
       r.status === 'submitted' ||
       r.status === 'hod_approved' ||
@@ -1469,7 +1528,6 @@ export default function RequisitionHistoryPage() {
     const returned = submitted.filter(r => r.status === 'returned').length;
     const cancelled = rawData.filter(r => r.status === 'cancelled').length;
 
-    // Procurement stats - using backend data
     const readyForProcurement = rawData.filter(r =>
       r.status === 'final_approved' &&
       !hasProcurementStarted(r) &&
@@ -1494,7 +1552,7 @@ export default function RequisitionHistoryPage() {
         icon: FileText,
         tagLabel: "TOTAL",
         tagColor: "blue",
-        subtitle: "All submitted requisitions",
+        subtitle: `${goodsCount} Goods • ${servicesCount} Services`,
       },
       {
         label: "Pending Approval",

@@ -357,14 +357,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'Final authorization (Level 4)',
         roles: ['final_approver']
       },
-      {
-        id: 'approval_history',
-        name: 'Approval History',
-        href: '/approvals/history',
-        icon: getIcon('Timer'),
-        description: 'View approval history and timelines',
-        roles: ['admin', 'accountant', 'head of institution', 'hod', 'auditor']
-      }
     ]
   },
 
@@ -538,6 +530,39 @@ export const navigationSections: NavigationSection[] = [
         icon: getIcon('Clock'),
         description: 'View historical purchase orders and receipts',
         roles: ['supplier']
+      }
+    ]
+  },
+  // DELIVERY NOTES (to be added as a parent tab)
+  {
+    id: 'delivery-notes',
+    title: 'Delivery Notes',
+    icon: getIcon('ClipboardList'),
+    defaultOpen: false,
+    items: [
+      {
+        id: 'goods_received_notes',
+        name: 'Goods Received Notes',
+        href: '/procurement/delivery-notes/goods-received',
+        icon: getIcon('Package'),
+        description: 'Manage GRN for goods deliveries',
+        roles: ['admin', 'procurement', 'accountant', 'storekeeper', 'hod', 'auditor']
+      },
+      {
+        id: 'service_acknowledgment_notes',
+        name: 'Service Acknowledgment Notes',
+        href: '/procurement/delivery-notes/service-acknowledgment',
+        icon: getIcon('FileCheck'),
+        description: 'Manage SAN for service deliveries',
+        roles: ['admin', 'procurement', 'accountant', 'hod', 'auditor']
+      },
+      {
+        id: 'delivery_tracking',
+        name: 'Delivery Tracking',
+        href: '/procurement/delivery-notes/tracking',
+        icon: getIcon('Truck'),
+        description: 'Track delivery progress and status',
+        roles: ['admin', 'procurement', 'accountant', 'hod', 'supplier']
       }
     ]
   },

@@ -2,12 +2,13 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
   FileText,
   MessageSquare,
@@ -53,6 +54,15 @@ import {
   Star,
   Heart,
   Flame,
+  ChevronDown,
+  ChevronUp,
+  Wrench,
+  ClipboardList,
+  UserCog,
+  Construction,
+  Laptop,
+  Handshake,
+  FileCheck as FileCheckIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate, getApprovalLevelInfo } from '../utils/helpers';
@@ -72,6 +82,7 @@ export interface RequisitionOverviewTabProps {
   hasSupplierSelected: boolean;
   poDetails: any;
   grnDetails: any;
+  sanDetails: any; // ✅ Added SAN details
   paymentDetails: any;
   quotesCount: number;
   totalItems: number;
@@ -89,20 +100,25 @@ const InfoRow = ({
   value,
   className,
   valueClassName,
+  badge,
 }: {
   icon: any;
   label: string;
   value: string | React.ReactNode;
   className?: string;
   valueClassName?: string;
+  badge?: React.ReactNode;
 }) => (
   <div className={cn("flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors", className)}>
     <div className="p-1.5 rounded-lg bg-primary/10 text-primary mt-0.5">
       <Icon className="h-4 w-4" />
     </div>
     <div className="flex-1 min-w-0">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className={cn("text-base font-medium mt-0.5", valueClassName)}>{value || 'N/A'}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+        {badge}
+      </div>
+      <div className={cn("text-base font-medium mt-0.5 truncate", valueClassName)}>{value || 'N/A'}</div>
     </div>
   </div>
 );
@@ -112,18 +128,21 @@ const DetailCard = ({
   icon: Icon,
   children,
   className,
+  badge,
 }: {
   title: string;
   icon?: any;
   children: React.ReactNode;
   className?: string;
+  badge?: React.ReactNode;
 }) => (
   <Card className={cn("shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl hover:shadow-md transition-shadow", className)}>
-    <CardHeader className="pb-3">
+    <CardHeader className="pb-3 flex flex-row items-center justify-between">
       <CardTitle className="text-base font-semibold flex items-center gap-2">
         {Icon && <Icon className="h-5 w-5 text-muted-foreground" />}
         {title}
       </CardTitle>
+      {badge}
     </CardHeader>
     <CardContent>{children}</CardContent>
   </Card>
@@ -140,6 +159,7 @@ const StatusChip = ({ label, color = 'gray', icon: Icon }: { label: string; colo
     indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
     teal: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
     rose: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+    cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
   };
 
   return (
@@ -147,6 +167,66 @@ const StatusChip = ({ label, color = 'gray', icon: Icon }: { label: string; colo
       {Icon && <Icon className="h-4 w-4" />}
       {label}
     </div>
+  );
+};
+
+const ExpandableText = ({ text, maxLines = 3 }: { text: string; maxLines?: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const lines = text?.split('\n') || [];
+  const shouldTruncate = lines.length > maxLines || text?.length > 300;
+
+  const displayText = isExpanded ? text : text?.slice(0, 300) + (text?.length > 300 ? '...' : '');
+
+  if (!text) return <p className="text-muted-foreground italic">No description provided</p>;
+
+  return (
+    <div className="space-y-2">
+      <div className={cn(
+        "text-base leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap",
+        !isExpanded && "line-clamp-3"
+      )}>
+        {text}
+      </div>
+      {shouldTruncate && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-0 h-auto font-medium"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="h-4 w-4 mr-1" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4 mr-1" />
+              Read More
+            </>
+          )}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+const SectionBadge = ({ label, color = 'blue' }: { label: string; color?: string }) => {
+  const colors: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    red: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    gray: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    cyan: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+    teal: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+  };
+
+  return (
+    <Badge className={cn("text-[10px] rounded-full px-2.5 py-0.5", colors[color] || colors.gray)}>
+      {label}
+    </Badge>
   );
 };
 
@@ -167,6 +247,7 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
   hasSupplierSelected,
   poDetails,
   grnDetails,
+  sanDetails,
   paymentDetails,
   quotesCount,
   totalItems,
@@ -179,7 +260,7 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
     'awaiting_quotations': 'bg-yellow-500',
     'evaluating_quotations': 'bg-orange-500',
     'supplier_selected': 'bg-purple-500',
-    'goods_receipt_pending': 'bg-teal-500',
+    'delivery_pending': 'bg-teal-500',
     'invoicing_pending': 'bg-cyan-500',
     'payment_pending': 'bg-amber-500',
     'completed': 'bg-emerald-500',
@@ -192,7 +273,7 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
       'awaiting_quotations': 'Awaiting Quotations',
       'evaluating_quotations': 'Evaluating Quotations',
       'supplier_selected': 'Supplier Selected',
-      'goods_receipt_pending': 'Goods Receipt Pending',
+      'delivery_pending': 'Delivery Pending',
       'invoicing_pending': 'Invoicing Pending',
       'payment_pending': 'Payment Pending',
       'completed': 'Completed',
@@ -206,9 +287,25 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
   const totalApprovalLevels = 4;
   const approvalProgress = (approvalCount / totalApprovalLevels) * 100;
 
-  // Get requester info
   const requester = requisition?.requester || requisition?.user || {};
   const department = requisition?.department || {};
+
+  const isService = requisition?.requisition_type === 'services';
+  const isGoods = requisition?.requisition_type === 'goods';
+
+  const serviceCategory = requisition?.service_category;
+  const serviceCategoryLabel = serviceCategory ?
+    serviceCategory.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : null;
+
+  const goodsCategoryLabel = requisition?.goods_category ?
+    requisition.goods_category.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : null;
+
+  // Determine delivery type
+  const hasGrn = grnDetails?.hasGrn || false;
+  const hasSan = sanDetails?.hasSan || false;
+  const hasDelivery = hasGrn || hasSan;
 
   return (
     <div className="space-y-6">
@@ -366,11 +463,20 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
                   <span className="text-sm font-mono font-medium">{poDetails.number}</span>
                 </div>
               )}
-              {grnDetails.hasGrn && (
+              {/* ✅ GRN Chip */}
+              {hasGrn && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 rounded-full border border-teal-200 dark:border-teal-800">
                   <Truck className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium text-teal-600 dark:text-teal-400">GRN:</span>
                   <span className="text-sm font-mono font-medium">{grnDetails.number}</span>
+                </div>
+              )}
+              {/* ✅ SAN Chip */}
+              {hasSan && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 rounded-full border border-cyan-200 dark:border-cyan-800">
+                  <FileCheckIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400">SAN:</span>
+                  <span className="text-sm font-mono font-medium">{sanDetails.number}</span>
                 </div>
               )}
               {paymentDetails.hasPayment && (
@@ -398,27 +504,209 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
         </Alert>
       )}
 
+      {/* Requisition Type Banner */}
+      <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-200/50 dark:border-blue-800/50">
+        <div className={cn(
+          "p-2.5 rounded-xl",
+          isService ? "bg-purple-100 dark:bg-purple-900/40" : "bg-blue-100 dark:bg-blue-900/40"
+        )}>
+          {isService ? (
+            <Briefcase className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          ) : (
+            <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {isService ? 'Service Requisition (LSO)' : 'Goods Requisition (LPO)'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {isService
+              ? 'This requisition is for professional services, contracts, or maintenance work.'
+              : 'This requisition is for physical items, materials, equipment, or supplies.'}
+          </p>
+        </div>
+        <div className="ml-auto">
+          <Badge className={cn(
+            "rounded-full px-3 py-1",
+            isService
+              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+          )}>
+            {isService ? 'LSO' : 'LPO'}
+          </Badge>
+        </div>
+      </div>
+
       {/* Description & Justification */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {requisition?.description && (
-          <DetailCard title="Description" icon={FileText}>
-            <p className="text-base leading-relaxed text-gray-700 dark:text-gray-300">{requisition.description}</p>
-          </DetailCard>
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <DetailCard title="Description" icon={FileText}>
+          <ExpandableText text={requisition?.description} />
+        </DetailCard>
 
         {requisition?.justification && (
           <DetailCard title="Justification" icon={MessageSquare}>
-            <p className="text-base leading-relaxed text-gray-700 dark:text-gray-300">{requisition.justification}</p>
+            <ExpandableText text={requisition?.justification} />
           </DetailCard>
         )}
       </div>
 
       {/* Requisition Details */}
-      <DetailCard title="Requisition Details" icon={Layers}>
+      <DetailCard
+        title="Requisition Details"
+        icon={Layers}
+        badge={
+          <div className="flex items-center gap-2">
+            {isService && serviceCategoryLabel && (
+              <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full text-[10px]">
+                {serviceCategoryLabel}
+              </Badge>
+            )}
+            {isGoods && goodsCategoryLabel && (
+              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-[10px]">
+                {goodsCategoryLabel}
+              </Badge>
+            )}
+          </div>
+        }
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          <InfoRow icon={Tag} label="Type" value={requisition?.type ? requisition.type.charAt(0).toUpperCase() + requisition.type.slice(1) : 'N/A'} />
+          {/* Type-specific info */}
+          {isService && (
+            <>
+              <InfoRow
+                icon={Briefcase}
+                label="Service Category"
+                value={serviceCategoryLabel || 'N/A'}
+              />
+              {requisition?.service_scope_of_work && (
+                <div className="col-span-3">
+                  <InfoRow
+                    icon={ClipboardList}
+                    label="Service Description"
+                    value={<ExpandableText text={requisition.service_scope_of_work} maxLines={2} />}
+                  />
+                </div>
+              )}
+              {requisition?.service_deliverables_expected && (
+                <div className="col-span-3">
+                  <InfoRow
+                    icon={Target}
+                    label="Expected Deliverables"
+                    value={<ExpandableText text={requisition.service_deliverables_expected} maxLines={2} />}
+                  />
+                </div>
+              )}
+              {requisition?.service_expected_start_date && (
+                <InfoRow
+                  icon={Calendar}
+                  label="Service Start Date"
+                  value={formatDate(requisition.service_expected_start_date)}
+                />
+              )}
+              {requisition?.service_expected_end_date && (
+                <InfoRow
+                  icon={CalendarDays}
+                  label="Service End Date"
+                  value={formatDate(requisition.service_expected_end_date)}
+                />
+              )}
+              {requisition?.service_estimated_duration_days && (
+                <InfoRow
+                  icon={Timer}
+                  label="Estimated Duration"
+                  value={`${requisition.service_estimated_duration_days} days`}
+                />
+              )}
+              {requisition?.service_requires_onsite_visit && (
+                <InfoRow
+                  icon={MapPin}
+                  label="Requires Onsite Visit"
+                  value="Yes"
+                  valueClassName="text-emerald-600 dark:text-emerald-400 font-semibold"
+                />
+              )}
+              {requisition?.service_special_requirements && (
+                <div className="col-span-3">
+                  <InfoRow
+                    icon={AlertTriangle}
+                    label="Special Requirements"
+                    value={<ExpandableText text={requisition.service_special_requirements} maxLines={2} />}
+                  />
+                </div>
+              )}
+              {requisition?.service_qualifications_required && (
+                <div className="col-span-3">
+                  <InfoRow
+                    icon={UserCog}
+                    label="Qualifications Required"
+                    value={<ExpandableText text={requisition.service_qualifications_required} maxLines={2} />}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {isGoods && (
+            <>
+              <InfoRow
+                icon={Tag}
+                label="Goods Category"
+                value={goodsCategoryLabel || 'N/A'}
+              />
+              {requisition?.goods_warehouse_location && (
+                <InfoRow
+                  icon={MapPin}
+                  label="Warehouse Location"
+                  value={requisition.goods_warehouse_location}
+                />
+              )}
+              {requisition?.goods_storage_requirements && (
+                <InfoRow
+                  icon={Shield}
+                  label="Storage Requirements"
+                  value={requisition.goods_storage_requirements}
+                />
+              )}
+              {requisition?.goods_expected_delivery_date && (
+                <InfoRow
+                  icon={Truck}
+                  label="Expected Delivery Date"
+                  value={formatDate(requisition.goods_expected_delivery_date)}
+                />
+              )}
+            </>
+          )}
+
+          {/* Common fields */}
+          <InfoRow icon={Tag} label="Requisition Type" value={requisition?.type ? requisition.type.charAt(0).toUpperCase() + requisition.type.slice(1) : 'N/A'} />
           <InfoRow icon={Clock} label="Urgency" value={requisition?.urgency ? requisition.urgency.charAt(0).toUpperCase() + requisition.urgency.slice(1) : 'N/A'} />
           <InfoRow icon={Shield} label="Risk Level" value={requisition?.risk_level ? requisition.risk_level.charAt(0).toUpperCase() + requisition.risk_level.slice(1) : 'N/A'} />
+          <InfoRow icon={Package} label="Total Items" value={totalItems?.toString() || '0'} />
+
+          {/* Total Amount - Conditional for Services */}
+          {isService ? (
+            <div className="col-span-1 md:col-span-2 lg:col-span-3">
+              <InfoRow
+                icon={DollarSign}
+                label="Total Amount"
+                value="To be determined by supplier quotations"
+                valueClassName="text-amber-600 dark:text-amber-400 font-medium"
+                badge={
+                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] rounded-full">
+                    Awaiting Quotation
+                  </Badge>
+                }
+              />
+            </div>
+          ) : (
+            <InfoRow
+              icon={DollarSign}
+              label="Total Amount"
+              value={formatCurrency(requisition?.total_amount)}
+              valueClassName="text-emerald-600 dark:text-emerald-400 font-bold"
+            />
+          )}
 
           {requisition?.budget_code && (
             <InfoRow icon={Hash} label="Budget Code" value={requisition.budget_code} valueClassName="font-mono" />
@@ -476,11 +764,10 @@ export const RequisitionOverviewTab: React.FC<RequisitionOverviewTabProps> = ({
               </div>
             </div>
           )}
-
         </div>
 
         {/* Dates */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <InfoRow icon={Calendar} label="Created At" value={formatDate(requisition?.created_at)} />
           <InfoRow icon={CalendarDays} label="Submitted At" value={formatDate(requisition?.submitted_at)} />
           {requisition?.required_by_date && (

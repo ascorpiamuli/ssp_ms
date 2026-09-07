@@ -263,40 +263,40 @@ const StatsCards = ({
     8: 'grid-cols-2 md:grid-cols-4 lg:grid-cols-8',
   };
 
-  // Size mapping based on variant - INCREASED SIZES
+  // Size mapping based on variant - OPTIMIZED SIZES (smaller default)
   const sizeMap = {
     compact: {
+      cardHeight: 'h-[90px]',
+      padding: 'p-3 pt-3',
+      labelSize: 'text-[10px]',
+      valueSize: 'text-xl',
+      iconSize: 'h-3.5 w-3.5',
+      iconPadding: 'p-1.5',
+      tagSize: 'sm' as const,
+      subtitleSize: 'text-[9px]',
+      gap: 'gap-2',
+    },
+    default: {
       cardHeight: 'h-[110px]',
       padding: 'p-4 pt-4',
       labelSize: 'text-[11px]',
       valueSize: 'text-2xl',
       iconSize: 'h-4 w-4',
       iconPadding: 'p-2',
-      tagSize: 'sm' as const,
+      tagSize: 'default' as const,
       subtitleSize: 'text-[10px]',
       gap: 'gap-3',
     },
-    default: {
-      cardHeight: 'h-[140px]',
-      padding: 'p-5 pt-6',
+    detailed: {
+      cardHeight: 'h-[130px]',
+      padding: 'p-5 pt-5',
       labelSize: 'text-[12px]',
       valueSize: 'text-3xl',
       iconSize: 'h-5 w-5',
       iconPadding: 'p-2.5',
-      tagSize: 'default' as const,
+      tagSize: 'lg' as const,
       subtitleSize: 'text-[11px]',
       gap: 'gap-4',
-    },
-    detailed: {
-      cardHeight: 'h-[170px]',
-      padding: 'p-6 pt-7',
-      labelSize: 'text-[14px]',
-      valueSize: 'text-4xl',
-      iconSize: 'h-6 w-6',
-      iconPadding: 'p-3',
-      tagSize: 'lg' as const,
-      subtitleSize: 'text-[12px]',
-      gap: 'gap-5',
     },
   };
 
@@ -331,15 +331,15 @@ const StatsCards = ({
       const DefaultIcon = getIconComponent(defaultIcon);
       if (DefaultIcon) {
         return (
-          <div className="absolute top-4 left-4 z-20">
+          <div className="absolute top-3 left-3 z-20">
             <div className={cn(
-              "p-2.5 rounded-xl shadow-md",
+              "p-2 rounded-xl shadow-md",
               "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 dark:from-blue-500/15 dark:to-indigo-500/15",
               "border border-white/30 dark:border-gray-700/50",
               "text-blue-600 dark:text-blue-400",
               "backdrop-blur-sm"
             )}>
-              <DefaultIcon className="h-6 w-6" />
+              <DefaultIcon className="h-5 w-5" />
             </div>
           </div>
         );
@@ -367,12 +367,12 @@ const StatsCards = ({
 
   if (isLoading) {
     return (
-      <div className={cn("grid gap-4", columnClasses[columns as keyof typeof columnClasses] || columnClasses[8], className)}>
+      <div className={cn("grid gap-3", columnClasses[columns as keyof typeof columnClasses] || columnClasses[8], className)}>
         {Array.from({ length: Math.min(stats.length || columns, 8) }).map((_, i) => (
-          <Card key={i} className="animate-pulse border-0 shadow-sm rounded-2xl bg-gray-100 dark:bg-gray-800 h-[140px]">
-            <CardContent className="p-5">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-3" />
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+          <Card key={i} className="animate-pulse border-0 shadow-sm rounded-2xl bg-gray-100 dark:bg-gray-800 h-[110px]">
+            <CardContent className="p-4">
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2" />
+              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
             </CardContent>
           </Card>
         ))}
@@ -528,7 +528,7 @@ const StatsCards = ({
   };
 
   return (
-    <div className={cn("grid gap-4", columnClasses[columns as keyof typeof columnClasses] || columnClasses[8], className)}>
+    <div className={cn("grid", size.gap, columnClasses[columns as keyof typeof columnClasses] || columnClasses[8], className)}>
       {stats.map((stat, index) => {
         const Icon = getIconComponent(stat.icon);
         const colors = defaultColors[index % defaultColors.length];
@@ -585,7 +585,7 @@ const StatsCards = ({
                   </p>
 
                   {/* Label and Icon at bottom */}
-                  <div className="flex items-center justify-between mt-auto pt-2">
+                  <div className="flex items-center justify-between mt-auto pt-1.5">
                     <div className="flex flex-col">
                       <p className={cn(
                         "font-semibold uppercase tracking-wider truncate",

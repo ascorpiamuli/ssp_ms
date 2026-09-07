@@ -11,6 +11,9 @@ import type {
   RequisitionHistory,
   HistoryAction,
   RequisitionAttachment,
+  ServiceCategory,
+  RequisitionTypeEnum,
+  ProcurementTypeEnum,
 } from '@/types/requisition.types';
 import { PaginatedResponse } from '../types/common.types';
 
@@ -73,6 +76,82 @@ export const useAdminDepartmentRequisitions = (
     queryKey: ['admin-department-requisitions', departmentId, filters],
     queryFn: () => requisitionService.adminGetDepartmentRequisitions(departmentId, filters),
     enabled: !!departmentId,
+    ...options,
+  });
+};
+
+// ============================================
+// REQUISITION TYPE-SPECIFIC LIST QUERIES
+// ============================================
+
+/**
+ * Get only service requisitions (LSO)
+ */
+export const useServiceRequisitions = (
+  filters?: RequisitionFilters,
+  options?: Omit<UseQueryOptions<PaginatedResponse<Requisition>>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['service-requisitions', filters],
+    queryFn: () => requisitionService.getServices(filters),
+    ...options,
+  });
+};
+
+/**
+ * Get only goods requisitions (LPO)
+ */
+export const useGoodsRequisitions = (
+  filters?: RequisitionFilters,
+  options?: Omit<UseQueryOptions<PaginatedResponse<Requisition>>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['goods-requisitions', filters],
+    queryFn: () => requisitionService.getGoods(filters),
+    ...options,
+  });
+};
+
+/**
+ * Get requisitions by service category
+ */
+export const useRequisitionsByServiceCategory = (
+  category: ServiceCategory,
+  filters?: RequisitionFilters,
+  options?: Omit<UseQueryOptions<PaginatedResponse<Requisition>>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['requisitions-by-category', category, filters],
+    queryFn: () => requisitionService.getByServiceCategory(category, filters),
+    enabled: !!category,
+    ...options,
+  });
+};
+
+/**
+ * Get requisitions ready for LPO generation (goods)
+ */
+export const useRequisitionsForLpo = (
+  filters?: RequisitionFilters,
+  options?: Omit<UseQueryOptions<PaginatedResponse<Requisition>>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['requisitions-for-lpo', filters],
+    queryFn: () => requisitionService.getForLpo(filters),
+    ...options,
+  });
+};
+
+/**
+ * Get requisitions ready for LSO generation (services)
+ */
+export const useRequisitionsForLso = (
+  filters?: RequisitionFilters,
+  options?: Omit<UseQueryOptions<PaginatedResponse<Requisition>>, 'queryKey' | 'queryFn'>
+) => {
+  return useQuery({
+    queryKey: ['requisitions-for-lso', filters],
+    queryFn: () => requisitionService.getForLso(filters),
     ...options,
   });
 };
@@ -243,4 +322,120 @@ export const useRequisitionAttachment = (
     enabled: !!requisitionId && !!attachmentId,
     ...options,
   });
+};
+
+// ============================================
+// COMBINED QUERY HOOKS FOR CONVENIENCE
+// ============================================
+
+/**
+ * Get all requisition data for a dashboard
+ */
+export const useRequisitionDashboardData = (
+  filters?: RequisitionFilters
+) => {
+  const requisitions = useRequisitions(filters);
+  const stats = useRequisitionStats(filters);
+  const myStats = useMyRequisitionStats();
+  const pendingApprovals = usePendingApprovalsList(filters);
+
+  return {
+    requisitions,
+    stats,
+    myStats,
+    pendingApprovals,
+    isLoading: requisitions.isLoading || stats.isLoading || myStats.isLoading || pendingApprovals.isLoading,
+    isError: requisitions.isError || stats.isError || myStats.isError || pendingApprovals.isError,
+    error: requisitions.error || stats.error || myStats.error || pendingApprovals.error,
+  };
+};
+
+/**
+ * Get service requisition dashboard data
+ */
+export const useServiceRequisitionDashboardData = (
+  filters?: RequisitionFilters
+) => {
+  const serviceRequisitions = useServiceRequisitions(filters);
+  const stats = useRequisitionStats({ ...filters, requisition_type: 'services' });
+  const forLso = useRequisitionsForLso(filters);
+  const pendingApprovals = usePendingApprovalsList(filters);
+
+  return {
+    serviceRequisitions,
+    stats,
+    forLso,
+    pendingApprovals,
+    isLoading: serviceRequisitions.isLoading || stats.isLoading || forLso.isLoading || pendingApprovals.isLoading,
+    isError: serviceRequisitions.isError || stats.isError || forLso.isError || pendingApprovals.isError,
+    error: serviceRequisitions.error || stats.error || forLso.error || pendingApprovals.error,
+  };
+};
+
+/**
+ * Get goods requisition dashboard data
+ */
+export const useGoodsRequisitionDashboardData = (
+  filters?: RequisitionFilters
+) => {
+  const goodsRequisitions = useGoodsRequisitions(filters);
+  const stats = useRequisitionStats({ ...filters, requisition_type: 'goods' });
+  const forLpo = useRequisitionsForLpo(filters);
+  const pendingApprovals = usePendingApprovalsList(filters);
+
+  return {
+    goodsRequisitions,
+    stats,
+    forLpo,
+    pendingApprovals,
+    isLoading: goodsRequisitions.isLoading || stats.isLoading || forLpo.isLoading || pendingApprovals.isLoading,
+    isError: goodsRequisitions.isError || stats.isError || forLpo.isError || pendingApprovals.isError,
+    error: goodsRequisitions.error || stats.error || forLpo.error || pendingApprovals.error,
+  };
+};
+
+// ============================================
+// EXPORT ALL QUERIES
+// ============================================
+
+export const useRequisitionQueries = () => {
+  return {
+    // List queries
+    requisitions: useRequisitions,
+    myRequisitions: useMyRequisitions,
+    pendingApprovals: usePendingApprovalsList,
+    adminRequisitions: useAdminRequisitions,
+    adminDepartmentRequisitions: useAdminDepartmentRequisitions,
+
+    // Type-specific list queries
+    serviceRequisitions: useServiceRequisitions,
+    goodsRequisitions: useGoodsRequisitions,
+    requisitionsByServiceCategory: useRequisitionsByServiceCategory,
+    requisitionsForLpo: useRequisitionsForLpo,
+    requisitionsForLso: useRequisitionsForLso,
+
+    // Detail queries
+    requisition: useRequisition,
+    requisitionByReference: useRequisitionByReference,
+
+    // Stats queries
+    requisitionStats: useRequisitionStats,
+    myRequisitionStats: useMyRequisitionStats,
+    adminRequisitionStats: useAdminRequisitionStats,
+
+    // History queries
+    requisitionHistory: useRequisitionHistory,
+    historyByAction: useHistoryByAction,
+    historyStats: useHistoryStats,
+    recentHistory: useRecentHistory,
+
+    // Attachment queries
+    requisitionAttachments: useRequisitionAttachments,
+    requisitionAttachment: useRequisitionAttachment,
+
+    // Dashboard data
+    dashboardData: useRequisitionDashboardData,
+    serviceDashboardData: useServiceRequisitionDashboardData,
+    goodsDashboardData: useGoodsRequisitionDashboardData,
+  };
 };
