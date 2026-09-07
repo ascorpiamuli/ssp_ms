@@ -10,6 +10,8 @@ use App\Services\Procurement\Contracts\Utilities\PdfGeneratorInterface;
 use App\Services\Procurement\PDF\PurchaseOrderPdfRenderer;
 use App\Services\Procurement\PDF\RequestForQuotationPdfRenderer;
 use App\Services\Procurement\PDF\SupplierQuotationPdfRenderer;
+use App\Services\Procurement\PDF\GrnPdfRenderer;
+use App\Services\Procurement\PDF\SanPdfRenderer;
 use App\Services\Signatures\Contracts\Services\QRCodeServiceInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -78,7 +80,8 @@ class PdfGenerator implements PdfGeneratorInterface
   public function generateGrn($grn): string
   {
     // TODO: Implement GrnPdfRenderer
-    return $this->generatePlaceholderPDF('Goods Received Note', $grn->grn_number ?? 'N/A');
+    $renderer = new GrnPdfRenderer($this->qrCodeService);
+    return $renderer->renderWithData($grn);
   }
 
   /**
@@ -87,7 +90,8 @@ class PdfGenerator implements PdfGeneratorInterface
   public function generateSan($san): string
   {
     // TODO: Implement SanPdfRenderer
-    return $this->generatePlaceholderPDF('Service Acknowledgment Note', $san->san_number ?? 'N/A');
+    $renderer = new SanPdfRenderer($this->qrCodeService);
+    return $renderer->renderWithData($san);
   }
 
   /**

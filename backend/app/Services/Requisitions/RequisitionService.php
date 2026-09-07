@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Requisition Service
  *
  * Handles all business logic for requisition management
+ * Supports both Goods (LPO) and Services (LSO) requisitions
  */
 class RequisitionService
 {
@@ -136,6 +137,23 @@ class RequisitionService
         'title',
         'description',
         'total_amount',
+        // === NEW: Requisition Type Fields ===
+        'requisition_type',
+        'procurement_type',
+        'service_category',
+        'service_scope_of_work',
+        'service_deliverables_expected',
+        'service_expected_start_date',
+        'service_expected_end_date',
+        'service_estimated_duration_days',
+        'service_requires_onsite_visit',
+        'service_special_requirements',
+        'service_qualifications_required',
+        'goods_category',
+        'goods_warehouse_location',
+        'goods_storage_requirements',
+        'goods_expected_delivery_date',
+        // === Existing Fields ===
         'status',
         'priority',
         'type',
@@ -171,6 +189,21 @@ class RequisitionService
 
     if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
       $query->byPriority($filters['priority']);
+    }
+
+    // === NEW: Filter by requisition type ===
+    if (!empty($filters['requisition_type']) && $filters['requisition_type'] !== 'all') {
+      $query->where('requisition_type', $filters['requisition_type']);
+    }
+
+    // === NEW: Filter by procurement type ===
+    if (!empty($filters['procurement_type']) && $filters['procurement_type'] !== 'all') {
+      $query->where('procurement_type', $filters['procurement_type']);
+    }
+
+    // === NEW: Filter by service category ===
+    if (!empty($filters['service_category']) && $filters['service_category'] !== 'all') {
+      $query->where('service_category', $filters['service_category']);
     }
 
     if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
@@ -309,6 +342,23 @@ class RequisitionService
         'title',
         'description',
         'total_amount',
+        // === NEW: Requisition Type Fields ===
+        'requisition_type',
+        'procurement_type',
+        'service_category',
+        'service_scope_of_work',
+        'service_deliverables_expected',
+        'service_expected_start_date',
+        'service_expected_end_date',
+        'service_estimated_duration_days',
+        'service_requires_onsite_visit',
+        'service_special_requirements',
+        'service_qualifications_required',
+        'goods_category',
+        'goods_warehouse_location',
+        'goods_storage_requirements',
+        'goods_expected_delivery_date',
+        // === Existing Fields ===
         'status',
         'priority',
         'type',
@@ -350,6 +400,17 @@ class RequisitionService
       $data['user_id'] = Auth::id();
       $data['status'] = 'draft';
 
+      // === SET DEFAULT VALUES FOR NEW FIELDS ===
+      if (empty($data['requisition_type'])) {
+        $data['requisition_type'] = Requisition::TYPE_GOODS;
+      }
+
+      if (empty($data['procurement_type'])) {
+        $data['procurement_type'] = $data['requisition_type'] === Requisition::TYPE_SERVICES
+          ? Requisition::PROCUREMENT_SERVICES
+          : Requisition::PROCUREMENT_GOODS;
+      }
+
       $fillableData = array_intersect_key($data, array_flip([
         'reference_number',
         'user_id',
@@ -358,6 +419,23 @@ class RequisitionService
         'title',
         'description',
         'total_amount',
+        // === NEW: Requisition Type Fields ===
+        'requisition_type',
+        'procurement_type',
+        'service_category',
+        'service_scope_of_work',
+        'service_deliverables_expected',
+        'service_expected_start_date',
+        'service_expected_end_date',
+        'service_estimated_duration_days',
+        'service_requires_onsite_visit',
+        'service_special_requirements',
+        'service_qualifications_required',
+        'goods_category',
+        'goods_warehouse_location',
+        'goods_storage_requirements',
+        'goods_expected_delivery_date',
+        // === Existing Fields ===
         'status',
         'priority',
         'type',
@@ -386,7 +464,7 @@ class RequisitionService
       // Audit: Log requisition creation
       $this->auditLogService->logModelCreated(
         $requisition,
-        "Requisition created: {$requisition->reference_number}"
+        "Requisition created: {$requisition->reference_number} (Type: {$requisition->requisition_type_label})"
       );
 
       // ✅ CREATE ITEMS - Include ALL fields
@@ -422,11 +500,23 @@ class RequisitionService
         $requisition->id,
         'created',
         null,
-        ['id' => $requisition->id, 'reference_number' => $requisition->reference_number],
-        'Requisition created'
+        [
+          'id' => $requisition->id,
+          'reference_number' => $requisition->reference_number,
+          'requisition_type' => $requisition->requisition_type_label
+        ],
+        "Requisition created ({$requisition->requisition_type_label})"
       );
 
       DB::commit();
+
+      Log::info('✅ Requisition created successfully', [
+        'requisition_id' => $requisition->id,
+        'reference_number' => $requisition->reference_number,
+        'requisition_type' => $requisition->requisition_type,
+        'procurement_type' => $requisition->procurement_type,
+        'created_by_user_id' => Auth::id(),
+      ]);
 
       return $requisition->fresh(['items' => function ($query) {
         $query->select([
@@ -579,6 +669,23 @@ class RequisitionService
         'supplier_id',
         'title',
         'description',
+        // === NEW: Requisition Type Fields ===
+        'requisition_type',
+        'procurement_type',
+        'service_category',
+        'service_scope_of_work',
+        'service_deliverables_expected',
+        'service_expected_start_date',
+        'service_expected_end_date',
+        'service_estimated_duration_days',
+        'service_requires_onsite_visit',
+        'service_special_requirements',
+        'service_qualifications_required',
+        'goods_category',
+        'goods_warehouse_location',
+        'goods_storage_requirements',
+        'goods_expected_delivery_date',
+        // === Existing Fields ===
         'priority',
         'type',
         'urgency',
@@ -725,7 +832,7 @@ class RequisitionService
       // Audit: Log requisition deletion
       $this->auditLogService->logModelDeleted(
         $requisition,
-        "Requisition deleted: {$requisition->reference_number}"
+        "Requisition deleted: {$requisition->reference_number} ({$requisition->requisition_type_label})"
       );
 
       // Log deletion
@@ -744,6 +851,7 @@ class RequisitionService
 
       Log::info('✅ Requisition deleted successfully', [
         'requisition_id' => $requisition->id,
+        'requisition_type' => $requisition->requisition_type,
         'deleted_by_user_id' => $user->id,
       ]);
 
@@ -815,6 +923,7 @@ class RequisitionService
       if ($requisition->status === 'returned') {
         Log::info('🔄 Resubmitting returned requisition', [
           'requisition_id' => $requisition->id,
+          'requisition_type' => $requisition->requisition_type_label,
           'return_count' => $requisition->return_count,
           'submitted_by' => $userId,
         ]);
@@ -829,8 +938,6 @@ class RequisitionService
           'return_reason' => null,
           'last_returned_at' => null,
           'return_count' => ($requisition->return_count ?? 0) + 1,
-          'last_resubmitted_at' => now(),
-          'resubmitted_by' => $userId,
         ]);
 
         Log::info('🔄 Reset returned requisition for resubmission', [
@@ -851,7 +958,7 @@ class RequisitionService
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
-        "Requisition submitted for approval: {$requisition->reference_number}"
+        "Requisition submitted for approval: {$requisition->reference_number} (Type: {$requisition->requisition_type_label})"
       );
 
       // Create approval workflow
@@ -868,6 +975,7 @@ class RequisitionService
         'previous_status' => $requisition->getOriginal('status'),
         'new_status' => 'submitted',
         'submitted_by' => $userId,
+        'requisition_type' => $requisition->requisition_type_label,
       ];
 
       if ($requisition->getOriginal('status') === 'returned') {
@@ -889,6 +997,7 @@ class RequisitionService
 
       Log::info('✅ Requisition submitted successfully', [
         'requisition_id' => $requisition->id,
+        'requisition_type' => $requisition->requisition_type,
         'previous_status' => $requisition->getOriginal('status'),
         'is_resubmission' => $requisition->getOriginal('status') === 'returned',
         'submitted_by_user_id' => $userId,
@@ -982,7 +1091,7 @@ class RequisitionService
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
-        "Requisition returned for revision: {$requisition->reference_number} - Reason: {$returnReason}"
+        "Requisition returned for revision: {$requisition->reference_number} ({$requisition->requisition_type_label}) - Reason: {$returnReason}"
       );
 
       // Update the approval status
@@ -1007,6 +1116,7 @@ class RequisitionService
 
       Log::info('✅ Requisition returned for revision', [
         'requisition_id' => $requisition->id,
+        'requisition_type' => $requisition->requisition_type,
         'returned_by_user_id' => $user->id,
         'return_count' => $requisition->return_count,
       ]);
@@ -1064,6 +1174,7 @@ class RequisitionService
           'requisition_id' => $requisition->id,
           'requisition_creator_id' => $requisition->user_id,
           'requisition_status' => $requisition->status,
+          'requisition_type' => $requisition->requisition_type,
           'attempted_by_user_id' => $user->id,
           'attempted_by_user_email' => $user->email,
           'user_roles' => $user->roles->pluck('name')->toArray(),
@@ -1094,7 +1205,7 @@ class RequisitionService
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
-        "Requisition cancelled: {$requisition->reference_number} - Reason: {$cancelReason}"
+        "Requisition cancelled: {$requisition->reference_number} ({$requisition->requisition_type_label}) - Reason: {$cancelReason}"
       );
 
       // Cancel all pending approvals - optimized query
@@ -1115,6 +1226,7 @@ class RequisitionService
 
       Log::info('✅ Requisition cancelled successfully', [
         'requisition_id' => $requisition->id,
+        'requisition_type' => $requisition->requisition_type,
         'cancelled_by_user_id' => $user->id,
         'cancellation_reason' => $data['reason'] ?? null,
         'cancelled_by_role' => $reason,
@@ -1150,6 +1262,11 @@ class RequisitionService
       $query->byUser((int) $filters['user_id']);
     }
 
+    // === NEW: Filter by requisition type ===
+    if (!empty($filters['requisition_type']) && $filters['requisition_type'] !== 'all') {
+      $query->where('requisition_type', $filters['requisition_type']);
+    }
+
     return [
       'total' => $query->count(),
       'pending' => (clone $query)->pendingApproval()->count(),
@@ -1157,6 +1274,9 @@ class RequisitionService
       'declined' => (clone $query)->declined()->count(),
       'returned' => (clone $query)->returned()->count(),
       'cancelled' => (clone $query)->cancelled()->count(),
+      // === NEW: Type-specific stats ===
+      'goods_requisitions' => (clone $query)->goods()->count(),
+      'services_requisitions' => (clone $query)->services()->count(),
     ];
   }
 
@@ -1196,6 +1316,23 @@ class RequisitionService
           'title',
           'description',
           'total_amount',
+          // === NEW: Requisition Type Fields ===
+          'requisition_type',
+          'procurement_type',
+          'service_category',
+          'service_scope_of_work',
+          'service_deliverables_expected',
+          'service_expected_start_date',
+          'service_expected_end_date',
+          'service_estimated_duration_days',
+          'service_requires_onsite_visit',
+          'service_special_requirements',
+          'service_qualifications_required',
+          'goods_category',
+          'goods_warehouse_location',
+          'goods_storage_requirements',
+          'goods_expected_delivery_date',
+          // === Existing Fields ===
           'status',
           'user_id',
           'department_id',
@@ -1244,6 +1381,13 @@ class RequisitionService
       $query->where('level', $filters['level']);
     }
 
+    // === NEW: Filter by requisition type ===
+    if (!empty($filters['requisition_type']) && $filters['requisition_type'] !== 'all') {
+      $query->whereHas('requisition', function ($q) use ($filters) {
+        $q->where('requisition_type', $filters['requisition_type']);
+      });
+    }
+
     if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
       $query->whereBetween('created_at', [$filters['date_from'], $filters['date_to']]);
     }
@@ -1275,6 +1419,23 @@ class RequisitionService
       'title',
       'status',
       'total_amount',
+      // === NEW: Requisition Type Fields ===
+      'requisition_type',
+      'procurement_type',
+      'service_category',
+      'service_scope_of_work',
+      'service_deliverables_expected',
+      'service_expected_start_date',
+      'service_expected_end_date',
+      'service_estimated_duration_days',
+      'service_requires_onsite_visit',
+      'service_special_requirements',
+      'service_qualifications_required',
+      'goods_category',
+      'goods_warehouse_location',
+      'goods_storage_requirements',
+      'goods_expected_delivery_date',
+      // === Existing Fields ===
       'user_id',
       'department_id',
       'created_at'
@@ -1311,6 +1472,113 @@ class RequisitionService
       $query->byUser((int) $filters['user_id']);
     }
 
+    // === NEW: Filter by requisition type ===
+    if (!empty($filters['requisition_type']) && $filters['requisition_type'] !== 'all') {
+      $query->where('requisition_type', $filters['requisition_type']);
+    }
+
     return $query->count();
+  }
+
+    // ============================================
+    // NEW: SERVICE-SPECIFIC METHODS
+    // ============================================
+
+  /**
+   * Get all service requisitions
+   *
+   * @param array $filters
+   * @param int $perPage
+   * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+   */
+  public function getServiceRequisitions(array $filters = [], int $perPage = 15)
+  {
+    $filters['requisition_type'] = Requisition::TYPE_SERVICES;
+    return $this->getAll($filters, $perPage);
+  }
+
+  /**
+   * Get all goods requisitions
+   *
+   * @param array $filters
+   * @param int $perPage
+   * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+   */
+  public function getGoodsRequisitions(array $filters = [], int $perPage = 15)
+  {
+    $filters['requisition_type'] = Requisition::TYPE_GOODS;
+    return $this->getAll($filters, $perPage);
+  }
+
+  /**
+   * Get requisitions by service category
+   *
+   * @param string $category
+   * @param array $filters
+   * @param int $perPage
+   * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+   */
+  public function getByServiceCategory(string $category, array $filters = [], int $perPage = 15)
+  {
+    $filters['service_category'] = $category;
+    return $this->getAll($filters, $perPage);
+  }
+
+  /**
+   * Get requisitions that will generate LPO (Goods)
+   *
+   * @param array $filters
+   * @param int $perPage
+   * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+   */
+  public function getForLpo(array $filters = [], int $perPage = 15)
+  {
+    $query = Requisition::where('procurement_type', Requisition::PROCUREMENT_GOODS)
+      ->where('status', 'final_approved');
+
+    if (!empty($filters['search'])) {
+      $query->search($filters['search']);
+    }
+
+    if (!empty($filters['department_id'])) {
+      $query->byDepartment((int) $filters['department_id']);
+    }
+
+    if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
+      $query->dateRange($filters['date_from'], $filters['date_to']);
+    }
+
+    return $query->orderBy('created_at', 'desc')->paginate($perPage);
+  }
+
+  /**
+   * Get requisitions that will generate LSO (Services)
+   *
+   * @param array $filters
+   * @param int $perPage
+   * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+   */
+  public function getForLso(array $filters = [], int $perPage = 15)
+  {
+    $query = Requisition::where('procurement_type', Requisition::PROCUREMENT_SERVICES)
+      ->where('status', 'final_approved');
+
+    if (!empty($filters['search'])) {
+      $query->search($filters['search']);
+    }
+
+    if (!empty($filters['department_id'])) {
+      $query->byDepartment((int) $filters['department_id']);
+    }
+
+    if (!empty($filters['service_category'])) {
+      $query->where('service_category', $filters['service_category']);
+    }
+
+    if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
+      $query->dateRange($filters['date_from'], $filters['date_to']);
+    }
+
+    return $query->orderBy('created_at', 'desc')->paginate($perPage);
   }
 }

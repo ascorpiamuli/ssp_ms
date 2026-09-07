@@ -49,8 +49,6 @@ import { RequisitionOverviewTab } from './components/RequisitionOverviewTab';
 import { RequisitionItemsTab } from './components/RequisitionItemsTab';
 import { RequisitionApprovalsTab } from './components/RequisitionApprovalsTab';
 import { RequisitionProcurementTab } from './components/RequisitionProcurementTab';
-import { RequisitionHistoryTab } from './components/RequisitionHistoryTab';
-
 // Dialogs
 import { DeleteDialog } from './components/Dialogs/DeleteDialog';
 import { SubmitDialog } from './components/Dialogs/SubmitDialog';
@@ -84,7 +82,7 @@ const STAGE_WEIGHTS: Record<string, number> = {
   'awaiting_quotations': 30,
   'evaluating_quotations': 45,
   'supplier_selected': 60,
-  'goods_receipt_pending': 75,
+  'delivery_pending': 75,
   'invoicing_pending': 85,
   'payment_pending': 95,
   'completed': 100,
@@ -271,9 +269,8 @@ export default function RequisitionDetailsPage() {
     return { hasPo: false };
   }, [steps, requisition]);
 
-  // Get GRN details from backend steps - handle different property names
+  // Get GRN details from backend steps
   const grnDetails = useMemo(() => {
-    // Try delivery first (from procurementSummary)
     const stepDelivery = steps?.delivery || steps?.goods_received;
     if (stepDelivery && stepDelivery.grn_number) {
       return {
@@ -292,6 +289,28 @@ export default function RequisitionDetailsPage() {
       };
     }
     return { hasGrn: false };
+  }, [steps, requisition]);
+
+  // ✅ Get SAN details from backend steps
+  const sanDetails = useMemo(() => {
+    const stepDelivery = steps?.delivery || steps?.service_acknowledgment;
+    if (stepDelivery && stepDelivery.san_number) {
+      return {
+        status: stepDelivery.status || 'generated',
+        number: stepDelivery.san_number,
+        created_at: stepDelivery.created_at || null,
+        hasSan: true,
+      };
+    }
+    if (requisition?.metadata?.san_number) {
+      return {
+        status: 'generated',
+        number: requisition.metadata.san_number,
+        created_at: requisition.metadata.san_created_at,
+        hasSan: true,
+      };
+    }
+    return { hasSan: false };
   }, [steps, requisition]);
 
   // Get payment details from backend steps
@@ -363,12 +382,12 @@ export default function RequisitionDetailsPage() {
     if (isProcurementComplete) return false;
     // Check if all required steps are complete based on backend status
     if (paymentDetails.hasPayment && paymentDetails.status === 'completed') return true;
-    if (poDetails.hasPo && grnDetails.hasGrn) return true;
-    if (qtnDetails.hasQtn && quotesCount > 0 && hasSupplierSelected && poDetails.hasPo && grnDetails.hasGrn) {
+    if (poDetails.hasPo && (grnDetails.hasGrn || sanDetails.hasSan)) return true;
+    if (qtnDetails.hasQtn && quotesCount > 0 && hasSupplierSelected && poDetails.hasPo && (grnDetails.hasGrn || sanDetails.hasSan)) {
       return true;
     }
     return false;
-  }, [requisition, canViewProcurement, hasProcurementStarted, isProcurementComplete, paymentDetails, poDetails, grnDetails, qtnDetails, quotesCount, hasSupplierSelected]);
+  }, [requisition, canViewProcurement, hasProcurementStarted, isProcurementComplete, paymentDetails, poDetails, grnDetails, sanDetails, qtnDetails, quotesCount, hasSupplierSelected]);
 
   const canCancelProcurement = useMemo(() => {
     if (!requisition) return false;
@@ -792,10 +811,6 @@ export default function RequisitionDetailsPage() {
                     <ShoppingCart className="h-4 w-4" />
                     Procurement
                   </TabsTrigger>
-                  <TabsTrigger value="history" className="flex-1 gap-2 data-[state=active]:bg-background py-2.5 rounded-lg">
-                    <ShoppingCart className="h-4 w-4" />
-                    History ({historyItems.length})
-                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-4">
@@ -812,6 +827,7 @@ export default function RequisitionDetailsPage() {
                     hasSupplierSelected={hasSupplierSelected}
                     poDetails={poDetails}
                     grnDetails={grnDetails}
+                    sanDetails={sanDetails}
                     paymentDetails={paymentDetails}
                     quotesCount={quotesCount}
                     totalItems={totalItems}
@@ -860,6 +876,7 @@ export default function RequisitionDetailsPage() {
                     qtnDetails={qtnDetails}
                     poDetails={poDetails}
                     grnDetails={grnDetails}
+                    sanDetails={sanDetails}
                     paymentDetails={paymentDetails}
                     hasSupplierSelected={hasSupplierSelected}
                     quotesCount={quotesCount}
@@ -880,15 +897,6 @@ export default function RequisitionDetailsPage() {
                       setShowCancelDialog(true);
                       setComment('');
                     }}
-                  />
-                </TabsContent>
-
-                <TabsContent value="history" className="mt-4">
-                  <RequisitionHistoryTab
-                    historyItems={historyItems}
-                    historyLoading={historyLoading}
-                    isReturned={isReturned}
-                    isEmergency={isEmergency}
                   />
                 </TabsContent>
               </Tabs>

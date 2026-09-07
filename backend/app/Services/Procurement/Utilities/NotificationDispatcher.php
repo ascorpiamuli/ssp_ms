@@ -191,9 +191,6 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     }
   }
 
-  /**
-   * Ensure requisition_id is set in the data array
-   */
   protected function ensureRequisitionId(array $data): array
   {
     // If requisition_id is already set and not null, return as is
@@ -264,11 +261,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
       }
     }
 
-    // Try to get the latest requisition_id from the current user's context
+    // ✅ FIXED: Use only 'user_id' column (not 'created_by')
     if (auth()->check() && auth()->user()) {
       // Try to find any requisition created by the current user
-      $requisition = \App\Models\Requisition::where('created_by', auth()->id())
-        ->orWhere('user_id', auth()->id())
+      $requisition = \App\Models\Requisition::where('user_id', auth()->id())
         ->latest()
         ->first();
 
@@ -282,7 +278,7 @@ class NotificationDispatcher implements NotificationDispatcherInterface
     }
 
     // Last resort: throw an exception if requisition_id is still null and it's a critical notification
-    $criticalEvents = ['qtn_sent', 'qtn_reminder', 'supplier_selected', 'po_generated', 'po_sent'];
+    $criticalEvents = ['qtn_sent', 'qtn_reminder', 'supplier_selected', 'po_generated', 'po_sent', 'po_cancelled'];
     if (in_array($data['type'] ?? '', $criticalEvents) || in_array($data['event'] ?? '', $criticalEvents)) {
       Log::error('❌ [NotificationDispatcher::ensureRequisitionId] Critical notification missing requisition_id', [
         'data' => $data
@@ -436,11 +432,18 @@ class NotificationDispatcher implements NotificationDispatcherInterface
   protected function registerDefaultEvents(): void
   {
     $this->eventMap = [
+      // ============================================
+      // PROCUREMENT EVENTS
+      // ============================================
       'procurement_started' => [
         'class' => ProcurementStartedNotification::class,
         'roles' => ['PROCUREMENT', 'ADMIN'],
         'priority' => 'normal',
       ],
+
+      // ============================================
+      // QUOTATION EVENTS
+      // ============================================
       'qtn_generated' => [
         'class' => QuotationRequestNotification::class,
         'roles' => ['PROCUREMENT'],
@@ -466,6 +469,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['SUPPLIER', 'HOD'],
         'priority' => 'high',
       ],
+
+      // ============================================
+      // PURCHASE ORDER EVENTS
+      // ============================================
       'po_generated' => [
         'class' => PurchaseOrderNotification::class,
         'roles' => ['SUPPLIER', 'PROCUREMENT', 'ACCOUNTANT'],
@@ -481,18 +488,50 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['PROCUREMENT', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
-      // ✅ FIXED: PO ready for endorsement - Accountants
+      'po_cancelled' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['SUPPLIER', 'PROCUREMENT', 'ACCOUNTANT', 'HOD'],
+        'priority' => 'high',
+      ],
+      'po_checked' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
+        'priority' => 'normal',
+      ],
+      'po_endorsed' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['FINAL_APPROVER', 'PROCUREMENT'],
+        'priority' => 'normal',
+      ],
+      'po_issued' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['SUPPLIER', 'PROCUREMENT'],
+        'priority' => 'normal',
+      ],
+      'po_delivered' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT', 'HOD'],
+        'priority' => 'normal',
+      ],
+      'po_completed' => [
+        'class' => PurchaseOrderNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT', 'HOD', 'SUPPLIER'],
+        'priority' => 'normal',
+      ],
       'po_ready_for_endorsement' => [
         'class' => PurchaseOrderNotification::class,
         'roles' => ['ACCOUNTANT'],
         'priority' => 'high',
       ],
-      // ✅ FIXED: PO ready for approval - FINAL_APPROVER only
       'po_ready_for_approval' => [
         'class' => PurchaseOrderNotification::class,
-        'roles' => ['FINAL_APPROVER'],  // Director/Finance Administrator
+        'roles' => ['FINAL_APPROVER'],
         'priority' => 'high',
       ],
+
+      // ============================================
+      // GRN EVENTS
+      // ============================================
       'grn_generated' => [
         'class' => GoodsReceivedNotification::class,
         'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
@@ -503,11 +542,64 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['HOD', 'HEAD OF INSTITUTION'],
         'priority' => 'high',
       ],
+      'grn_submitted' => [
+        'class' => ApprovalRequiredNotification::class,
+        'roles' => ['HOD', 'HEAD OF INSTITUTION'],
+        'priority' => 'high',
+      ],
       'grn_approved' => [
         'class' => ApprovalStatusNotification::class,
         'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
         'priority' => 'normal',
       ],
+      'grn_rejected' => [
+        'class' => ApprovalStatusNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT', 'SUPPLIER'],
+        'priority' => 'normal',
+      ],
+      'grn_inspected' => [
+        'class' => GoodsReceivedNotification::class,
+        'roles' => ['PROCUREMENT', 'ACCOUNTANT'],
+        'priority' => 'normal',
+      ],
+
+      // ============================================
+      // ✅ SAN EVENTS - ADDED
+      // ============================================
+      'san_generated' => [
+        'class' => GoodsReceivedNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
+        'priority' => 'normal',
+      ],
+      'san_approval_required' => [
+        'class' => ApprovalRequiredNotification::class,
+        'roles' => ['HOD', 'HEAD OF INSTITUTION'],
+        'priority' => 'high',
+      ],
+      'san_submitted' => [
+        'class' => ApprovalRequiredNotification::class,
+        'roles' => ['HOD', 'HEAD OF INSTITUTION'],
+        'priority' => 'high',
+      ],
+      'san_approved' => [
+        'class' => ApprovalStatusNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT'],
+        'priority' => 'normal',
+      ],
+      'san_rejected' => [
+        'class' => ApprovalStatusNotification::class,
+        'roles' => ['ACCOUNTANT', 'PROCUREMENT', 'SUPPLIER'],
+        'priority' => 'normal',
+      ],
+      'san_quality_rated' => [
+        'class' => ApprovalStatusNotification::class,
+        'roles' => ['PROCUREMENT', 'SUPPLIER'],
+        'priority' => 'normal',
+      ],
+
+      // ============================================
+      // INVOICE EVENTS
+      // ============================================
       'invoice_submitted' => [
         'class' => InvoiceNotification::class,
         'roles' => ['ACCOUNTANT'],
@@ -523,6 +615,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['SUPPLIER', 'ACCOUNTANT'],
         'priority' => 'normal',
       ],
+
+      // ============================================
+      // PAYMENT VOUCHER EVENTS
+      // ============================================
       'voucher_prepared' => [
         'class' => PaymentVoucherNotification::class,
         'roles' => ['HEAD OF INSTITUTION', 'ACCOUNTANT'],
@@ -538,6 +634,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['ACCOUNTANT'],
         'priority' => 'normal',
       ],
+
+      // ============================================
+      // CONTRACT EVENTS
+      // ============================================
       'contract_created' => [
         'class' => ContractNotification::class,
         'roles' => ['SUPPLIER', 'PROCUREMENT'],
@@ -553,6 +653,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['PROCUREMENT', 'SUPPLIER'],
         'priority' => 'normal',
       ],
+
+      // ============================================
+      // TENDER EVENTS
+      // ============================================
       'tender_published' => [
         'class' => TenderNotification::class,
         'roles' => ['SUPPLIER'],
@@ -563,6 +667,10 @@ class NotificationDispatcher implements NotificationDispatcherInterface
         'roles' => ['SUPPLIER', 'PROCUREMENT'],
         'priority' => 'high',
       ],
+
+      // ============================================
+      // APPROVAL EVENTS
+      // ============================================
       'approval_required' => [
         'class' => ApprovalRequiredNotification::class,
         'roles' => ['HOD', 'ACCOUNTANT', 'HEAD OF INSTITUTION', 'FINAL_APPROVER'],

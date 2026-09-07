@@ -195,6 +195,23 @@ const PRIORITY_CONFIG: Record<string, { color: string; icon: any; label: string;
   emergency: { color: 'text-red-600 dark:text-red-400', icon: Zap, label: 'Emergency', bg: 'bg-red-50 dark:bg-red-950/30' },
 };
 
+const REQUISITION_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string; badge: string }> = {
+  goods: {
+    label: 'Goods (LPO)',
+    icon: Package,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    badge: 'LPO',
+  },
+  services: {
+    label: 'Services (LSO)',
+    icon: Briefcase,
+    color: 'text-purple-600 dark:text-purple-400',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+    badge: 'LSO',
+  },
+};
+
 const APPROVER_ROLES = ['hod', 'accountant', 'principal', 'final_approver', 'admin', 'super_admin'];
 const APPROVABLE_STATUSES = ['submitted', 'hod_approved', 'accountant_approved', 'principal_approved'];
 const ITEMS_PER_PAGE = 10;
@@ -309,36 +326,26 @@ const hasProcurementStarted = (requisition: Requisition): boolean => {
 };
 
 const isProcurementComplete = (requisition: Requisition, summary?: any): boolean => {
-  // Use backend data first
   if (summary) {
     const isCompleted = safeGet(summary, 'procurement.is_completed', false);
     if (isCompleted) return true;
   }
-  // Fallback to local check
   return requisition.is_procurement_created === true &&
     requisition.status === 'final_approved' &&
     (requisition.metadata?.payment_completed === true ||
       requisition.metadata?.cheque_issued === true);
 };
 
-// Get procurement progress from backend
 const getProcurementProgress = (summary: any): number => {
   if (!summary) return 0;
-
-  // Use backend completion rate from metrics
   const completionRate = safeGet(summary, 'metrics.completion_rate', null);
   if (completionRate !== null && completionRate !== undefined) {
     return Math.min(Math.max(completionRate, 0), 100);
   }
-
-  // Fallback to stage-based calculation
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 100;
-
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
-
-  // Stage weights
   const STAGE_WEIGHTS: Record<string, number> = {
     'initiated': 10,
     'quotation_in_progress': 25,
@@ -350,32 +357,25 @@ const getProcurementProgress = (summary: any): number => {
     'payment_pending': 95,
     'completed': 100,
   };
-
   if (status && STAGE_WEIGHTS[status]) {
     let progress = STAGE_WEIGHTS[status];
-
     const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
     if (status === 'evaluating_quotations' && String(sqStatus) === 'completed') {
       progress += 5;
     }
-
     const pgStatus = safeGet(steps, 'po_generation.status', '');
     if (status === 'supplier_selected' && (String(pgStatus) === 'completed' || String(pgStatus) === 'in_progress')) {
       progress += 5;
     }
-
     return Math.min(progress, 99);
   }
-
   let progress = 0;
-
   const qtnStatus = safeGet(steps, 'quotation.status', '');
   if (String(qtnStatus) === 'closed' || String(qtnStatus) === 'completed') {
     progress += 20;
   } else if (String(qtnStatus) === 'sent' || String(qtnStatus) === 'responded') {
     progress += 15;
   }
-
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const sqReceived = safeGet(steps, 'supplier_quotations.quotes_received', 0);
   if (String(sqStatus) === 'completed') {
@@ -383,47 +383,39 @@ const getProcurementProgress = (summary: any): number => {
   } else if (Number(sqReceived) > 0) {
     progress += 15;
   }
-
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   if (String(ssStatus) === 'completed') {
     progress += 20;
   } else if (String(ssStatus) === 'in_progress') {
     progress += 10;
   }
-
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   if (String(pgStatus) === 'completed') {
     progress += 15;
   } else if (String(pgStatus) === 'in_progress') {
     progress += 10;
   }
-
   const delStatus = safeGet(steps, 'delivery.status', '');
   if (String(delStatus) === 'completed') {
     progress += 15;
   } else if (String(delStatus) === 'in_progress') {
     progress += 10;
   }
-
   const payStatus = safeGet(steps, 'payment.status', '');
   if (String(payStatus) === 'completed') {
     progress += 10;
   } else if (String(payStatus) === 'in_progress') {
     progress += 5;
   }
-
   return Math.min(progress, 99);
 };
 
 const getProcurementStatusLabel = (summary: any): string => {
   if (!summary) return 'Not Started';
-
   const isCompleted = safeGet(summary, 'procurement.is_completed', false);
   if (isCompleted) return 'Complete';
-
   const status = safeGet(summary, 'procurement.status', '');
   const steps = safeGet(summary, 'procurement.steps', {});
-
   const statusMap: Record<string, string> = {
     'initiated': 'Initiated',
     'quotation_in_progress': 'Quotation in Progress',
@@ -435,22 +427,18 @@ const getProcurementStatusLabel = (summary: any): string => {
     'payment_pending': 'Payment Pending',
     'completed': 'Completed',
   };
-
   if (statusMap[status]) return statusMap[status];
-
   const sqStatus = safeGet(steps, 'supplier_quotations.status', '');
   const ssStatus = safeGet(steps, 'supplier_selection.status', '');
   const pgStatus = safeGet(steps, 'po_generation.status', '');
   const delStatus = safeGet(steps, 'delivery.status', '');
   const payStatus = safeGet(steps, 'payment.status', '');
-
   if (String(payStatus) === 'completed') return 'Payment Processed';
   if (String(delStatus) === 'completed') return 'Goods Received';
   if (String(pgStatus) === 'completed') return 'LPO/LSO Issued';
   if (String(ssStatus) === 'completed') return 'Supplier Selected';
   if (String(sqStatus) === 'completed') return 'Quotes Evaluated';
   if (String(sqStatus) === 'in_progress') return 'Awaiting Quotes';
-
   return status?.replace(/_/g, ' ') || 'In Progress';
 };
 
@@ -486,6 +474,18 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
     <Badge variant="outline" className={cn("flex items-center gap-1 text-xs rounded-full", config.bg, config.color)}>
       <Icon className="h-3 w-3" />
       {config.label}
+    </Badge>
+  );
+};
+
+const RequisitionTypeBadge = ({ type }: { type: string }) => {
+  const config = REQUISITION_TYPE_CONFIG[type] || REQUISITION_TYPE_CONFIG.goods;
+  const Icon = config.icon;
+
+  return (
+    <Badge variant="outline" className={cn("flex items-center gap-1 text-xs rounded-full", config.bg, config.color)}>
+      <Icon className="h-3 w-3" />
+      {config.badge}
     </Badge>
   );
 };
@@ -741,12 +741,184 @@ const formatDateTime = (date: string | Date | null): string => {
   }
 };
 
-interface HistoryDetailsCardProps {
-  requisitionId: number;
-  onClose: () => void;
+// ============================================
+// FILTERS COMPONENT
+// ============================================
+
+interface FiltersProps {
+  filters: RequisitionFilters;
+  onFilterChange: (key: keyof RequisitionFilters, value: any) => void;
+  onReset: () => void;
+  departments: any[];
 }
 
-const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps) => {
+const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl relative">
+      <CardContent className="p-4 pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Filters</span>
+            <Badge variant="secondary" className="ml-2 rounded-full">
+              {Object.keys(filters).filter(key => filters[key as keyof RequisitionFilters]).length}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="gap-1 rounded-xl"
+            >
+              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {isExpanded ? 'Hide' : 'Show'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onReset} className="gap-1 rounded-xl">
+              <RefreshCw className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search your requisitions..."
+              value={filters.search || ''}
+              onChange={(e) => onFilterChange('search', e.target.value)}
+              className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+
+          <Select
+            value={filters.status as string || 'all'}
+            onValueChange={(value) => onFilterChange('status', value === 'all' ? undefined : value as any)}
+          >
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="submitted">Submitted</SelectItem>
+              <SelectItem value="hod_approved">HOD Approved</SelectItem>
+              <SelectItem value="hod_declined">HOD Declined</SelectItem>
+              <SelectItem value="accountant_approved">Accountant/Finance Approved</SelectItem>
+              <SelectItem value="accountant_declined">Accountant/Finance Declined</SelectItem>
+              <SelectItem value="principal_approved">Principal/HOI Approved</SelectItem>
+              <SelectItem value="principal_declined">Principal/HOI Declined</SelectItem>
+              <SelectItem value="final_approved">Director/Finance Admin Approved</SelectItem>
+              <SelectItem value="final_declined">Director/Finance Admin Declined</SelectItem>
+              <SelectItem value="returned">Returned</SelectItem>
+              <SelectItem value="revised">Revised</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.priority as string || 'all'}
+            onValueChange={(value) => onFilterChange('priority', value === 'all' ? undefined : value as any)}
+          >
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+              <SelectValue placeholder="All Priorities" />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="emergency">Emergency</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.requisition_type as string || 'all'}
+            onValueChange={(value) => onFilterChange('requisition_type', value === 'all' ? undefined : value as any)}
+          >
+            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="goods">Goods (LPO)</SelectItem>
+              <SelectItem value="services">Services (LSO)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {isExpanded && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t dark:border-gray-700">
+            <Select
+              value={filters.department_id?.toString() || 'all'}
+              onValueChange={(value) => onFilterChange('department_id', value === 'all' ? undefined : parseInt(value))}
+            >
+              <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id.toString()}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              type="date"
+              value={filters.date_from || ''}
+              onChange={(e) => onFilterChange('date_from', e.target.value || undefined)}
+              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            />
+
+            <Input
+              type="date"
+              value={filters.date_to || ''}
+              onChange={(e) => onFilterChange('date_to', e.target.value || undefined)}
+              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ============================================
+// REQUISITION TABLE COMPONENT
+// ============================================
+
+interface RequisitionTableProps {
+  data: Requisition[];
+  isLoading: boolean;
+  onView: (id: number) => void;
+  onEdit: (id: number) => void;
+  onDelete: (id: number) => void;
+  onSubmit: (id: number) => void;
+  onReturn: (id: number) => void;
+  onCancel: (id: number) => void;
+  onRowClick: (requisition: Requisition) => void;
+  userRoles: string[];
+  userId?: number;
+  onStartProcurement: (id: number) => void;
+  onViewHistory: (id: number) => void;
+  expandedHistoryId: number | null;
+  currentPage: number;
+  totalItems: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}
+
+// ============================================
+// HISTORY DETAILS CARD - ADD THIS BEFORE RequisitionTable
+// ============================================
+
+const HistoryDetailsCard = ({ requisitionId, onClose }: { requisitionId: number; onClose: () => void }) => {
   const { data: historyData, isLoading, refetch } = useRequisitionHistory(requisitionId, {
     per_page: 100,
   });
@@ -854,7 +1026,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
           </div>
         ) : (
           <div className="space-y-4">
-            {historyItems.map((history: RequisitionHistory, index: number) => {
+            {historyItems.map((history: any, index: number) => {
               const config = HISTORY_ACTION_CONFIG[history.action] || {
                 color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700',
                 icon: Clock,
@@ -869,8 +1041,6 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                 history.action?.includes('lpo') ||
                 history.action?.includes('grn') ||
                 history.action?.includes('supplier');
-
-              const userRoleLabel = history.user?.role_label || getRoleDisplayName(history.user?.role || '');
 
               return (
                 <motion.div
@@ -941,7 +1111,7 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
                             </Avatar>
                             <span>{history.user.full_name || history.user.first_name || 'Unknown'}</span>
                             {history.user.role && (
-                              <span className="text-[10px] text-muted-foreground">({userRoleLabel})</span>
+                              <span className="text-[10px] text-muted-foreground">({getRoleDisplayName(history.user.role)})</span>
                             )}
                           </div>
                         )}
@@ -994,166 +1164,6 @@ const HistoryDetailsCard = ({ requisitionId, onClose }: HistoryDetailsCardProps)
     </div>
   );
 };
-
-// ============================================
-// FILTERS COMPONENT
-// ============================================
-
-interface FiltersProps {
-  filters: RequisitionFilters;
-  onFilterChange: (key: keyof RequisitionFilters, value: any) => void;
-  onReset: () => void;
-  departments: any[];
-}
-
-const Filters = ({ filters, onFilterChange, onReset, departments }: FiltersProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <Card className="mb-6 border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-950 rounded-xl relative">
-
-      <CardContent className="p-4 pt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Filters</span>
-            <Badge variant="secondary" className="ml-2 rounded-full">
-              {Object.keys(filters).filter(key => filters[key as keyof RequisitionFilters]).length}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="gap-1 rounded-xl"
-            >
-              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {isExpanded ? 'Hide' : 'Show'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onReset} className="gap-1 rounded-xl">
-              <RefreshCw className="h-4 w-4" />
-              Reset
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search your requisitions..."
-              value={filters.search || ''}
-              onChange={(e) => onFilterChange('search', e.target.value)}
-              className="pl-9 h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
-            />
-          </div>
-
-          <Select
-            value={filters.status as string || 'all'}
-            onValueChange={(value) => onFilterChange('status', value === 'all' ? undefined : value as any)}
-          >
-            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="hod_approved">HOD Approved</SelectItem>
-              <SelectItem value="hod_declined">HOD Declined</SelectItem>
-              <SelectItem value="accountant_approved">Accountant/Finance Approved</SelectItem>
-              <SelectItem value="accountant_declined">Accountant/Finance Declined</SelectItem>
-              <SelectItem value="principal_approved">Principal/HOI Approved</SelectItem>
-              <SelectItem value="principal_declined">Principal/HOI Declined</SelectItem>
-              <SelectItem value="final_approved">Director/Finance Admin Approved</SelectItem>
-              <SelectItem value="final_declined">Director/Finance Admin Declined</SelectItem>
-              <SelectItem value="returned">Returned</SelectItem>
-              <SelectItem value="revised">Revised</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={filters.priority as string || 'all'}
-            onValueChange={(value) => onFilterChange('priority', value === 'all' ? undefined : value as any)}
-          >
-            <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
-              <SelectValue placeholder="All Priorities" />
-            </SelectTrigger>
-            <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-              <SelectItem value="all">All Priorities</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="emergency">Emergency</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {isExpanded && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t dark:border-gray-700">
-            <Select
-              value={filters.department_id?.toString() || 'all'}
-              onValueChange={(value) => onFilterChange('department_id', value === 'all' ? undefined : parseInt(value))}
-            >
-              <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700">
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                <SelectItem value="all">All Departments</SelectItem>
-                {departments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id.toString()}>
-                    {dept.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Input
-              type="date"
-              value={filters.date_from || ''}
-              onChange={(e) => onFilterChange('date_from', e.target.value || undefined)}
-              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
-            />
-
-            <Input
-              type="date"
-              value={filters.date_to || ''}
-              onChange={(e) => onFilterChange('date_to', e.target.value || undefined)}
-              className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700"
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-// ============================================
-// REQUISITION TABLE COMPONENT
-// ============================================
-
-interface RequisitionTableProps {
-  data: Requisition[];
-  isLoading: boolean;
-  onView: (id: number) => void;
-  onEdit: (id: number) => void;
-  onDelete: (id: number) => void;
-  onSubmit: (id: number) => void;
-  onReturn: (id: number) => void;
-  onCancel: (id: number) => void;
-  onRowClick: (requisition: Requisition) => void;
-  userRoles: string[];
-  userId?: number;
-  onStartProcurement: (id: number) => void;
-  onViewHistory: (id: number) => void;
-  expandedHistoryId: number | null;
-  currentPage: number;
-  totalItems: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}
 
 const RequisitionTable = ({
   data,
@@ -1241,6 +1251,26 @@ const RequisitionTable = ({
     return requisition.user?.id === userId;
   };
 
+  const isServiceRequisition = (requisition: Requisition) => {
+    return requisition.requisition_type === 'services';
+  };
+
+  const getAmountDisplay = (requisition: Requisition) => {
+    if (isServiceRequisition(requisition)) {
+      return (
+        <span className="text-amber-600 dark:text-amber-400 flex items-center justify-end gap-1.5 text-sm">
+          <Sparkles className="h-3.5 w-3.5" />
+          TBD
+        </span>
+      );
+    }
+    return (
+      <span className="font-medium">
+        {formatCurrency(requisition.total_amount || 0)}
+      </span>
+    );
+  };
+
   return (
     <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm">
       <ScrollArea className="w-full">
@@ -1249,11 +1279,12 @@ const RequisitionTable = ({
             <TableRow className="bg-muted/50 dark:bg-gray-800/50">
               <TableHead className="w-[50px]">#</TableHead>
               <TableHead className="min-w-[180px]">Requisition</TableHead>
+              <TableHead className="w-[100px]">Type</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="min-w-[350px]">Approval Flow</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="min-w-[320px]">Approval Flow</TableHead>
+              <TableHead className="w-[100px]">Priority</TableHead>
+              <TableHead className="text-right w-[120px]">Amount</TableHead>
+              <TableHead className="text-right w-[120px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1270,6 +1301,7 @@ const RequisitionTable = ({
               const procurementStarted = hasProcurementStarted(req);
               const procurementComplete = isProcurementComplete(req);
               const isHistoryExpanded = expandedHistoryId === req.id;
+              const isService = isServiceRequisition(req);
               const statusColor = isApproved ? 'emerald' :
                 isCancelledStatus ? 'gray' :
                   isDeclined ? 'red' :
@@ -1278,6 +1310,9 @@ const RequisitionTable = ({
                         req.status === 'hod_approved' ? 'indigo' :
                           req.status === 'accountant_approved' ? 'purple' :
                             req.status === 'principal_approved' ? 'teal' : 'gray';
+
+              const typeConfig = REQUISITION_TYPE_CONFIG[req.requisition_type] || REQUISITION_TYPE_CONFIG.goods;
+              const TypeIcon = typeConfig.icon;
 
               return (
                 <React.Fragment key={req.id}>
@@ -1288,7 +1323,8 @@ const RequisitionTable = ({
                       isCancelledStatus && "bg-gray-100/50 dark:bg-gray-800/30",
                       isDeclined && "bg-red-50/30 dark:bg-red-950/20",
                       req.status === 'returned' && "bg-amber-50/30 dark:bg-amber-950/20",
-                      isOwn && "border-l-4 border-l-blue-400 dark:border-l-blue-600"
+                      isOwn && "border-l-4 border-l-blue-400 dark:border-l-blue-600",
+                      isService && "border-l-4 border-l-purple-400 dark:border-l-purple-600"
                     )}
                     onClick={() => onRowClick(req)}
                     data-status={req.status}
@@ -1340,6 +1376,18 @@ const RequisitionTable = ({
                       </div>
                     </TableCell>
                     <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className={cn(
+                          "flex items-center gap-1 text-[10px] rounded-full",
+                          typeConfig.bg,
+                          typeConfig.color
+                        )}>
+                          <TypeIcon className="h-3 w-3" />
+                          {typeConfig.badge}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <StatusBadge status={req.status} />
                     </TableCell>
                     <TableCell>
@@ -1351,8 +1399,8 @@ const RequisitionTable = ({
                     <TableCell>
                       <PriorityBadge priority={req.priority} />
                     </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(req.total_amount || 0)}
+                    <TableCell className="text-right">
+                      {getAmountDisplay(req)}
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
@@ -1432,7 +1480,7 @@ const RequisitionTable = ({
                   </TableRow>
                   {isHistoryExpanded && (
                     <TableRow>
-                      <TableCell colSpan={7} className="p-0">
+                      <TableCell colSpan={8} className="p-0">
                         <HistoryDetailsCard
                           requisitionId={req.id}
                           onClose={() => onViewHistory(req.id)}
@@ -1555,7 +1603,7 @@ export default function ManageRequisitionsPage() {
 
   const isLoading = myRequisitionsQuery.isLoading || departmentsLoading;
 
-  // Build stats for StatsCards component
+  // Stats with type breakdown
   const statsItems: StatCardItem[] = useMemo(() => {
     const total = data.length;
     const approved = data.filter(r => r.status === 'final_approved').length;
@@ -1573,8 +1621,8 @@ export default function ManageRequisitionsPage() {
     ).length;
     const draft = data.filter(r => r.status === 'draft').length;
     const returned = data.filter(r => r.status === 'returned').length;
-    const revised = data.filter(r => r.status === 'revised').length;
-    const cancelled = data.filter(r => r.status === 'cancelled').length;
+    const goodsCount = data.filter(r => r.requisition_type === 'goods').length;
+    const servicesCount = data.filter(r => r.requisition_type === 'services').length;
 
     return [
       {
@@ -1583,7 +1631,7 @@ export default function ManageRequisitionsPage() {
         icon: FileText,
         tagLabel: "TOTAL",
         tagColor: "blue",
-        subtitle: "All requisitions",
+        subtitle: `${goodsCount} Goods • ${servicesCount} Services`,
       },
       {
         label: "Pending",

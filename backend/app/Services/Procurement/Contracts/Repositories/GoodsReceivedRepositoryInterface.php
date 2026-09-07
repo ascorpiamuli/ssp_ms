@@ -131,4 +131,17 @@ interface GoodsReceivedRepositoryInterface
    * Delete a GRN item.
    */
   public function deleteGrnItem(int $id): bool;
+
+
+  // Add these methods to app/Services/Procurement/Contracts/Repositories/GoodsReceivedRepositoryInterface.php
+
+/**
+ * Get all GRNs (no status filter).
+ */
+public function getAllGrns(): array;
+
+/**
+ * Get all SANs (no status filter).
+ */
+public function getAllSans(): array;
 }

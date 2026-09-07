@@ -1313,13 +1313,6 @@ export default function ManagePurchaseOrdersPage() {
             <RefreshCw className={cn("h-4 w-4", isLoadingData && "animate-spin")} />
             Refresh
           </Button>
-          <Button
-            className="h-10 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-600/20 text-white"
-            onClick={handleCreateNew}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Order
-          </Button>
         </div>
       }
     >

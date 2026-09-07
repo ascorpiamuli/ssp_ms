@@ -28,6 +28,26 @@ class Requisition extends Model
     'title',
     'description',
     'total_amount',
+    // === NEW: Requisition Type ===
+    'requisition_type',
+    // === NEW: Service-Specific Fields ===
+    'service_category',
+    'service_scope_of_work',
+    'service_deliverables_expected',
+    'service_expected_start_date',
+    'service_expected_end_date',
+    'service_estimated_duration_days',
+    'service_requires_onsite_visit',
+    'service_special_requirements',
+    'service_qualifications_required',
+    // === NEW: Goods-Specific Fields ===
+    'goods_category',
+    'goods_warehouse_location',
+    'goods_storage_requirements',
+    'goods_expected_delivery_date',
+    // === NEW: Procurement Type ===
+    'procurement_type',
+    // === Existing Fields ===
     'status',
     'priority',
     'type',
@@ -109,6 +129,7 @@ class Requisition extends Model
    * @var array<string, string>
    */
   protected $casts = [
+    // === Existing Casts ===
     'total_amount' => 'decimal:2',
     'budget_allocated' => 'decimal:2',
     'budget_utilized' => 'decimal:2',
@@ -147,6 +168,13 @@ class Requisition extends Model
     'metadata' => 'json',
     'custom_fields' => 'json',
     'deleted_at' => 'datetime',
+    // === NEW: Service Casts ===
+    'service_expected_start_date' => 'date',
+    'service_expected_end_date' => 'date',
+    'service_estimated_duration_days' => 'integer',
+    'service_requires_onsite_visit' => 'boolean',
+    // === NEW: Goods Casts ===
+    'goods_expected_delivery_date' => 'date',
   ];
 
   /**
@@ -168,7 +196,46 @@ class Requisition extends Model
     'is_approvable',
     'is_returnable',
     'can_be_revised',
+    // === NEW: Appends ===
+    'requisition_type_label',
+    'service_category_label',
+    'procurement_type_label',
+    'is_service_requisition',
+    'is_goods_requisition',
   ];
+
+  // ============================================
+  // CONSTANTS
+  // ============================================
+
+  /**
+   * Requisition types.
+   */
+  public const TYPE_GOODS = 'goods';
+  public const TYPE_SERVICES = 'services';
+
+  /**
+   * Service categories.
+   */
+  public const SERVICE_CATEGORIES = [
+    'consultancy',
+    'maintenance',
+    'training',
+    'installation',
+    'cleaning',
+    'security',
+    'transport',
+    'construction',
+    'professional_services',
+    'it_services',
+    'other'
+  ];
+
+  /**
+   * Procurement types.
+   */
+  public const PROCUREMENT_GOODS = 'goods';
+  public const PROCUREMENT_SERVICES = 'services';
 
   // ============================================
   // RELATIONSHIPS
@@ -279,12 +346,12 @@ class Requisition extends Model
     return $this->hasMany(RequisitionEscalation::class)->orderBy('escalated_at', 'desc');
   }
 
-    // ============================================
-    // ACCESSORS & MUTATORS - ALL WITH NULL SAFETY
-    // ============================================
+  // ============================================
+  // ACCESSORS & MUTATORS - ALL WITH NULL SAFETY
+  // ============================================
 
   /**
-   * ✅ FIXED: Get formatted total amount with proper casting.
+   * Get formatted total amount with proper casting.
    */
   public function getFormattedTotalAmountAttribute(): string
   {
@@ -420,6 +487,78 @@ class Requisition extends Model
     return $labels[$this->sla_status] ?? 'Not Set';
   }
 
+  // ============================================
+  // NEW ACCESSORS
+  // ============================================
+
+  /**
+   * Get requisition type label.
+   */
+  public function getRequisitionTypeLabelAttribute(): string
+  {
+    $labels = [
+      'goods' => 'Goods (LPO)',
+      'services' => 'Services (LSO)',
+    ];
+
+    return $labels[$this->requisition_type] ?? ucfirst($this->requisition_type ?? 'Goods');
+  }
+
+  /**
+   * Get service category label.
+   */
+  public function getServiceCategoryLabelAttribute(): string
+  {
+    $labels = [
+      'consultancy' => 'Consultancy',
+      'maintenance' => 'Maintenance',
+      'training' => 'Training',
+      'installation' => 'Installation',
+      'cleaning' => 'Cleaning',
+      'security' => 'Security',
+      'transport' => 'Transport',
+      'construction' => 'Construction',
+      'professional_services' => 'Professional Services',
+      'it_services' => 'IT Services',
+      'other' => 'Other',
+    ];
+
+    return $labels[$this->service_category] ?? $this->service_category ?? 'Not Specified';
+  }
+
+  /**
+   * Get procurement type label.
+   */
+  public function getProcurementTypeLabelAttribute(): string
+  {
+    $labels = [
+      'goods' => 'Goods (LPO)',
+      'services' => 'Services (LSO)',
+    ];
+
+    return $labels[$this->procurement_type] ?? ucfirst($this->procurement_type ?? 'Goods');
+  }
+
+  /**
+   * Check if requisition is for goods.
+   */
+  public function getIsGoodsRequisitionAttribute(): bool
+  {
+    return $this->requisition_type === self::TYPE_GOODS;
+  }
+
+  /**
+   * Check if requisition is for services.
+   */
+  public function getIsServiceRequisitionAttribute(): bool
+  {
+    return $this->requisition_type === self::TYPE_SERVICES;
+  }
+
+  // ============================================
+  // MUTATORS
+  // ============================================
+
   /**
    * Check if requisition is editable.
    */
@@ -458,6 +597,39 @@ class Requisition extends Model
   public function setTitleAttribute(string $value): void
   {
     $this->attributes['title'] = ucwords(strtolower(trim($value)));
+  }
+
+  /**
+   * Set the requisition type with validation.
+   */
+  public function setRequisitionTypeAttribute(string $value): void
+  {
+    if (!in_array($value, [self::TYPE_GOODS, self::TYPE_SERVICES])) {
+      throw new \InvalidArgumentException('Invalid requisition type. Must be "goods" or "services".');
+    }
+    $this->attributes['requisition_type'] = $value;
+  }
+
+  /**
+   * Set the procurement type with validation.
+   */
+  public function setProcurementTypeAttribute(string $value): void
+  {
+    if (!in_array($value, [self::PROCUREMENT_GOODS, self::PROCUREMENT_SERVICES])) {
+      throw new \InvalidArgumentException('Invalid procurement type. Must be "goods" or "services".');
+    }
+    $this->attributes['procurement_type'] = $value;
+  }
+
+  /**
+   * Set the service category with validation.
+   */
+  public function setServiceCategoryAttribute(?string $value): void
+  {
+    if ($value !== null && !in_array($value, self::SERVICE_CATEGORIES)) {
+      throw new \InvalidArgumentException('Invalid service category.');
+    }
+    $this->attributes['service_category'] = $value;
   }
 
   /**
@@ -513,6 +685,50 @@ class Requisition extends Model
   public function scopeEmergency($query)
   {
     return $query->where('type', 'emergency');
+  }
+
+  // ============================================
+  // NEW SCOPES
+  // ============================================
+
+  /**
+   * Scope to only goods requisitions.
+   */
+  public function scopeGoods($query)
+  {
+    return $query->where('requisition_type', self::TYPE_GOODS);
+  }
+
+  /**
+   * Scope to only services requisitions.
+   */
+  public function scopeServices($query)
+  {
+    return $query->where('requisition_type', self::TYPE_SERVICES);
+  }
+
+  /**
+   * Scope to requisitions that will generate LPO.
+   */
+  public function scopeForLpo($query)
+  {
+    return $query->where('procurement_type', self::PROCUREMENT_GOODS);
+  }
+
+  /**
+   * Scope to requisitions that will generate LSO.
+   */
+  public function scopeForLso($query)
+  {
+    return $query->where('procurement_type', self::PROCUREMENT_SERVICES);
+  }
+
+  /**
+   * Scope by service category.
+   */
+  public function scopeByServiceCategory($query, string $category)
+  {
+    return $query->where('service_category', $category);
   }
 
   public function scopeByDepartment($query, int $departmentId)
@@ -581,6 +797,74 @@ class Requisition extends Model
   public function isCancelled(): bool
   {
     return $this->status === 'cancelled';
+  }
+
+  // ============================================
+  // NEW HELPER METHODS
+  // ============================================
+
+  /**
+   * Check if requisition is for goods.
+   */
+  public function isGoods(): bool
+  {
+    return $this->requisition_type === self::TYPE_GOODS;
+  }
+
+  /**
+   * Check if requisition is for services.
+   */
+  public function isServices(): bool
+  {
+    return $this->requisition_type === self::TYPE_SERVICES;
+  }
+
+  /**
+   * Check if requisition will generate LPO.
+   */
+  public function willGenerateLpo(): bool
+  {
+    return $this->procurement_type === self::PROCUREMENT_GOODS;
+  }
+
+  /**
+   * Check if requisition will generate LSO.
+   */
+  public function willGenerateLso(): bool
+  {
+    return $this->procurement_type === self::PROCUREMENT_SERVICES;
+  }
+
+  /**
+   * Get the appropriate order type based on requisition type.
+   */
+  public function getOrderType(): string
+  {
+    return $this->isGoods() ? 'LPO' : 'LSO';
+  }
+
+  /**
+   * Check if requisition has service-specific fields filled.
+   */
+  public function hasServiceDetails(): bool
+  {
+    return $this->isServices() && (
+      $this->service_scope_of_work !== null ||
+      $this->service_deliverables_expected !== null ||
+      $this->service_category !== null
+    );
+  }
+
+  /**
+   * Check if requisition has goods-specific fields filled.
+   */
+  public function hasGoodsDetails(): bool
+  {
+    return $this->isGoods() && (
+      $this->goods_category !== null ||
+      $this->goods_warehouse_location !== null ||
+      $this->goods_expected_delivery_date !== null
+    );
   }
 
   public function canBeRevised(): bool

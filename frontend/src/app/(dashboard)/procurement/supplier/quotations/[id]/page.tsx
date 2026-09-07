@@ -227,7 +227,7 @@ const DetailRow = ({ label, value, className }: { label: string; value: React.Re
 );
 
 // ============================================
-// COMPONENTS - Items Table (Scrollable)
+// COMPONENTS - Items Table (Scrollable with fixed height)
 // ============================================
 
 const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationItem[]; isRejected?: boolean }) => {
@@ -258,10 +258,11 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
       isRejected ? "border-red-200/50 dark:border-red-800/50 opacity-70" : "border-gray-200 dark:border-gray-700",
       "hover:shadow-md"
     )}>
-      <ScrollArea className="w-full max-h-[500px]">
+      {/* Fixed height scrollable container */}
+      <ScrollArea className="h-[400px] w-full">
         <Table>
-          <TableHeader className="sticky top-0 z-10">
-            <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+          <TableHeader className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800/50">
+            <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50">
               <TableHead className="w-[50px] py-3.5 text-xs font-semibold uppercase tracking-wider">#</TableHead>
               <TableHead className="min-w-[200px] py-3.5 text-xs font-semibold uppercase tracking-wider">Item</TableHead>
               <TableHead className="text-right py-3.5 text-xs font-semibold uppercase tracking-wider">Qty</TableHead>
@@ -357,8 +358,8 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
               </TableRow>
             ))}
           </TableBody>
-          <TableFooter>
-            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30">
+          <TableFooter className="sticky bottom-0 z-10">
+            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
               <TableCell colSpan={4} className="text-right font-medium py-3">
                 Subtotal
               </TableCell>
@@ -366,7 +367,7 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
                 KES {formatCurrency(totals.total)}
               </TableCell>
             </TableRow>
-            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30">
+            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
               <TableCell colSpan={4} className="text-right font-medium text-muted-foreground py-3">
                 Tax
               </TableCell>
@@ -374,7 +375,7 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
                 KES {formatCurrency(totals.tax)}
               </TableCell>
             </TableRow>
-            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30">
+            <TableRow className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
               <TableCell colSpan={4} className="text-right font-medium text-muted-foreground py-3">
                 Discount
               </TableCell>
@@ -382,7 +383,7 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
                 -KES {formatCurrency(totals.discount)}
               </TableCell>
             </TableRow>
-            <TableRow className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20">
+            <TableRow className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 hover:from-emerald-50/50 hover:to-teal-50/50 dark:hover:from-emerald-950/20 dark:hover:to-teal-950/20">
               <TableCell colSpan={4} className="text-right font-bold py-3.5 text-base">
                 Total
               </TableCell>
@@ -397,74 +398,6 @@ const ItemsTable = ({ items, isRejected = false }: { items: SupplierQuotationIte
         </Table>
       </ScrollArea>
     </div>
-  );
-};
-
-// ============================================
-// COMPONENTS - Stat Card
-// ============================================
-
-const StatCard = ({
-  icon: Icon,
-  label,
-  value,
-  subValue,
-  color = 'blue'
-}: {
-  icon: any;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose' | 'teal';
-}) => {
-  const colorMap = {
-    emerald: 'from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50',
-    blue: 'from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200/50',
-    purple: 'from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200/50',
-    amber: 'from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border-amber-200/50',
-    rose: 'from-rose-50 to-rose-100/50 dark:from-rose-950/30 dark:to-rose-900/20 border-rose-200/50',
-    teal: 'from-teal-50 to-teal-100/50 dark:from-teal-950/30 dark:to-teal-900/20 border-teal-200/50',
-  };
-
-  const iconColorMap = {
-    emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-    blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-    purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
-    amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-    rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
-    teal: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
-  };
-
-  return (
-    <Card className={cn(
-      "border shadow-sm hover:shadow-md transition-all duration-200",
-      "bg-gradient-to-br",
-      colorMap[color]
-    )}>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              {label}
-            </p>
-            <p className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-              {value}
-            </p>
-            {subValue && (
-              <p className="text-xs text-muted-foreground">
-                {subValue}
-              </p>
-            )}
-          </div>
-          <div className={cn(
-            "p-2.5 rounded-xl flex-shrink-0 ml-3",
-            iconColorMap[color]
-          )}>
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 };
 
@@ -543,9 +476,6 @@ export default function SupplierQuotationDetailPage() {
       >
         <div className="space-y-6">
           <Skeleton className="h-64 rounded-xl" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-          </div>
           <Skeleton className="h-96 rounded-xl" />
         </div>
       </PageTemplate>
@@ -797,38 +727,6 @@ export default function SupplierQuotationDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            icon={DollarSign}
-            label="Total Amount"
-            value={`KES ${formatCurrency(quotation.total_amount)}`}
-            subValue={`Net: KES ${formatCurrency(quotation.net_amount)}`}
-            color="emerald"
-          />
-          <StatCard
-            icon={Package}
-            label="Items"
-            value={totalItems}
-            subValue={`${totalItems} item${totalItems > 1 ? 's' : ''}`}
-            color="blue"
-          />
-          <StatCard
-            icon={Scale}
-            label="Evaluation Score"
-            value={evalScore > 0 ? `${evalScore}%` : 'Pending'}
-            subValue={evalScore > 0 ? (evalScore >= 80 ? 'Excellent' : evalScore >= 60 ? 'Good' : 'Needs Work') : 'Not evaluated'}
-            color="purple"
-          />
-          <StatCard
-            icon={Calendar}
-            label="Validity"
-            value={quotation.validity_date ? formatDate(quotation.validity_date) : 'N/A'}
-            subValue={isValid ? 'Valid' : 'Expired'}
-            color={isValid ? 'teal' : 'rose'}
-          />
-        </div>
-
         {/* Main Content - Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
@@ -887,7 +785,7 @@ export default function SupplierQuotationDetailPage() {
               </Card>
             )}
 
-            {/* Items Table - Scrollable */}
+            {/* Items Table - Scrollable with fixed height */}
             <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -902,6 +800,9 @@ export default function SupplierQuotationDetailPage() {
                       {totalItems} item{totalItems > 1 ? 's' : ''} in this quotation
                     </CardDescription>
                   </div>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                    {totalItems} items
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -1004,7 +905,6 @@ export default function SupplierQuotationDetailPage() {
                 </Button>
               </CardContent>
             </Card>
-
           </div>
         </div>
 

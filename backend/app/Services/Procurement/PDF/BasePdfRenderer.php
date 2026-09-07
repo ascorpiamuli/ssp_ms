@@ -53,7 +53,10 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
     ];
   }
 
-  protected function initPdf(string $title): Fpdi // Return Fpdi instead of TCPDF
+  /**
+   * Initialize PDF in PORTRAIT orientation
+   */
+  protected function initPdf(string $title): Fpdi
   {
     $pdf = new Fpdi('P', 'mm', 'A4', true, 'UTF-8', false);
     $pdf->SetCreator('SSPMS');
@@ -73,11 +76,36 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
     return $pdf;
   }
 
+  /**
+   * ✅ Initialize PDF in LANDSCAPE orientation
+   * Useful for purchase orders with many items or wide tables
+   */
+  protected function initPdfLandscape(string $title): Fpdi
+  {
+    $pdf = new Fpdi('L', 'mm', 'A4', true, 'UTF-8', false);
+    $pdf->SetCreator('SSPMS');
+    $pdf->SetAuthor('SSPMS');
+    $pdf->SetTitle($title);
+    $pdf->SetSubject('Purchase Order');
+    $pdf->SetKeywords('Purchase Order, LPO, LSO, Procurement');
+
+    $pdf->setPrintHeader(false);
+    $pdf->setPrintFooter(false);
+    $pdf->SetMargins(15, 10, 15);
+    $pdf->SetHeaderMargin(3);
+    $pdf->SetFooterMargin(10);
+    $pdf->SetAutoPageBreak(true, 15);
+    $pdf->AddPage('L');
+
+    return $pdf;
+  }
+
   protected function setWatermarkText(string $text): void
   {
     $this->watermarkText = $text;
   }
-  protected function addLogoWatermark(Fpdi $pdf): void // Changed from TCPDF to Fpdi
+
+  protected function addLogoWatermark(Fpdi $pdf): void
   {
     if (!$this->logoData) {
       return;
@@ -241,7 +269,7 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
     }
   }
 
-  protected function addWatermarkText(Fpdi $pdf, string $text): void // Changed from TCPDF to Fpdi
+  protected function addWatermarkText(Fpdi $pdf, string $text): void
   {
     try {
       $pdf->SetAlpha(0.10);
@@ -521,7 +549,7 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
     }
   }
 
-  protected function addHeaderLine(Fpdi $pdf, float $yPosition): void // Changed from TCPDF to Fpdi
+  protected function addHeaderLine(Fpdi $pdf, float $yPosition): void
   {
     $pdf->SetY($yPosition);
     $pdf->SetDrawColor($this->primary[0], $this->primary[1], $this->primary[2]);
@@ -532,7 +560,7 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
     $pdf->Line(15, $yPosition + 1.8, 195, $yPosition + 1.8);
   }
 
-  protected function addSectionHeader(Fpdi $pdf, string $title): void // Changed from TCPDF to Fpdi
+  protected function addSectionHeader(Fpdi $pdf, string $title): void
   {
     $pdf->SetFont('helvetica', 'B', 14);
     $pdf->SetTextColor($this->primary[0], $this->primary[1], $this->primary[2]);
@@ -545,7 +573,7 @@ abstract class BasePdfRenderer extends Fpdi // Changed from TCPDF to Fpdi
   }
 
   protected function addFieldPair(
-    Fpdi $pdf, // Changed from TCPDF to Fpdi
+    Fpdi $pdf,
     string $label,
     string $value,
     float $x,

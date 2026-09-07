@@ -172,6 +172,15 @@ import {
   CalendarMinus2,
   CalendarX2,
   CalendarCheck2,
+  Sparkles as SparklesIcon,
+  Stars,
+  Wand2,
+  Zap as ZapIcon,
+  Rocket as RocketIcon,
+  Gem as GemIcon,
+  Sparkle as SparkleIcon,
+  Crown as CrownIcon,
+  Award as AwardIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -459,14 +468,19 @@ const StatusBadge = ({ status }: { status: string }) => {
   const Icon = config.icon;
 
   return (
-    <div className={cn(
-      "flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border",
-      config.bg, config.text, config.border
-    )}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dotColor)} />
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className={cn(
+        "flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border",
+        config.bg, config.text, config.border
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", config.dotColor)} />
       <Icon className="h-3 w-3" />
       {config.label}
-    </div>
+    </motion.div>
   );
 };
 
@@ -475,13 +489,18 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
   const Icon = config.icon;
 
   return (
-    <div className={cn(
-      "flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border",
-      config.color, config.bgColor, config.borderColor
-    )}>
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className={cn(
+        "flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border",
+        config.color, config.bgColor, config.borderColor
+      )}
+    >
       <Icon className="h-3 w-3" />
       {config.label}
-    </div>
+    </motion.div>
   );
 };
 
@@ -492,17 +511,23 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
 const TableSkeleton = () => (
   <div className="w-full p-4 space-y-4">
     {Array.from({ length: 5 }).map((_, i) => (
-      <div key={i} className="flex items-center gap-4">
-        <Skeleton className="h-8 w-8" />
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-8 w-24 ml-auto" />
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-8 w-20" />
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-8 w-48 ml-auto" />
-      </div>
+      <motion.div
+        key={i}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: i * 0.05 }}
+        className="flex items-center gap-4"
+      >
+        <Skeleton className="h-8 w-8 rounded-lg" />
+        <Skeleton className="h-8 w-32 rounded-lg" />
+        <Skeleton className="h-8 w-40 rounded-lg" />
+        <Skeleton className="h-8 w-32 rounded-lg" />
+        <Skeleton className="h-8 w-24 rounded-lg ml-auto" />
+        <Skeleton className="h-8 w-24 rounded-lg" />
+        <Skeleton className="h-8 w-20 rounded-lg" />
+        <Skeleton className="h-8 w-32 rounded-lg" />
+        <Skeleton className="h-8 w-48 rounded-lg ml-auto" />
+      </motion.div>
     ))}
   </div>
 );
@@ -650,7 +675,6 @@ export default function PendingApprovalsPage() {
 
   const allApprovals = useMemo(() => {
     const merged = [...pendingExtracted.data, ...delegatedExtracted.data];
-    // Remove duplicates
     return merged.filter((item, index, self) =>
       index === self.findIndex((a) => a.id === item.id)
     );
@@ -835,7 +859,6 @@ export default function PendingApprovalsPage() {
   };
 
   const handleApprove = (approval: any) => {
-    // Prevent approval if declined
     if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
       return;
     }
@@ -847,7 +870,6 @@ export default function PendingApprovalsPage() {
   const handleConfirmApprove = () => {
     const approval = allApprovals.find(a => a.id === selectedApprovalId);
     if (approval) {
-      // Prevent approval if declined
       if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
         return;
       }
@@ -877,7 +899,6 @@ export default function PendingApprovalsPage() {
   };
 
   const handleDecline = (approval: any) => {
-    // Prevent decline if already declined
     if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
       return;
     }
@@ -889,7 +910,6 @@ export default function PendingApprovalsPage() {
   const handleConfirmDecline = () => {
     const approval = allApprovals.find(a => a.id === selectedApprovalId);
     if (approval && reason.trim()) {
-      // Prevent decline if already declined
       if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
         return;
       }
@@ -920,7 +940,6 @@ export default function PendingApprovalsPage() {
   };
 
   const handleDelegate = (approval: any) => {
-    // Prevent delegation if declined
     if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
       return;
     }
@@ -933,7 +952,6 @@ export default function PendingApprovalsPage() {
   const handleConfirmDelegate = () => {
     const approval = allApprovals.find(a => a.id === selectedApprovalId);
     if (approval && selectedDelegate) {
-      // Prevent delegation if declined
       if (hasBeenDeclined(approval) || isDeclinedStatus(approval?.requisition?.status)) {
         return;
       }
@@ -962,7 +980,6 @@ export default function PendingApprovalsPage() {
   };
 
   const handleBulkApprove = () => {
-    // Filter out declined approvals from bulk selection
     const validApprovals = allApprovals.filter((a: any) =>
       selectedApprovals.includes(a.id) &&
       !hasBeenDeclined(a) &&
@@ -1042,7 +1059,6 @@ export default function PendingApprovalsPage() {
     return filteredApprovals.reduce((acc: number, a: any) => acc + (parseFloat(a.requisition?.total_amount) || 0), 0);
   }, [filteredApprovals]);
 
-  // Handle view mode toggle
   const handleViewModeChange = (mode: 'table' | 'grid' | 'compact' | 'detailed') => {
     setViewMode(mode);
   };
@@ -1084,15 +1100,21 @@ export default function PendingApprovalsPage() {
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {selectedApprovals.length > 0 && (
-            <Button
-              variant="default"
-              size="sm"
-              className="gap-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20 rounded-xl text-white"
-              onClick={handleBulkApprove}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
             >
-              <Check className="h-4 w-4" />
-              Approve Selected ({selectedApprovals.length})
-            </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20 rounded-xl text-white"
+                onClick={handleBulkApprove}
+              >
+                <Check className="h-4 w-4" />
+                Approve Selected ({selectedApprovals.length})
+              </Button>
+            </motion.div>
           )}
           <Button
             variant="outline"
@@ -1225,28 +1247,38 @@ export default function PendingApprovalsPage() {
         ].map((item, index) => (
           <motion.div
             key={item.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.4, delay: index * 0.06, type: 'spring', stiffness: 300, damping: 25 }}
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="cursor-pointer"
           >
             <Card className={cn(
-              "border shadow-sm rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
+              "border shadow-sm rounded-2xl overflow-hidden transition-all duration-300",
               item.border, item.bg
             )}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <p className={cn("text-xs font-medium", item.textColor)}>{item.label}</p>
-                  <div className={cn(
-                    "p-2 rounded-xl bg-gradient-to-br text-white",
-                    item.gradient,
-                    "shadow-lg"
-                  )}>
+                  <motion.div
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    className={cn(
+                      "p-2 rounded-xl bg-gradient-to-br text-white",
+                      item.gradient,
+                      "shadow-lg"
+                    )}
+                  >
                     <item.icon className="h-4 w-4" />
-                  </div>
+                  </motion.div>
                 </div>
-                <p className="text-xl font-bold mt-1.5 text-gray-900 dark:text-white">
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: index * 0.06 + 0.2 }}
+                  className="text-xl font-bold mt-1.5 text-gray-900 dark:text-white"
+                >
                   {item.value}
-                </p>
+                </motion.p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{item.description}</p>
               </CardContent>
             </Card>
@@ -1255,24 +1287,27 @@ export default function PendingApprovalsPage() {
       </div>
 
       {/* Returned Warning Banner */}
-      {returnedCount > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Alert className="mt-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800 rounded-xl shadow-sm">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <AlertTitle className="text-amber-800 dark:text-amber-300 text-sm font-semibold flex items-center gap-2">
-              <RotateCcw className="h-4 w-4" />
-              {returnedCount} Requisition{returnedCount > 1 ? 's' : ''} Previously Returned
-            </AlertTitle>
-            <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
-              Please review changes carefully before approving.
-            </AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {returnedCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert className="mt-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800 rounded-xl shadow-sm">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <AlertTitle className="text-amber-800 dark:text-amber-300 text-sm font-semibold flex items-center gap-2">
+                <RotateCcw className="h-4 w-4" />
+                {returnedCount} Requisition{returnedCount > 1 ? 's' : ''} Previously Returned
+              </AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                Please review changes carefully before approving.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Advanced Filters */}
       <AnimatePresence>
@@ -1444,7 +1479,6 @@ export default function PendingApprovalsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       >
-        {/* Main Content */}
         <Card className="mt-4 border shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden">
           {/* Search and Filter Bar */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50/50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/50">
@@ -1470,7 +1504,6 @@ export default function PendingApprovalsPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                {/* Dropdown instead of Tabs */}
                 <Select
                   value={activeTab}
                   onValueChange={(value) => setActiveTab(value as any)}
@@ -1639,7 +1672,7 @@ export default function PendingApprovalsPage() {
                 <motion.div
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.5 }}
+                  transition={{ duration: 0.5, type: 'spring', stiffness: 300, damping: 25 }}
                   className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/20 mb-4"
                 >
                   <CheckCircle className="h-12 w-12 text-emerald-600 dark:text-emerald-400" />
@@ -1757,8 +1790,9 @@ export default function PendingApprovalsPage() {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: index * 0.02 }}
+                          whileHover={{ backgroundColor: 'rgba(59, 130, 246, 0.03)' }}
                           className={cn(
-                            "transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 group",
+                            "transition-all duration-200 group",
                             isReturned && "border-l-4 border-l-amber-400 bg-amber-50/10 dark:bg-amber-950/10",
                             isDelegated && "border-l-4 border-l-purple-400",
                             isDeclined && "border-l-4 border-l-red-400 bg-red-50/10 dark:bg-red-950/10 opacity-75",
@@ -1866,10 +1900,10 @@ export default function PendingApprovalsPage() {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-all"
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      className="h-8 w-8 p-0 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-all flex items-center justify-center"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleBookmark(approval.id);
@@ -1880,7 +1914,7 @@ export default function PendingApprovalsPage() {
                                       ) : (
                                         <Bookmark className="h-4 w-4 text-muted-foreground" />
                                       )}
-                                    </Button>
+                                    </motion.button>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="dark:bg-gray-800 dark:border-gray-700">
                                     {isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
@@ -1900,10 +1934,10 @@ export default function PendingApprovalsPage() {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 px-2.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-950/30 rounded-lg text-xs font-medium transition-all"
+                                        <motion.button
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
+                                          className="h-8 px-2.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-950/30 rounded-lg text-xs font-medium transition-all flex items-center"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleDelegate(approval);
@@ -1912,7 +1946,7 @@ export default function PendingApprovalsPage() {
                                         >
                                           <UserPlus className="h-3.5 w-3.5 mr-1" />
                                           Delegate
-                                        </Button>
+                                        </motion.button>
                                       </TooltipTrigger>
                                       <TooltipContent side="top" className="dark:bg-gray-800 dark:border-gray-700">Delegate to another approver</TooltipContent>
                                     </Tooltip>
@@ -1921,10 +1955,10 @@ export default function PendingApprovalsPage() {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 px-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30 rounded-lg text-xs font-medium transition-all"
+                                        <motion.button
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
+                                          className="h-8 px-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30 rounded-lg text-xs font-medium transition-all flex items-center"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleDecline(approval);
@@ -1933,7 +1967,7 @@ export default function PendingApprovalsPage() {
                                         >
                                           <X className="h-3.5 w-3.5 mr-1" />
                                           Decline
-                                        </Button>
+                                        </motion.button>
                                       </TooltipTrigger>
                                       <TooltipContent side="top" className="dark:bg-gray-800 dark:border-gray-700">Decline this requisition</TooltipContent>
                                     </Tooltip>
@@ -1942,11 +1976,11 @@ export default function PendingApprovalsPage() {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
+                                        <motion.button
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
                                           className={cn(
-                                            "h-8 px-2.5 rounded-lg text-xs font-medium transition-all",
+                                            "h-8 px-2.5 rounded-lg text-xs font-medium transition-all flex items-center",
                                             isReturned
                                               ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-950/30"
                                               : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:text-emerald-300 dark:hover:bg-emerald-950/30"
@@ -1959,7 +1993,7 @@ export default function PendingApprovalsPage() {
                                         >
                                           <Check className="h-3.5 w-3.5 mr-1" />
                                           Approve
-                                        </Button>
+                                        </motion.button>
                                       </TooltipTrigger>
                                       <TooltipContent side="top" className="dark:bg-gray-800 dark:border-gray-700">
                                         {isReturned ? 'Approve with caution (previously returned)' : 'Approve this requisition'}
@@ -1972,17 +2006,17 @@ export default function PendingApprovalsPage() {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      className="h-8 w-8 p-0 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all flex items-center justify-center"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleRowClick(requisition?.id);
                                       }}
                                     >
                                       <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-blue-600 transition-colors" />
-                                    </Button>
+                                    </motion.button>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="dark:bg-gray-800 dark:border-gray-700">View requisition details</TooltipContent>
                                 </Tooltip>
@@ -2093,336 +2127,366 @@ export default function PendingApprovalsPage() {
         </Card>
       </motion.div>
 
-      {/* Dialogs */}
+      {/* Dialogs with animations */}
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <DialogContent className="max-w-md rounded-2xl dark:bg-gray-900 dark:border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-              <CheckCircle className="h-6 w-6 text-emerald-500" />
-              Approve Requisition
-            </DialogTitle>
-            <DialogDescription className="text-base dark:text-gray-400">
-              {selectedApproval?.requisition?.reference_number} - {selectedApproval?.requisition?.title}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="approve-comment" className="text-sm font-medium text-gray-700 dark:text-gray-300">Comment (Optional)</Label>
-              <Textarea
-                id="approve-comment"
-                placeholder="Add any comments about this approval..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={3}
-                className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Amount</span>
-                <span className="font-semibold dark:text-white">{formatCurrency(selectedApproval?.requisition?.total_amount || 0)}</span>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                <CheckCircle className="h-6 w-6 text-emerald-500" />
+                Approve Requisition
+              </DialogTitle>
+              <DialogDescription className="text-base dark:text-gray-400">
+                {selectedApproval?.requisition?.reference_number} - {selectedApproval?.requisition?.title}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="approve-comment" className="text-sm font-medium text-gray-700 dark:text-gray-300">Comment (Optional)</Label>
+                <Textarea
+                  id="approve-comment"
+                  placeholder="Add any comments about this approval..."
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={3}
+                  className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500/20"
+                />
               </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-muted-foreground">Items</span>
-                <span className="font-semibold dark:text-white">{selectedApproval?.requisition?.items?.length || 0}</span>
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Amount</span>
+                  <span className="font-semibold dark:text-white">{formatCurrency(selectedApproval?.requisition?.total_amount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Items</span>
+                  <span className="font-semibold dark:text-white">{selectedApproval?.requisition?.items?.length || 0}</span>
+                </div>
+                {selectedApproval?.requisition?.return_count > 0 && (
+                  <div className="flex justify-between text-sm mt-2 pt-2 border-t border-amber-200 dark:border-amber-800">
+                    <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <RotateCcw className="h-3 w-3" />
+                      Previously Returned
+                    </span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">Yes</span>
+                  </div>
+                )}
+                {selectedApproval && hasBeenDeclined(selectedApproval) && (
+                  <div className="flex justify-between text-sm mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                    <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                      <XCircle className="h-3 w-3" />
+                      Previously Declined
+                    </span>
+                    <span className="font-semibold text-red-600 dark:text-red-400">Yes</span>
+                  </div>
+                )}
               </div>
-              {selectedApproval?.requisition?.return_count > 0 && (
-                <div className="flex justify-between text-sm mt-2 pt-2 border-t border-amber-200 dark:border-amber-800">
-                  <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                    <RotateCcw className="h-3 w-3" />
-                    Previously Returned
-                  </span>
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">Yes</span>
-                </div>
-              )}
-              {selectedApproval && hasBeenDeclined(selectedApproval) && (
-                <div className="flex justify-between text-sm mt-2 pt-2 border-t border-red-200 dark:border-red-800">
-                  <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-                    <XCircle className="h-3 w-3" />
-                    Previously Declined
-                  </span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">Yes</span>
-                </div>
-              )}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowApproveDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
-            <Button
-              onClick={handleConfirmApprove}
-              className={cn(
-                "h-11 px-6 rounded-xl font-medium shadow-lg text-white",
-                selectedApproval?.requisition?.return_count > 0
-                  ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-600/30"
-                  : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/30"
-              )}
-              disabled={isProcessing || (selectedApproval && hasBeenDeclined(selectedApproval))}
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-              Approve
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowApproveDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
+              <Button
+                onClick={handleConfirmApprove}
+                className={cn(
+                  "h-11 px-6 rounded-xl font-medium shadow-lg text-white",
+                  selectedApproval?.requisition?.return_count > 0
+                    ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-600/30"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/30"
+                )}
+                disabled={isProcessing || (selectedApproval && hasBeenDeclined(selectedApproval))}
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Approve
+              </Button>
+            </DialogFooter>
+          </motion.div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showDeclineDialog} onOpenChange={setShowDeclineDialog}>
         <DialogContent className="max-w-md rounded-2xl dark:bg-gray-900 dark:border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-              <XCircle className="h-6 w-6 text-red-500" />
-              Decline Requisition
-            </DialogTitle>
-            <DialogDescription className="text-base dark:text-gray-400">
-              {selectedApproval?.requisition?.reference_number} - {selectedApproval?.requisition?.title}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="decline-reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Reason for Decline <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="decline-reason"
-                placeholder="Provide a clear reason for declining this requisition..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-red-500/20"
-              />
-            </div>
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Amount</span>
-                <span className="font-semibold dark:text-white">{formatCurrency(selectedApproval?.requisition?.total_amount || 0)}</span>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                <XCircle className="h-6 w-6 text-red-500" />
+                Decline Requisition
+              </DialogTitle>
+              <DialogDescription className="text-base dark:text-gray-400">
+                {selectedApproval?.requisition?.reference_number} - {selectedApproval?.requisition?.title}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="decline-reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reason for Decline <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="decline-reason"
+                  placeholder="Provide a clear reason for declining this requisition..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-red-500/20"
+                />
               </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-muted-foreground">Items</span>
-                <span className="font-semibold dark:text-white">{selectedApproval?.requisition?.items?.length || 0}</span>
-              </div>
-              {selectedApproval && hasBeenDeclined(selectedApproval) && (
-                <div className="flex justify-between text-sm mt-2 pt-2 border-t border-red-200 dark:border-red-800">
-                  <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-                    <XCircle className="h-3 w-3" />
-                    Previously Declined
-                  </span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">Yes</span>
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Amount</span>
+                  <span className="font-semibold dark:text-white">{formatCurrency(selectedApproval?.requisition?.total_amount || 0)}</span>
                 </div>
-              )}
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Items</span>
+                  <span className="font-semibold dark:text-white">{selectedApproval?.requisition?.items?.length || 0}</span>
+                </div>
+                {selectedApproval && hasBeenDeclined(selectedApproval) && (
+                  <div className="flex justify-between text-sm mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                    <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                      <XCircle className="h-3 w-3" />
+                      Previously Declined
+                    </span>
+                    <span className="font-semibold text-red-600 dark:text-red-400">Yes</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeclineDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
-            <Button
-              onClick={handleConfirmDecline}
-              disabled={!reason.trim() || isProcessing || (selectedApproval && hasBeenDeclined(selectedApproval))}
-              variant="destructive"
-              className="h-11 px-6 rounded-xl shadow-lg shadow-red-600/30 text-white"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
-              Decline
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeclineDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
+              <Button
+                onClick={handleConfirmDecline}
+                disabled={!reason.trim() || isProcessing || (selectedApproval && hasBeenDeclined(selectedApproval))}
+                variant="destructive"
+                className="h-11 px-6 rounded-xl shadow-lg shadow-red-600/30 text-white"
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
+                Decline
+              </Button>
+            </DialogFooter>
+          </motion.div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showDelegateDialog} onOpenChange={setShowDelegateDialog}>
         <DialogContent className="max-w-md rounded-2xl dark:bg-gray-900 dark:border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-              <UserPlus className="h-6 w-6 text-purple-500" />
-              Delegate Approval
-            </DialogTitle>
-            <DialogDescription className="text-base dark:text-gray-400">
-              Delegate {selectedApproval?.requisition?.reference_number} to another approver
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="delegate-user" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Select Delegate <span className="text-red-500">*</span>
-              </Label>
-              <Select value={selectedDelegate} onValueChange={setSelectedDelegate}>
-                <SelectTrigger className="h-11 rounded-xl focus:ring-2 focus:ring-purple-500/20 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                  <SelectValue placeholder="Select an approver..." />
-                </SelectTrigger>
-                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
-                  {availableDelegates.length === 0 ? (
-                    <SelectItem value="none" disabled className="dark:text-gray-400">No available approvers</SelectItem>
-                  ) : (
-                    availableDelegates.map((u: any) => (
-                      <SelectItem key={u.id} value={u.id.toString()} className="dark:text-gray-300">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px]">{getInitials(getFullName(u))}</AvatarFallback>
-                          </Avatar>
-                          <span>{getFullName(u)}</span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                <UserPlus className="h-6 w-6 text-purple-500" />
+                Delegate Approval
+              </DialogTitle>
+              <DialogDescription className="text-base dark:text-gray-400">
+                Delegate {selectedApproval?.requisition?.reference_number} to another approver
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="delegate-user" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Select Delegate <span className="text-red-500">*</span>
+                </Label>
+                <Select value={selectedDelegate} onValueChange={setSelectedDelegate}>
+                  <SelectTrigger className="h-11 rounded-xl focus:ring-2 focus:ring-purple-500/20 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
+                    <SelectValue placeholder="Select an approver..." />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                    {availableDelegates.length === 0 ? (
+                      <SelectItem value="none" disabled className="dark:text-gray-400">No available approvers</SelectItem>
+                    ) : (
+                      availableDelegates.map((u: any) => (
+                        <SelectItem key={u.id} value={u.id.toString()} className="dark:text-gray-300">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-[10px]">{getInitials(getFullName(u))}</AvatarFallback>
+                            </Avatar>
+                            <span>{getFullName(u)}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delegate-comment" className="text-sm font-medium text-gray-700 dark:text-gray-300">Comment (Optional)</Label>
+                <Textarea
+                  id="delegate-comment"
+                  placeholder="Reason for delegation..."
+                  value={delegateComment}
+                  onChange={(e) => setDelegateComment(e.target.value)}
+                  rows={3}
+                  className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500/20"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="delegate-comment" className="text-sm font-medium text-gray-700 dark:text-gray-300">Comment (Optional)</Label>
-              <Textarea
-                id="delegate-comment"
-                placeholder="Reason for delegation..."
-                value={delegateComment}
-                onChange={(e) => setDelegateComment(e.target.value)}
-                rows={3}
-                className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500/20"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDelegateDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
-            <Button
-              onClick={handleConfirmDelegate}
-              disabled={!selectedDelegate || isDelegating || (selectedApproval && hasBeenDeclined(selectedApproval))}
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 h-11 px-6 rounded-xl shadow-lg shadow-purple-600/30 font-medium text-white"
-            >
-              {isDelegating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-              Delegate
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDelegateDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
+              <Button
+                onClick={handleConfirmDelegate}
+                disabled={!selectedDelegate || isDelegating || (selectedApproval && hasBeenDeclined(selectedApproval))}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 h-11 px-6 rounded-xl shadow-lg shadow-purple-600/30 font-medium text-white"
+              >
+                {isDelegating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                Delegate
+              </Button>
+            </DialogFooter>
+          </motion.div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showBulkApproveDialog} onOpenChange={setShowBulkApproveDialog}>
         <DialogContent className="max-w-md rounded-2xl dark:bg-gray-900 dark:border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-              <CheckCircle className="h-6 w-6 text-emerald-500" />
-              Bulk Approve Requisitions
-            </DialogTitle>
-            <DialogDescription className="text-base dark:text-gray-400">
-              You are about to approve {selectedApprovals.filter(id => {
-                const a = allApprovals.find(ap => ap.id === id);
-                return a && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status);
-              }).length} requisitions
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 rounded-xl">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertTitle className="text-amber-800 dark:text-amber-300">Confirm Bulk Action</AlertTitle>
-              <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
-                This will approve all selected requisitions that haven't been declined. This action cannot be undone.
-              </AlertDescription>
-            </Alert>
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Amount</span>
-                <span className="font-semibold dark:text-white">
-                  {formatCurrency(
-                    filteredApprovals
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                <CheckCircle className="h-6 w-6 text-emerald-500" />
+                Bulk Approve Requisitions
+              </DialogTitle>
+              <DialogDescription className="text-base dark:text-gray-400">
+                You are about to approve {selectedApprovals.filter(id => {
+                  const a = allApprovals.find(ap => ap.id === id);
+                  return a && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status);
+                }).length} requisitions
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 rounded-xl">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertTitle className="text-amber-800 dark:text-amber-300">Confirm Bulk Action</AlertTitle>
+                <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                  This will approve all selected requisitions that haven't been declined. This action cannot be undone.
+                </AlertDescription>
+              </Alert>
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-800/30 p-4 rounded-xl border dark:border-gray-700">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Amount</span>
+                  <span className="font-semibold dark:text-white">
+                    {formatCurrency(
+                      filteredApprovals
+                        .filter((a: any) => selectedApprovals.includes(a.id) && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status))
+                        .reduce((acc: number, a: any) => acc + (parseFloat(a.requisition?.total_amount) || 0), 0)
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Items</span>
+                  <span className="font-semibold dark:text-white">
+                    {filteredApprovals
                       .filter((a: any) => selectedApprovals.includes(a.id) && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status))
-                      .reduce((acc: number, a: any) => acc + (parseFloat(a.requisition?.total_amount) || 0), 0)
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-muted-foreground">Items</span>
-                <span className="font-semibold dark:text-white">
-                  {filteredApprovals
-                    .filter((a: any) => selectedApprovals.includes(a.id) && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status))
-                    .reduce((acc: number, a: any) => acc + (a.requisition?.items?.length || 0), 0)}
-                </span>
+                      .reduce((acc: number, a: any) => acc + (a.requisition?.items?.length || 0), 0)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkApproveDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
-            <Button
-              onClick={handleConfirmBulkApprove}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 h-11 px-6 rounded-xl shadow-lg shadow-emerald-600/30 font-medium text-white"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Approve All
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBulkApproveDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
+              <Button
+                onClick={handleConfirmBulkApprove}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 h-11 px-6 rounded-xl shadow-lg shadow-emerald-600/30 font-medium text-white"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Approve All
+              </Button>
+            </DialogFooter>
+          </motion.div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showBulkDeclineDialog} onOpenChange={setShowBulkDeclineDialog}>
         <DialogContent className="max-w-md rounded-2xl dark:bg-gray-900 dark:border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-              <XCircle className="h-6 w-6 text-red-500" />
-              Bulk Decline Requisitions
-            </DialogTitle>
-            <DialogDescription className="text-base dark:text-gray-400">
-              You are about to decline {selectedApprovals.filter(id => {
-                const a = allApprovals.find(ap => ap.id === id);
-                return a && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status);
-              }).length} requisitions
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <Alert className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 rounded-xl">
-              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-              <AlertTitle className="text-red-800 dark:text-red-300">Confirm Bulk Action</AlertTitle>
-              <AlertDescription className="text-red-700 dark:text-red-400 text-sm">
-                This will decline all selected requisitions that haven't been declined. This action cannot be undone.
-              </AlertDescription>
-            </Alert>
-            <div className="space-y-2">
-              <Label htmlFor="bulk-decline-reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Reason for Decline <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="bulk-decline-reason"
-                placeholder="Provide a reason for declining these requisitions..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-red-500/20"
-              />
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                <XCircle className="h-6 w-6 text-red-500" />
+                Bulk Decline Requisitions
+              </DialogTitle>
+              <DialogDescription className="text-base dark:text-gray-400">
+                You are about to decline {selectedApprovals.filter(id => {
+                  const a = allApprovals.find(ap => ap.id === id);
+                  return a && !hasBeenDeclined(a) && !isDeclinedStatus(a?.requisition?.status);
+                }).length} requisitions
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Alert className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 rounded-xl">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <AlertTitle className="text-red-800 dark:text-red-300">Confirm Bulk Action</AlertTitle>
+                <AlertDescription className="text-red-700 dark:text-red-400 text-sm">
+                  This will decline all selected requisitions that haven't been declined. This action cannot be undone.
+                </AlertDescription>
+              </Alert>
+              <div className="space-y-2">
+                <Label htmlFor="bulk-decline-reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reason for Decline <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="bulk-decline-reason"
+                  placeholder="Provide a reason for declining these requisitions..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="resize-none rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-400 focus:ring-2 focus:ring-red-500/20"
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDeclineDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
-            <Button
-              onClick={() => {
-                const approvals = allApprovals.filter((a: any) =>
-                  selectedApprovals.includes(a.id) &&
-                  !hasBeenDeclined(a) &&
-                  !isDeclinedStatus(a?.requisition?.status)
-                );
-                const promises = approvals.map((approval: any) => {
-                  return new Promise((resolve, reject) => {
-                    processApproval({
-                      requisitionId: approval.requisition?.id,
-                      level: approval.level,
-                      data: { action: 'declined', reason: reason.trim() },
-                    }, {
-                      onSuccess: resolve,
-                      onError: reject,
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBulkDeclineDialog(false)} className="h-11 rounded-xl dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">Cancel</Button>
+              <Button
+                onClick={() => {
+                  const approvals = allApprovals.filter((a: any) =>
+                    selectedApprovals.includes(a.id) &&
+                    !hasBeenDeclined(a) &&
+                    !isDeclinedStatus(a?.requisition?.status)
+                  );
+                  const promises = approvals.map((approval: any) => {
+                    return new Promise((resolve, reject) => {
+                      processApproval({
+                        requisitionId: approval.requisition?.id,
+                        level: approval.level,
+                        data: { action: 'declined', reason: reason.trim() },
+                      }, {
+                        onSuccess: resolve,
+                        onError: reject,
+                      });
                     });
                   });
-                });
 
-                Promise.all(promises)
-                  .then(() => {
-                    setShowBulkDeclineDialog(false);
-                    setSelectedApprovals([]);
-                    pendingApprovalsQuery.refetch();
-                    delegatedApprovalsQuery.refetch();
-                    statsQuery.refetch();
-                  })
-                  .catch((err) => {
-                   console.error(err)
-                  });
-              }}
-              disabled={!reason.trim()}
-              variant="destructive"
-              className="h-11 px-6 rounded-xl shadow-lg shadow-red-600/30 text-white"
-            >
-              <X className="h-4 w-4 mr-2" />
-              Decline All
-            </Button>
-          </DialogFooter>
+                  Promise.all(promises)
+                    .then(() => {
+                      setShowBulkDeclineDialog(false);
+                      setSelectedApprovals([]);
+                      pendingApprovalsQuery.refetch();
+                      delegatedApprovalsQuery.refetch();
+                      statsQuery.refetch();
+                    })
+                    .catch((err) => {
+                      console.error(err)
+                    });
+                }}
+                disabled={!reason.trim()}
+                variant="destructive"
+                className="h-11 px-6 rounded-xl shadow-lg shadow-red-600/30 text-white"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Decline All
+              </Button>
+            </DialogFooter>
+          </motion.div>
         </DialogContent>
       </Dialog>
     </PageTemplate>

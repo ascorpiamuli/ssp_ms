@@ -311,9 +311,12 @@ class PurchaseOrder extends Model
     return $this->belongsTo(Requisition::class, 'requisition_id');
   }
 
+  /**
+   * ✅ FIXED: Supplier relationship - points to Supplier model, not User
+   */
   public function supplier(): BelongsTo
   {
-    return $this->belongsTo(User::class, 'supplier_id');
+    return $this->belongsTo(Supplier::class, 'supplier_id');
   }
 
   public function supplierQuotation(): BelongsTo
@@ -480,9 +483,24 @@ class PurchaseOrder extends Model
     return $this->type === 'lso';
   }
 
+  /**
+   * ✅ FIXED: Get supplier name from the Supplier model
+   */
   public function getSupplierNameAttribute(): string
   {
-    return $this->supplier ? $this->supplier->full_name : 'Unknown Supplier';
+    if ($this->relationLoaded('supplier') && $this->supplier) {
+      return $this->supplier->company_name ?? $this->supplier->name ?? 'Unknown Supplier';
+    }
+
+    // Fallback: try to find the supplier directly
+    if ($this->supplier_id) {
+      $supplier = Supplier::find($this->supplier_id);
+      if ($supplier) {
+        return $supplier->company_name ?? $supplier->name ?? 'Unknown Supplier';
+      }
+    }
+
+    return 'Unknown Supplier';
   }
 
   public function getIsOverdueAttribute(): bool

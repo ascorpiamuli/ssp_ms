@@ -8,6 +8,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrderItem extends Model
 {
@@ -120,6 +121,38 @@ class PurchaseOrderItem extends Model
   // ACCESSORS & MUTATORS
   // ============================================
 
+  /**
+   * ✅ Get item name in uppercase when accessed
+   */
+  public function getItemNameAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set item name to uppercase when saved
+   */
+  public function setItemNameAttribute(?string $value): void
+  {
+    $this->attributes['item_name'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get description in proper case when accessed
+   */
+  public function getDescriptionAttribute(?string $value): ?string
+  {
+    return $value;
+  }
+
+  /**
+   * ✅ Set description with proper formatting
+   */
+  public function setDescriptionAttribute(?string $value): void
+  {
+    $this->attributes['description'] = $value ? trim($value) : null;
+  }
+
   public function getFormattedQuantityAttribute(): string
   {
     return number_format((float) ($this->quantity ?? 0), 2);
@@ -177,14 +210,6 @@ class PurchaseOrderItem extends Model
   public function getIsFullyReceivedAttribute(): bool
   {
     return (bool) $this->fully_received;
-  }
-
-  /**
-   * Set item_name to proper case.
-   */
-  public function setItemNameAttribute(string $value): void
-  {
-    $this->attributes['item_name'] = ucwords(strtolower(trim($value)));
   }
 
   // ============================================
@@ -276,5 +301,37 @@ class PurchaseOrderItem extends Model
     $this->save();
 
     return $this;
+  }
+
+  /**
+   * ✅ Check if this item was added by the supplier
+   */
+  public function isSupplierAdded(): bool
+  {
+    return is_null($this->requisition_item_id);
+  }
+
+  /**
+   * ✅ Check if this item came from the requisition
+   */
+  public function isFromRequisition(): bool
+  {
+    return !is_null($this->requisition_item_id);
+  }
+
+  /**
+   * ✅ Get the source type label
+   */
+  public function getSourceTypeLabelAttribute(): string
+  {
+    return $this->isSupplierAdded() ? 'Supplier Added' : 'Requisition';
+  }
+
+  /**
+   * ✅ Get the source type color
+   */
+  public function getSourceTypeColorAttribute(): string
+  {
+    return $this->isSupplierAdded() ? 'purple' : 'emerald';
   }
 }

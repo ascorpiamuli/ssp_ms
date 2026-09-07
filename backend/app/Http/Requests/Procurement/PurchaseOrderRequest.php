@@ -38,7 +38,8 @@ class PurchaseOrderRequest extends FormRequest
       'currency' => 'string|size:3',
       'generate_contract' => 'boolean',
       'items' => 'required|array|min:1',
-      'items.*.requisition_item_id' => 'required|exists:requisition_items,id',
+      // ✅ FIXED: requisition_item_id is now nullable - supplier-added items won't have one
+      'items.*.requisition_item_id' => 'nullable|exists:requisition_items,id',
       'items.*.item_name' => 'required|string|max:255',
       'items.*.description' => 'nullable|string',
       'items.*.unit_of_measure' => 'nullable|string|max:50',
@@ -51,6 +52,8 @@ class PurchaseOrderRequest extends FormRequest
       'items.*.specifications' => 'nullable|string',
       'items.*.brand' => 'nullable|string|max:100',
       'items.*.model' => 'nullable|string|max:100',
+      // ✅ ADDED: supplier_quotation_item_id to link to supplier's original item
+      'items.*.supplier_quotation_item_id' => 'nullable|exists:supplier_quotation_items,id',
       'metadata' => 'nullable|array',
     ];
   }
@@ -67,7 +70,6 @@ class PurchaseOrderRequest extends FormRequest
       'expected_delivery_date.after_or_equal' => 'Expected delivery date must be after or equal to issue date.',
       'items.required' => 'At least one item is required.',
       'items.min' => 'At least one item is required.',
-      'items.*.requisition_item_id.required' => 'Requisition item ID is required.',
       'items.*.item_name.required' => 'Item name is required.',
       'items.*.quantity.required' => 'Quantity is required.',
       'items.*.quantity.min' => 'Quantity must be greater than 0.',

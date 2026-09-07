@@ -72,6 +72,7 @@ class SupplierQuotationController extends Controller
         'supplier',
         'items',
         'quotationRequest',
+        'requisition',
         'evaluatedBy',
       ])->findOrFail($id);
 

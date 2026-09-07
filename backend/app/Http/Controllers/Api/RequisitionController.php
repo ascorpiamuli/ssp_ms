@@ -46,6 +46,7 @@ class RequisitionController extends Controller
       Log::info('✅ RequisitionController::index - Requisitions fetched', [
         'total' => $requisitions->total(),
         'count' => $requisitions->count(),
+        'requisition_types' => $this->getRequisitionTypeBreakdown($requisitions),
       ]);
 
       return response()->json([
@@ -76,6 +77,8 @@ class RequisitionController extends Controller
       Log::info('📝 RequisitionController::store - Creating requisition', [
         'reference_number' => $data['reference_number'] ?? 'not provided',
         'title' => $data['title'] ?? 'not provided',
+        'requisition_type' => $data['requisition_type'] ?? 'not provided',
+        'procurement_type' => $data['procurement_type'] ?? 'not provided',
         'user_id' => Auth::id(),
       ]);
 
@@ -84,6 +87,8 @@ class RequisitionController extends Controller
       Log::info('✅ RequisitionController::store - Requisition created', [
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
+        'requisition_type' => $requisition->requisition_type_label,
+        'procurement_type' => $requisition->procurement_type_label,
       ]);
 
       return response()->json([
@@ -130,6 +135,7 @@ class RequisitionController extends Controller
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
         'status' => $requisition->status,
+        'requisition_type' => $requisition->requisition_type_label,
       ]);
 
       return response()->json([
@@ -170,7 +176,8 @@ class RequisitionController extends Controller
       Log::info('✏️ RequisitionController::update - Updating requisition', [
         'id' => $id,
         'user_id' => Auth::id(),
-        'data' => $data,
+        'requisition_type' => $data['requisition_type'] ?? 'not changed',
+        'procurement_type' => $data['procurement_type'] ?? 'not changed',
       ]);
 
       $requisition = $this->requisitionService->update($id, $data);
@@ -178,6 +185,7 @@ class RequisitionController extends Controller
       Log::info('✅ RequisitionController::update - Requisition updated', [
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
+        'requisition_type' => $requisition->requisition_type_label,
       ]);
 
       return response()->json([
@@ -290,6 +298,7 @@ class RequisitionController extends Controller
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
         'status' => $requisition->status,
+        'requisition_type' => $requisition->requisition_type_label,
         'approvals_count' => $requisition->approvals->count() ?? 0,
       ]);
 
@@ -350,6 +359,7 @@ class RequisitionController extends Controller
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
         'status' => $requisition->status,
+        'requisition_type' => $requisition->requisition_type_label,
       ]);
 
       return response()->json([
@@ -409,6 +419,7 @@ class RequisitionController extends Controller
         'id' => $requisition->id,
         'reference_number' => $requisition->reference_number,
         'status' => $requisition->status,
+        'requisition_type' => $requisition->requisition_type_label,
       ]);
 
       return response()->json([
@@ -512,6 +523,7 @@ class RequisitionController extends Controller
       ], 500);
     }
   }
+
   /**
    * Get current user's requisition statistics.
    */
@@ -635,6 +647,7 @@ class RequisitionController extends Controller
           'sample_ids' => array_slice(array_column($sampleData, 'id'), 0, 5),
           'sample_statuses' => array_slice(array_column($sampleData, 'status'), 0, 5),
           'sample_reference_numbers' => array_slice(array_column($sampleData, 'reference_number'), 0, 5),
+          'sample_requisition_types' => array_slice(array_column($sampleData, 'requisition_type'), 0, 5),
         ]);
       } else {
         Log::warning('⚠️ RequisitionController::pendingApprovals - No data returned');
@@ -670,5 +683,259 @@ class RequisitionController extends Controller
         'message' => 'Failed to retrieve pending approvals: ' . $e->getMessage()
       ], 500);
     }
+  }
+
+    // ============================================
+    // NEW: SERVICE AND GOODS SPECIFIC ENDPOINTS
+    // ============================================
+
+  /**
+   * Get only service requisitions.
+   */
+  public function services(IndexRequisitionRequest $request): JsonResponse
+  {
+    try {
+      $filters = $request->validated();
+      $perPage = $request->input('per_page', 15);
+
+      Log::info('📋 RequisitionController::services - Fetching service requisitions', [
+        'filters' => $filters,
+        'per_page' => $perPage,
+        'user_id' => Auth::id(),
+      ]);
+
+      $requisitions = $this->requisitionService->getServiceRequisitions($filters, $perPage);
+
+      Log::info('✅ RequisitionController::services - Service requisitions fetched', [
+        'total' => $requisitions->total(),
+        'count' => $requisitions->count(),
+        'service_categories' => $this->getServiceCategoryBreakdown($requisitions),
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => new RequisitionCollection($requisitions),
+        'message' => 'Service requisitions retrieved successfully'
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ RequisitionController::services - Error', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve service requisitions: ' . $e->getMessage()
+      ], 500);
+    }
+  }
+
+  /**
+   * Get only goods requisitions.
+   */
+  public function goods(IndexRequisitionRequest $request): JsonResponse
+  {
+    try {
+      $filters = $request->validated();
+      $perPage = $request->input('per_page', 15);
+
+      Log::info('📋 RequisitionController::goods - Fetching goods requisitions', [
+        'filters' => $filters,
+        'per_page' => $perPage,
+        'user_id' => Auth::id(),
+      ]);
+
+      $requisitions = $this->requisitionService->getGoodsRequisitions($filters, $perPage);
+
+      Log::info('✅ RequisitionController::goods - Goods requisitions fetched', [
+        'total' => $requisitions->total(),
+        'count' => $requisitions->count(),
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => new RequisitionCollection($requisitions),
+        'message' => 'Goods requisitions retrieved successfully'
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ RequisitionController::goods - Error', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve goods requisitions: ' . $e->getMessage()
+      ], 500);
+    }
+  }
+
+  /**
+   * Get requisitions by service category.
+   */
+  public function byServiceCategory(IndexRequisitionRequest $request, string $category): JsonResponse
+  {
+    try {
+      $filters = $request->validated();
+      $perPage = $request->input('per_page', 15);
+
+      Log::info('📋 RequisitionController::byServiceCategory - Fetching requisitions by category', [
+        'category' => $category,
+        'filters' => $filters,
+        'per_page' => $perPage,
+        'user_id' => Auth::id(),
+      ]);
+
+      $requisitions = $this->requisitionService->getByServiceCategory($category, $filters, $perPage);
+
+      Log::info('✅ RequisitionController::byServiceCategory - Requisitions fetched', [
+        'category' => $category,
+        'total' => $requisitions->total(),
+        'count' => $requisitions->count(),
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => new RequisitionCollection($requisitions),
+        'message' => "Requisitions for category '{$category}' retrieved successfully"
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ RequisitionController::byServiceCategory - Error', [
+        'category' => $category,
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve requisitions: ' . $e->getMessage()
+      ], 500);
+    }
+  }
+
+  /**
+   * Get requisitions ready for LPO generation (goods).
+   */
+  public function forLpo(IndexRequisitionRequest $request): JsonResponse
+  {
+    try {
+      $filters = $request->validated();
+      $perPage = $request->input('per_page', 15);
+
+      Log::info('📋 RequisitionController::forLpo - Fetching requisitions ready for LPO', [
+        'filters' => $filters,
+        'per_page' => $perPage,
+        'user_id' => Auth::id(),
+      ]);
+
+      $requisitions = $this->requisitionService->getForLpo($filters, $perPage);
+
+      Log::info('✅ RequisitionController::forLpo - Requisitions fetched', [
+        'total' => $requisitions->total(),
+        'count' => $requisitions->count(),
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => new RequisitionCollection($requisitions),
+        'message' => 'Requisitions ready for LPO retrieved successfully'
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ RequisitionController::forLpo - Error', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve requisitions: ' . $e->getMessage()
+      ], 500);
+    }
+  }
+
+  /**
+   * Get requisitions ready for LSO generation (services).
+   */
+  public function forLso(IndexRequisitionRequest $request): JsonResponse
+  {
+    try {
+      $filters = $request->validated();
+      $perPage = $request->input('per_page', 15);
+
+      Log::info('📋 RequisitionController::forLso - Fetching requisitions ready for LSO', [
+        'filters' => $filters,
+        'per_page' => $perPage,
+        'user_id' => Auth::id(),
+      ]);
+
+      $requisitions = $this->requisitionService->getForLso($filters, $perPage);
+
+      Log::info('✅ RequisitionController::forLso - Requisitions fetched', [
+        'total' => $requisitions->total(),
+        'count' => $requisitions->count(),
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'data' => new RequisitionCollection($requisitions),
+        'message' => 'Requisitions ready for LSO retrieved successfully'
+      ]);
+    } catch (\Exception $e) {
+      Log::error('❌ RequisitionController::forLso - Error', [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+      ]);
+      return response()->json([
+        'success' => false,
+        'message' => 'Failed to retrieve requisitions: ' . $e->getMessage()
+      ], 500);
+    }
+  }
+
+    // ============================================
+    // PRIVATE HELPER METHODS
+    // ============================================
+
+  /**
+   * Get requisition type breakdown from a paginated collection.
+   *
+   * @param \Illuminate\Contracts\Pagination\LengthAwarePaginator $requisitions
+   * @return array
+   */
+  private function getRequisitionTypeBreakdown($requisitions): array
+  {
+    $breakdown = [
+      'goods' => 0,
+      'services' => 0,
+    ];
+
+    foreach ($requisitions->items() as $requisition) {
+      if ($requisition->requisition_type === 'goods') {
+        $breakdown['goods']++;
+      } elseif ($requisition->requisition_type === 'services') {
+        $breakdown['services']++;
+      }
+    }
+
+    return $breakdown;
+  }
+
+  /**
+   * Get service category breakdown from a paginated collection.
+   *
+   * @param \Illuminate\Contracts\Pagination\LengthAwarePaginator $requisitions
+   * @return array
+   */
+  private function getServiceCategoryBreakdown($requisitions): array
+  {
+    $breakdown = [];
+
+    foreach ($requisitions->items() as $requisition) {
+      if ($requisition->requisition_type === 'services' && $requisition->service_category) {
+        $category = $requisition->service_category;
+        if (!isset($breakdown[$category])) {
+          $breakdown[$category] = 0;
+        }
+        $breakdown[$category]++;
+      }
+    }
+
+    return $breakdown;
   }
 }

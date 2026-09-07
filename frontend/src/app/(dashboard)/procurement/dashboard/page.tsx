@@ -263,7 +263,8 @@ function extractStats(response: any): RequisitionStats {
     final_approved: 0, declined: 0, hod_declined: 0,
     accountant_declined: 0, principal_declined: 0, final_declined: 0,
     returned: 0, cancelled: 0, revised: 0, total_amount: 0,
-    emergency: 0, average_amount: 0
+    emergency: 0, average_amount: 0,
+    goods_requisitions: 0, services_requisitions: 0,
   };
   return response as RequisitionStats;
 }

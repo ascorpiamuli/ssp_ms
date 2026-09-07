@@ -204,6 +204,10 @@ class QuotationService extends BaseService implements QuotationServiceInterface
     return $qtn;
   }
 
+  // app/Services/Procurement/Services/QuotationService.php
+
+  // Update the submitSupplierQuotation method to handle custom items
+
   public function submitSupplierQuotation(SupplierQuotationDTO $dto): SupplierQuotation
   {
     Log::info('[QuotationService] submitSupplierQuotation - START', [
@@ -268,6 +272,9 @@ class QuotationService extends BaseService implements QuotationServiceInterface
       );
 
       foreach ($dto->items as $itemData) {
+        // Check if this is a custom item (no requisition_item_id)
+        $isCustomItem = empty($itemData['requisition_item_id']) || $itemData['requisition_item_id'] === null;
+
         $itemCreateData = [
           'supplier_quotation_id' => $quotation->id,
           'requisition_item_id' => $itemData['requisition_item_id'] ?? null,
@@ -289,6 +296,8 @@ class QuotationService extends BaseService implements QuotationServiceInterface
           'model' => $itemData['model'] ?? null,
           'is_alternative' => $itemData['is_alternative'] ?? false,
           'alternative_notes' => $itemData['alternative_notes'] ?? null,
+          'is_custom' => $isCustomItem, // Add flag for custom items
+          'custom_item_notes' => $isCustomItem ? 'Custom item added by supplier' : null,
         ];
 
         $item = $this->repository->createSupplierQuotationItem($itemCreateData);
@@ -325,6 +334,7 @@ class QuotationService extends BaseService implements QuotationServiceInterface
         [
           'quotation_number' => $quotation->quotation_number,
           'items_count' => count($dto->items),
+          'custom_items' => collect($dto->items)->filter(fn($item) => empty($item['requisition_item_id']))->count(),
         ],
         "Quotation submitted by supplier ID: {$dto->supplierId}"
       );

@@ -133,7 +133,6 @@ import { format } from 'date-fns';
 import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from '@/components/ui/toast-context';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Table as UITable,
@@ -153,7 +152,6 @@ import { useSuppliers } from '@/hooks/useSuppliers';
 import { useAuthContext } from '@/contexts/AuthContext';
 
 import type { RequisitionItem } from '@/types/requisition.types';
-import { AnyARecord } from 'dns';
 
 // ============================================
 // HELPERS
@@ -305,7 +303,7 @@ const StatusBadge = ({ status, size = 'default', showIcon = true }: { status: st
 };
 
 // ============================================
-// FINANCIAL METRIC CARD - ENHANCED
+// FINANCIAL METRIC CARD
 // ============================================
 
 interface FinancialMetricCardProps {
@@ -422,15 +420,16 @@ const FinancialMetricCard = ({
 };
 
 // ============================================
-// PRICE COMPARISON ROW - ENHANCED
+// PRICE COMPARISON ROW - ENHANCED with Supplier-Added Items
 // ============================================
 
 interface PriceComparisonRowProps {
   item: any;
   index: number;
+  isSupplierAdded?: boolean;
 }
 
-const PriceComparisonRow = ({ item, index }: PriceComparisonRowProps) => {
+const PriceComparisonRow = ({ item, index, isSupplierAdded = false }: PriceComparisonRowProps) => {
   const isSaving = item.isSaving;
   const diffPercent = Math.abs(Math.round(item.percentDifference));
   const isSignificant = Math.abs(item.percentDifference) > 10;
@@ -442,8 +441,9 @@ const PriceComparisonRow = ({ item, index }: PriceComparisonRowProps) => {
       transition={{ delay: index * 0.03 }}
       className={cn(
         "hover:bg-muted/30 transition-colors group",
-        isSaving ? "bg-emerald-50/20 dark:bg-emerald-950/10" :
-          item.difference !== 0 ? "bg-amber-50/20 dark:bg-amber-950/10" : ""
+        isSupplierAdded ? "bg-purple-50/30 dark:bg-purple-950/15" :
+          isSaving ? "bg-emerald-50/20 dark:bg-emerald-950/10" :
+            item.difference !== 0 ? "bg-amber-50/20 dark:bg-amber-950/10" : ""
       )}
     >
       <TableCell className="py-3 text-center">
@@ -454,57 +454,76 @@ const PriceComparisonRow = ({ item, index }: PriceComparisonRowProps) => {
       <TableCell className="py-3">
         <div className="flex items-center gap-2">
           <span className="font-medium text-gray-900 dark:text-gray-100">{item.itemName}</span>
+          {isSupplierAdded && (
+            <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full text-[10px]">
+              <Sparkles className="h-3 w-3 mr-0.5" />
+              Supplier Added
+            </Badge>
+          )}
           <Badge variant="outline" className="text-[10px] rounded-full px-2 py-0 h-5 text-muted-foreground">
             {item.quantity} units
           </Badge>
         </div>
       </TableCell>
       <TableCell className="py-3 text-right">
-        <span className="text-gray-600 dark:text-gray-400">{formatCurrency(item.estimatedPrice)}</span>
+        {isSupplierAdded ? (
+          <span className="text-muted-foreground italic">—</span>
+        ) : (
+          <span className="text-gray-600 dark:text-gray-400">{formatCurrency(item.estimatedPrice)}</span>
+        )}
       </TableCell>
       <TableCell className="py-3 text-right">
         <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(item.actualPrice)}</span>
       </TableCell>
       <TableCell className="py-3 text-right">
-        <div className="flex items-center justify-end gap-2">
-          <span className={cn(
-            "font-semibold",
-            isSaving ? "text-emerald-600 dark:text-emerald-400" :
-              item.difference > 0 ? "text-amber-600 dark:text-amber-400" :
-                "text-gray-500"
-          )}>
-            {isSaving ? `-${formatCurrency(Math.abs(item.difference))}` : formatCurrency(item.difference)}
-          </span>
-          {item.difference !== 0 && (
-            <Badge className={cn(
-              "rounded-full text-[10px] border-0",
-              isSaving ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" :
-                "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+        {isSupplierAdded ? (
+          <span className="text-purple-600 dark:text-purple-400 text-xs font-medium">New Item</span>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <span className={cn(
+              "font-semibold",
+              isSaving ? "text-emerald-600 dark:text-emerald-400" :
+                item.difference > 0 ? "text-amber-600 dark:text-amber-400" :
+                  "text-gray-500"
             )}>
-              {isSaving ? '↓' : '↑'} {diffPercent}%
-            </Badge>
-          )}
-          {isSignificant && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="p-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-500">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isSaving ? 'Significant cost saving detected' : 'Significant price increase detected'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+              {isSaving ? `-${formatCurrency(Math.abs(item.difference))}` : formatCurrency(item.difference)}
+            </span>
+            {item.difference !== 0 && (
+              <Badge className={cn(
+                "rounded-full text-[10px] border-0",
+                isSaving ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" :
+                  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+              )}>
+                {isSaving ? '↓' : '↑'} {diffPercent}%
+              </Badge>
+            )}
+            {isSignificant && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-500">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isSaving ? 'Significant cost saving detected' : 'Significant price increase detected'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        )}
       </TableCell>
       <TableCell className="py-3 text-right font-medium text-gray-900 dark:text-gray-100">
         {formatCurrency(item.totalActual)}
       </TableCell>
       <TableCell className="py-3 text-center">
-        {isSaving ? (
+        {isSupplierAdded ? (
+          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full">
+            <Sparkles className="h-3 w-3 mr-1" />
+            Added
+          </Badge>
+        ) : isSaving ? (
           <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 rounded-full">
             <ArrowDownRight className="h-3 w-3 mr-1" />
             Saving
@@ -533,8 +552,11 @@ export default function PurchaseOrderEndorsePage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { success, error } = useToast();
   const { user } = useAuthContext();
+
+  // ============================================
+  // ALL HOOKS - CALLED AT TOP LEVEL
+  // ============================================
 
   // State
   const [endorseComment, setEndorseComment] = useState('');
@@ -547,7 +569,7 @@ export default function PurchaseOrderEndorsePage() {
   const { data: suppliersData } = useAllSuppliers();
   const endorseMutation = useEndorsePurchaseOrder();
 
-  // User info
+  // User info - useMemo hooks
   const userDepartmentId = useMemo(() => {
     const userAny = user as any;
     return userAny?.effective_department?.id ||
@@ -573,8 +595,83 @@ export default function PurchaseOrderEndorsePage() {
 
   const supplierName = getSupplierName(supplier || po?.supplier);
 
+  // Supplier contact info
+  const supplierEmail = useMemo(() => {
+    return supplier?.company_email || supplier?.email || po?.supplier?.email || 'No email';
+  }, [supplier, po]);
+
+  const supplierPhone = useMemo(() => {
+    return supplier?.company_phone || supplier?.phone || po?.supplier?.phone || 'N/A';
+  }, [supplier, po]);
+
+  const supplierAddress = useMemo(() => {
+    return supplier?.company_address || 'N/A';
+  }, [supplier]);
+
+  // Checked by user
+  const checkedByUser = useMemo(() => {
+    if (!po?.checked_by) return null;
+    return (po as any)?.checked_by_user?.full_name || getUserName(po.checked_by);
+  }, [po]);
+
   // ============================================
-  // FINANCIAL ANALYSIS
+  // ITEM ANALYSIS - WITH SUPPLIER-ADDED ITEMS
+  // ============================================
+
+  const itemAnalysis = useMemo(() => {
+    if (!po?.items) return {
+      total: 0,
+      verified: 0,
+      supplierAdded: 0,
+      count: 0,
+      matchRate: 0,
+      canEndorse: false
+    };
+
+    const poItems = po.items || [];
+    const reqItems = po.requisition?.items || [];
+
+    let verified = 0;
+    let supplierAdded = 0;
+    let count = 0;
+
+    poItems.forEach((item: any) => {
+      // Supplier-added items - no requisition_item_id
+      if (!item.requisition_item_id) {
+        supplierAdded++;
+        verified++; // Count as verified for endorsement
+        return;
+      }
+
+      const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
+      if (reqItem) {
+        count++;
+        const nameMatch = item.item_name?.toLowerCase() === reqItem.item_name?.toLowerCase();
+        const qtyMatch = item.quantity === reqItem.quantity;
+        const unitMatch = item.unit_of_measure === reqItem.unit_of_measure;
+        if (nameMatch && qtyMatch && unitMatch) verified++;
+      }
+    });
+
+    const totalItems = poItems.length;
+    const totalAcceptable = verified;
+    const totalItemsForRate = totalItems > 0 ? totalItems : 1;
+
+    // Can endorse if all items are either verified OR supplier-added
+    const canEndorse = totalItems === (verified);
+
+    return {
+      total: totalItems,
+      verified,
+      supplierAdded,
+      count,
+      matchRate: Math.round((totalAcceptable / totalItemsForRate) * 100),
+      canEndorse
+    };
+  }, [po]);
+
+  // ============================================
+  // FINANCIAL ANALYSIS - WITH SUPPLIER-ADDED ITEMS
   // ============================================
 
   const financialAnalysis = useMemo(() => {
@@ -589,6 +686,7 @@ export default function PurchaseOrderEndorsePage() {
         itemCount: 0,
         averagePriceDiff: 0,
         budgetStatus: 'unknown' as 'on_budget' | 'under_budget' | 'over_budget',
+        supplierAddedTotal: 0,
       };
     }
 
@@ -597,18 +695,26 @@ export default function PurchaseOrderEndorsePage() {
 
     let estimatedTotal = 0;
     let actualTotal = 0;
+    let supplierAddedTotal = 0;
     let count = 0;
     let totalPriceDiff = 0;
 
     poItems.forEach((item: any) => {
       const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
-      if (reqItem) {
+      const isSupplierAdded = !item.requisition_item_id;
+
+      if (isSupplierAdded) {
+        supplierAddedTotal += (item.unit_price || 0) * (item.quantity || 0);
+        actualTotal += (item.unit_price || 0) * (item.quantity || 0);
+      } else if (reqItem) {
         const estCost = (reqItem.estimated_unit_cost || 0) * (item.quantity || 0);
         const actCost = (item.unit_price || 0) * (item.quantity || 0);
         estimatedTotal += estCost;
         actualTotal += actCost;
         totalPriceDiff += (item.unit_price || 0) - (reqItem.estimated_unit_cost || 0);
         count++;
+      } else {
+        actualTotal += (item.unit_price || 0) * (item.quantity || 0);
       }
     });
 
@@ -633,10 +739,14 @@ export default function PurchaseOrderEndorsePage() {
       itemCount: count,
       averagePriceDiff,
       budgetStatus,
+      supplierAddedTotal,
     };
   }, [po]);
 
-  // Budget utilization
+  // ============================================
+  // BUDGET UTILIZATION
+  // ============================================
+
   const budgetUtilization = useMemo(() => {
     const totalBudget = financialAnalysis.estimatedTotal * 1.2;
     const used = financialAnalysis.actualTotal;
@@ -653,39 +763,7 @@ export default function PurchaseOrderEndorsePage() {
   }, [financialAnalysis]);
 
   // ============================================
-  // ITEMS ANALYSIS
-  // ============================================
-
-  const itemAnalysis = useMemo(() => {
-    if (!po?.items) return { total: 0, verified: 0, count: 0, matchRate: 0 };
-
-    const poItems = po.items || [];
-    const reqItems = po.requisition?.items || [];
-
-    let verified = 0;
-    let count = 0;
-
-    poItems.forEach((item: any) => {
-      const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
-      if (reqItem) {
-        count++;
-        const nameMatch = item.item_name?.toLowerCase() === reqItem.item_name?.toLowerCase();
-        const qtyMatch = item.quantity === reqItem.quantity;
-        const unitMatch = item.unit_of_measure === reqItem.unit_of_measure;
-        if (nameMatch && qtyMatch && unitMatch) verified++;
-      }
-    });
-
-    return {
-      total: poItems.length,
-      verified,
-      count,
-      matchRate: count > 0 ? Math.round((verified / count) * 100) : 0
-    };
-  }, [po]);
-
-  // ============================================
-  // PRICE COMPARISON ITEMS
+  // PRICE COMPARISON ITEMS - WITH SUPPLIER-ADDED
   // ============================================
 
   const priceComparisonItems = useMemo(() => {
@@ -697,8 +775,24 @@ export default function PurchaseOrderEndorsePage() {
     const results: any[] = [];
 
     poItems.forEach((item: any) => {
+      const isSupplierAdded = !item.requisition_item_id;
       const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
-      if (reqItem) {
+
+      if (isSupplierAdded) {
+        results.push({
+          itemName: item.item_name,
+          quantity: item.quantity,
+          estimatedPrice: 0,
+          actualPrice: item.unit_price || 0,
+          difference: 0,
+          percentDifference: 0,
+          isSaving: false,
+          totalEstimated: 0,
+          totalActual: (item.unit_price || 0) * (item.quantity || 0),
+          reqItem: null,
+          isSupplierAdded: true,
+        });
+      } else if (reqItem) {
         const estPrice = reqItem.estimated_unit_cost || 0;
         const actPrice = item.unit_price || 0;
         const diff = actPrice - estPrice;
@@ -715,6 +809,7 @@ export default function PurchaseOrderEndorsePage() {
           totalEstimated: estPrice * (item.quantity || 0),
           totalActual: actPrice * (item.quantity || 0),
           reqItem,
+          isSupplierAdded: false,
         });
       }
     });
@@ -722,9 +817,17 @@ export default function PurchaseOrderEndorsePage() {
     return results;
   }, [po]);
 
-  // Total savings and premiums
-  const totalSavings = priceComparisonItems.reduce((sum, item) => sum + (item.difference < 0 ? Math.abs(item.difference) * item.quantity : 0), 0);
-  const totalPremiums = priceComparisonItems.reduce((sum, item) => sum + (item.difference > 0 ? item.difference * item.quantity : 0), 0);
+  // ============================================
+  // TOTAL SAVINGS AND PREMIUMS
+  // ============================================
+
+  const totalSavings = useMemo(() => {
+    return priceComparisonItems.reduce((sum, item) => sum + (item.difference < 0 ? Math.abs(item.difference) * item.quantity : 0), 0);
+  }, [priceComparisonItems]);
+
+  const totalPremiums = useMemo(() => {
+    return priceComparisonItems.reduce((sum, item) => sum + (item.difference > 0 ? item.difference * item.quantity : 0), 0);
+  }, [priceComparisonItems]);
 
   // ============================================
   // HANDLERS
@@ -742,20 +845,23 @@ export default function PurchaseOrderEndorsePage() {
         { id: po.id, comment: endorseComment || undefined },
         {
           onSuccess: () => {
-            success(`Purchase Order ${po.po_number} endorsed successfully`);
             setShowEndorseDialog(false);
             router.push('/procurement/purchase-orders/pending-endorsement');
           },
           onError: (err: any) => {
-            error(err?.message || 'Failed to endorse purchase order');
           }
         }
       );
     }
   };
 
-  // Check if all items match
-  const allItemsMatch = itemAnalysis.verified === itemAnalysis.count && itemAnalysis.count > 0;
+  const handleRefresh = () => {
+    refetch();
+  };
+
+  // ============================================
+  // CONDITIONAL RETURNS - AFTER ALL HOOKS
+  // ============================================
 
   // Loading state
   if (isLoading) {
@@ -890,9 +996,9 @@ export default function PurchaseOrderEndorsePage() {
     );
   }
 
-  const supplierEmail = supplier?.company_email || supplier?.email || po?.supplier?.email || 'No email';
-  const supplierPhone = supplier?.company_phone || supplier?.phone || po?.supplier?.phone || 'N/A';
-  const supplierAddress = supplier?.company_address || 'N/A';
+  // ============================================
+  // MAIN RENDER
+  // ============================================
 
   return (
     <PageTemplate
@@ -921,6 +1027,13 @@ export default function PurchaseOrderEndorsePage() {
             </Tooltip>
           </TooltipProvider>
 
+          {itemAnalysis.supplierAdded > 0 && (
+            <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 rounded-full px-3 py-1.5">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              {itemAnalysis.supplierAdded} Supplier-Added Items
+            </Badge>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -934,14 +1047,14 @@ export default function PurchaseOrderEndorsePage() {
           <Button
             className="h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300"
             onClick={handleEndorse}
-            disabled={endorseMutation.isPending || !allItemsMatch}
+            disabled={endorseMutation.isPending || !itemAnalysis.canEndorse}
           >
             {endorseMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Stamp className="h-4 w-4 mr-2" />
             )}
-            {allItemsMatch ? 'Endorse Order' : 'Resolve Issues First'}
+            {itemAnalysis.canEndorse ? 'Endorse Order' : 'Resolve Issues First'}
           </Button>
         </div>
       }
@@ -1024,8 +1137,19 @@ export default function PurchaseOrderEndorsePage() {
                 />
               </div>
 
-              {/* Budget progress bar - Compact Professional */}
-              <div className="mt-5 p-4 bg-white/60 dark:bg-gray-800/40 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
+              {financialAnalysis.supplierAddedTotal > 0 && (
+                <div className="mt-4 p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/50">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm text-purple-700 dark:text-purple-300">
+                      <strong>{itemAnalysis.supplierAdded}</strong> supplier-added items totaling{' '}
+                      <strong>{formatCurrency(financialAnalysis.supplierAddedTotal)}</strong> have been included in this order.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 p-4 bg-white/60 dark:bg-gray-800/40 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30">
@@ -1093,27 +1217,65 @@ export default function PurchaseOrderEndorsePage() {
         {/* STATUS ALERT */}
         {/* ============================================ */}
         <AnimatePresence>
-          {allItemsMatch && (
+          {itemAnalysis.canEndorse && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
             >
-              <Card className="rounded-xl bg-emerald-50/90 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/50 shadow-sm">
+              <Card className={cn(
+                "rounded-xl shadow-sm",
+                itemAnalysis.supplierAdded > 0
+                  ? "bg-purple-50/90 dark:bg-purple-950/30 border-purple-200/60 dark:border-purple-800/50"
+                  : "bg-emerald-50/90 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/50"
+              )}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-4">
-                    <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex-shrink-0">
-                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    <div className={cn(
+                      "p-2.5 rounded-xl flex-shrink-0",
+                      itemAnalysis.supplierAdded > 0
+                        ? "bg-purple-100 dark:bg-purple-900/40"
+                        : "bg-emerald-100 dark:bg-emerald-900/40"
+                    )}>
+                      {itemAnalysis.supplierAdded > 0 ? (
+                        <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                      ) : (
+                        <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      )}
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-emerald-700 dark:text-emerald-300">All Items Verified</p>
-                      <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                        All {itemAnalysis.total} items match the requisition. The order is ready for endorsement.
+                      <p className={cn(
+                        "font-semibold",
+                        itemAnalysis.supplierAdded > 0
+                          ? "text-purple-700 dark:text-purple-300"
+                          : "text-emerald-700 dark:text-emerald-300"
+                      )}>
+                        {itemAnalysis.supplierAdded > 0
+                          ? `${itemAnalysis.supplierAdded} Supplier-Added Items Included`
+                          : 'All Items Verified'
+                        }
+                      </p>
+                      <p className={cn(
+                        "text-sm",
+                        itemAnalysis.supplierAdded > 0
+                          ? "text-purple-600 dark:text-purple-400"
+                          : "text-emerald-600 dark:text-emerald-400"
+                      )}>
+                        {itemAnalysis.supplierAdded > 0
+                          ? `${itemAnalysis.supplierAdded} item(s) were added by the supplier during quotation. These items have been reviewed by the HOD.`
+                          : `All ${itemAnalysis.total} items match the requisition. The order is ready for endorsement.`
+                        }
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-900/20 px-4 py-2 rounded-xl">
-                      <DollarSign className="h-4 w-4" />
-                      <span className="font-bold">{formatCurrency(financialAnalysis.actualTotal)}</span>
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="flex items-center gap-1 bg-white/60 dark:bg-gray-800/40 px-3 py-1.5 rounded-xl">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{itemAnalysis.total} items</span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-white/60 dark:bg-gray-800/40 px-3 py-1.5 rounded-xl">
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-bold">{formatCurrency(financialAnalysis.actualTotal)}</span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1121,7 +1283,7 @@ export default function PurchaseOrderEndorsePage() {
             </motion.div>
           )}
 
-          {!allItemsMatch && itemAnalysis.total > 0 && (
+          {!itemAnalysis.canEndorse && itemAnalysis.total > 0 && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1137,6 +1299,7 @@ export default function PurchaseOrderEndorsePage() {
                       <p className="font-semibold text-amber-700 dark:text-amber-300">Items Require Review</p>
                       <p className="text-sm text-amber-600 dark:text-amber-400">
                         {itemAnalysis.total - itemAnalysis.verified} item(s) have mismatches. Please review before endorsing.
+                        {itemAnalysis.supplierAdded > 0 && ` (${itemAnalysis.supplierAdded} supplier-added items are already approved)`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1221,7 +1384,7 @@ export default function PurchaseOrderEndorsePage() {
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Checked By</p>
                   <div className="flex items-center gap-2 mt-1">
                     <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{getUserName(po.checked_by)}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{checkedByUser || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -1328,6 +1491,10 @@ export default function PurchaseOrderEndorsePage() {
                       <span className="text-muted-foreground">Premium</span>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                      <span className="text-muted-foreground">Supplier Added</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600" />
                       <span className="text-muted-foreground">On Budget</span>
                     </div>
@@ -1354,7 +1521,6 @@ export default function PurchaseOrderEndorsePage() {
                 </div>
               </div>
 
-              {/* Savings summary */}
               <div className="flex flex-wrap items-center gap-5 mt-2.5 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Total Savings:</span>
@@ -1374,9 +1540,15 @@ export default function PurchaseOrderEndorsePage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Supplier-Added Items:</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400">
+                    {itemAnalysis.supplierAdded} items
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Items with savings:</span>
                   <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                    {priceComparisonItems.filter(i => i.isSaving).length}/{priceComparisonItems.length}
+                    {priceComparisonItems.filter(i => i.isSaving && !i.isSupplierAdded).length}/{priceComparisonItems.filter(i => !i.isSupplierAdded).length}
                   </span>
                 </div>
               </div>
@@ -1412,7 +1584,12 @@ export default function PurchaseOrderEndorsePage() {
                           return item.itemName.toLowerCase().includes(searchTerm.toLowerCase());
                         })
                         .map((item, index) => (
-                          <PriceComparisonRow key={index} item={item} index={index} />
+                          <PriceComparisonRow
+                            key={index}
+                            item={item}
+                            index={index}
+                            isSupplierAdded={item.isSupplierAdded || false}
+                          />
                         ))}
                     </TableBody>
                   </UITable>
@@ -1437,6 +1614,15 @@ export default function PurchaseOrderEndorsePage() {
                         <span className="text-muted-foreground">Premiums:</span>
                         <span className="font-bold text-amber-600">{formatCurrency(totalPremiums)}</span>
                       </div>
+                      {itemAnalysis.supplierAdded > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                            <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                          </div>
+                          <span className="text-muted-foreground">Supplier Added:</span>
+                          <span className="font-bold text-purple-600">{itemAnalysis.supplierAdded} items</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <span>Net:</span>
@@ -1502,6 +1688,10 @@ export default function PurchaseOrderEndorsePage() {
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                     <span>Above estimate</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span>Supplier Added</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
@@ -1587,18 +1777,35 @@ export default function PurchaseOrderEndorsePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
         >
-          <Card className="border-0 shadow-lg rounded-2xl overflow-hidden border-l-[6px] border-l-blue-500">
+          <Card className={cn(
+            "border-0 shadow-lg rounded-2xl overflow-hidden border-l-[6px]",
+            itemAnalysis.supplierAdded > 0 ? "border-l-purple-500" : "border-l-blue-500"
+          )}>
             <CardContent className="p-6">
               <div className="flex items-start gap-5">
-                <div className="p-3 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
-                  <BookCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <div className={cn(
+                  "p-3 rounded-2xl flex-shrink-0",
+                  itemAnalysis.supplierAdded > 0
+                    ? "bg-purple-100 dark:bg-purple-900/30"
+                    : "bg-blue-100 dark:bg-blue-900/30"
+                )}>
+                  {itemAnalysis.supplierAdded > 0 ? (
+                    <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  ) : (
+                    <BookCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  )}
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-lg text-gray-900 dark:text-white">Budget Verification</h4>
+                  <h4 className="font-bold text-lg text-gray-900 dark:text-white">
+                    {itemAnalysis.supplierAdded > 0 ? 'Budget Verification with Supplier-Added Items' : 'Budget Verification'}
+                  </h4>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                     As the Accountant, you are confirming that the required funds of{' '}
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(po.total_amount)}</span>{' '}
                     are available and this purchase is compliant with the approved budget.
+                    {itemAnalysis.supplierAdded > 0 && (
+                      <> <span className="font-medium text-purple-600 dark:text-purple-400">{itemAnalysis.supplierAdded} supplier-added items</span> have been included and verified.</>
+                    )}
                   </p>
                   <div className="flex flex-wrap items-center gap-5 mt-3 text-sm">
                     <div className="flex items-center gap-2">
@@ -1639,6 +1846,14 @@ export default function PurchaseOrderEndorsePage() {
                         Items: <span className="font-medium">{itemAnalysis.verified}/{itemAnalysis.total} verified</span>
                       </span>
                     </div>
+                    {itemAnalysis.supplierAdded > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                        <span className="text-gray-700 dark:text-gray-300">
+                          Supplier Added: <span className="font-medium text-purple-600 dark:text-purple-400">{itemAnalysis.supplierAdded}</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1648,7 +1863,7 @@ export default function PurchaseOrderEndorsePage() {
       </div>
 
       {/* ============================================ */}
-      {/* ENDORSE DIALOG - ENHANCED */}
+      {/* ENDORSE DIALOG */}
       {/* ============================================ */}
       <Dialog open={showEndorseDialog} onOpenChange={setShowEndorseDialog}>
         <DialogContent className="rounded-2xl dark:bg-gray-900 max-w-lg border-0 shadow-2xl p-0 overflow-hidden">
@@ -1707,14 +1922,32 @@ export default function PurchaseOrderEndorsePage() {
               </div>
             </div>
 
+            {itemAnalysis.supplierAdded > 0 && (
+              <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/50">
+                <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span>
+                    <strong>{itemAnalysis.supplierAdded}</strong> supplier-added items totaling{' '}
+                    <strong>{formatCurrency(financialAnalysis.supplierAddedTotal)}</strong> are included in this order.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Items Summary */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-900 dark:text-white">Items Summary</p>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm flex-wrap">
                 <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 rounded-full px-3 py-1">
                   <CheckCircle className="h-3 w-3 mr-1" />
                   {itemAnalysis.verified} Verified
                 </Badge>
+                {itemAnalysis.supplierAdded > 0 && (
+                  <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-0 rounded-full px-3 py-1">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {itemAnalysis.supplierAdded} Supplier Added
+                  </Badge>
+                )}
                 <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-0 rounded-full px-3 py-1">
                   <AlertCircle className="h-3 w-3 mr-1" />
                   {itemAnalysis.total - itemAnalysis.verified} Mismatches
@@ -1742,6 +1975,15 @@ export default function PurchaseOrderEndorsePage() {
                 <ArrowRight className="h-3 w-3" />
                 <span>Actual: {formatCurrency(financialAnalysis.actualTotal)}</span>
               </div>
+              {financialAnalysis.supplierAddedTotal > 0 && (
+                <div className="flex items-center justify-between text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    Supplier-added total:
+                  </span>
+                  <span className="font-medium">{formatCurrency(financialAnalysis.supplierAddedTotal)}</span>
+                </div>
+              )}
             </div>
 
             {/* Comment */}
@@ -1758,7 +2000,10 @@ export default function PurchaseOrderEndorsePage() {
 
             <div className="flex items-center gap-2.5 p-3.5 bg-blue-50/60 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/50 text-xs text-muted-foreground">
               <Info className="h-4 w-4 text-blue-500 flex-shrink-0" />
-              <span className="leading-relaxed">By endorsing, you confirm that funds are available and this purchase is financially compliant with the approved budget.</span>
+              <span className="leading-relaxed">
+                By endorsing, you confirm that funds are available and this purchase is financially compliant with the approved budget.
+                {itemAnalysis.supplierAdded > 0 && ' Supplier-added items have been reviewed and approved.'}
+              </span>
             </div>
           </div>
 

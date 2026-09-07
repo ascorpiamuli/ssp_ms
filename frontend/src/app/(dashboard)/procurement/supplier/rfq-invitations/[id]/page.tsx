@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -32,10 +32,6 @@ import {
   Edit,
   Trash2,
   Truck,
-  CheckCircle2,
-  XCircle as XCircleIcon,
-  AlertOctagon,
-  Clock as ClockIcon,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -47,42 +43,29 @@ import {
   Phone,
   AtSign,
   Globe2,
-  Briefcase as BriefcaseIcon2,
   CalendarDays,
   Hourglass,
-  Target as TargetIcon,
-  TrendingUp as TrendingUpIcon2,
-  Award as AwardIcon2,
-  Users as UsersIcon2,
-  CheckCircle as CheckCircleIcon2,
-  XCircle as XCircleIcon2,
-  AlertTriangle as AlertTriangleIcon2,
+  Target,
+  Award,
   Lock,
-  Unlock,
-  EyeOff,
-  ShieldQuestion,
-  Sparkles,
   CreditCard,
-  Coins,
-  Wallet,
-  Fingerprint,
-  Key,
-  ScanEye,
-  Binary,
-  Zap,
-  Crown,
-  Gem,
-  Star,
-  Gift,
-  Rocket,
-  Flame,
-  Sparkle,
-  ExternalLink,
   DollarSign,
   Tag,
   Hash,
   Bell,
   Timer,
+  ClipboardList,
+  UserCog,
+  FileSpreadsheet,
+  RotateCcw,
+  Construction,
+  Wrench,
+  HardHat,
+  PenTool,
+  Settings,
+  Toolbox,
+  Compass,
+  Rocket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,52 +107,46 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar as AvatarComponent, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
 
 // Hooks
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { useQuotation } from '@/hooks/useQuotation';
-import {
-  useCreateSupplierQuotation,
-} from '@/hooks/useSupplierQuotation';
 
 // Types
 import type { QuotationRequest } from '@/types/quotations.types';
-import type { Requisition } from '@/types/requisition.types';
+import type { Requisition, ServiceCategory } from '@/types/requisition.types';
 
-// Components
-import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
-
-// ============================================
-// TYPE EXTENSIONS
-// ============================================
-
-// Extended Requisition type with items and approvals
-interface ExtendedRequisition extends Requisition {
-  items: any[];
-  approvals: any[];
-}
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-const CURRENCY = 'KES';
+const SERVICE_CATEGORY_LABELS: Record<string, string> = {
+  consultancy: 'Consultancy Services',
+  maintenance: 'Maintenance & Repair',
+  training: 'Training & Development',
+  installation: 'Installation Services',
+  cleaning: 'Cleaning & Sanitation',
+  security: 'Security Services',
+  transport: 'Transport & Logistics',
+  construction: 'Construction & Renovation',
+  professional_services: 'Professional Services',
+  it_services: 'IT Services',
+  other: 'Other Services',
+};
 
 // ============================================
 // HELPERS
 // ============================================
 
-const formatDate = (date: string | Date | null): string => {
+const formatDate = (date: string | Date | null | undefined): string => {
   if (!date) return 'N/A';
   try {
     return format(new Date(date), 'dd MMM yyyy');
@@ -178,7 +155,7 @@ const formatDate = (date: string | Date | null): string => {
   }
 };
 
-const formatDateTime = (date: string | Date | null): string => {
+const formatDateTime = (date: string | Date | null | undefined): string => {
   if (!date) return 'N/A';
   try {
     return format(new Date(date), 'dd MMM yyyy HH:mm');
@@ -204,7 +181,7 @@ const getInitials = (name: string): string => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 };
 
-const getTimeRemaining = (closingDate: string | Date): {
+const getTimeRemaining = (closingDate: string | Date | null | undefined): {
   text: string;
   days: number;
   isExpired: boolean;
@@ -243,7 +220,6 @@ const getTimeRemaining = (closingDate: string | Date): {
   }
 };
 
-// Helper to safely get user name from QuotationUser | number
 const getUserName = (user: { full_name?: string; first_name?: string; last_name?: string } | number | null | undefined): string => {
   if (!user) return 'Unknown';
   if (typeof user === 'number') return 'User ' + user;
@@ -253,7 +229,6 @@ const getUserName = (user: { full_name?: string; first_name?: string; last_name?
   return 'Unknown';
 };
 
-// Helper to safely get user email
 const getUserEmail = (user: { email?: string } | number | null | undefined): string => {
   if (!user) return '';
   if (typeof user === 'number') return '';
@@ -263,63 +238,67 @@ const getUserEmail = (user: { email?: string } | number | null | undefined): str
   return '';
 };
 
-// Helper to safely get approver name
 const getApproverName = (approver: { full_name?: string; first_name?: string; last_name?: string } | null | undefined): string => {
   if (!approver) return 'Unknown';
   return approver.full_name || [approver.first_name, approver.last_name].filter(Boolean).join(' ') || 'Unknown';
+};
+
+const getServiceCategoryLabel = (category: string | null | undefined): string => {
+  if (!category) return 'N/A';
+  return SERVICE_CATEGORY_LABELS[category] || category.replace(/_/g, ' ');
+};
+
+const isServiceRequisition = (requisition: any): boolean => {
+  if (!requisition) return false;
+  if (requisition.is_service_requisition === true) return true;
+  if (requisition.is_goods_requisition === true) return false;
+  return requisition.requisition_type === 'services';
 };
 
 // ============================================
 // STATUS CONFIGURATIONS
 // ============================================
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; description: string }> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   draft: {
     label: 'Draft',
     color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700',
     icon: Edit,
-    description: 'This RFQ is still in draft',
   },
   sent: {
     label: 'Open for Bidding',
     color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
     icon: Mail,
-    description: 'Suppliers can submit their quotations',
   },
   responded: {
     label: 'Bids Received',
     color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
     icon: Users,
-    description: 'Suppliers have submitted their quotations',
   },
   evaluating: {
     label: 'Under Evaluation',
     color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
     icon: Clock,
-    description: 'Quotations are being evaluated',
   },
   closed: {
     label: 'Closed',
     color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
     icon: CheckCircle,
-    description: 'This RFQ is closed',
   },
   cancelled: {
     label: 'Cancelled',
     color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
     icon: Ban,
-    description: 'This RFQ has been cancelled',
   },
   expired: {
     label: 'Expired',
     color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
     icon: AlertCircle,
-    description: 'The closing date has passed',
   },
 };
 
 // ============================================
-// SUB-COMPONENTS
+// COMPONENTS
 // ============================================
 
 const StatusBadge = ({ status, isExpired, className }: { status: string; isExpired?: boolean; className?: string }) => {
@@ -335,17 +314,7 @@ const StatusBadge = ({ status, isExpired, className }: { status: string; isExpir
   );
 };
 
-// ============================================
-// BLURRED PRICE
-// ============================================
-
-interface BlurredPriceProps {
-  amount?: number | string | null;
-  className?: string;
-  showLock?: boolean;
-}
-
-const BlurredPrice = ({ amount, className, showLock = true }: BlurredPriceProps) => {
+const BlurredPrice = ({ amount, className, showLock = true }: { amount?: number | string | null; className?: string; showLock?: boolean }) => {
   return (
     <div className={cn("inline-flex items-center gap-2 select-none", className)}>
       <span className="font-mono text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-lg text-transparent blur-sm select-none">
@@ -358,203 +327,97 @@ const BlurredPrice = ({ amount, className, showLock = true }: BlurredPriceProps)
   );
 };
 
-// ============================================
-// STATS CARDS
-// ============================================
+const InfoRow = ({
+  icon: Icon,
+  label,
+  value,
+  className,
+  valueClassName,
+  badge,
+}: {
+  icon: any;
+  label: string;
+  value: string | React.ReactNode;
+  className?: string;
+  valueClassName?: string;
+  badge?: React.ReactNode;
+}) => (
+  <div className={cn("flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors", className)}>
+    <div className="p-1.5 rounded-lg bg-primary/10 text-primary mt-0.5">
+      <Icon className="h-4 w-4" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+        {badge}
+      </div>
+      <div className={cn("text-base font-medium mt-0.5", valueClassName)}>{value || 'N/A'}</div>
+    </div>
+  </div>
+);
 
-interface StatsGridProps {
-  quotation: QuotationRequest;
-}
+const ExpandableText = ({ text, maxLines = 3 }: { text: string | null | undefined; maxLines?: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-const StatsGrid = ({ quotation }: StatsGridProps) => {
-  const stats = [
-    {
-      label: 'Response Count',
-      value: quotation.response_count || 0,
-      icon: Users,
-      color: 'from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200/50',
-      iconBg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-    },
-    {
-      label: 'Response Rate',
-      value: `${quotation.response_rate || 0}%`,
-      icon: TrendingUp,
-      color: 'from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50',
-      iconBg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-    },
-    {
-      label: 'Total Items',
-      value: (quotation.requisition as ExtendedRequisition)?.items?.length || 0,
-      icon: Package,
-      color: 'from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200/50',
-      iconBg: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
-    },
-    {
-      label: 'Suppliers Invited',
-      value: quotation.sent_to_suppliers?.length || 0,
-      icon: Users,
-      color: 'from-indigo-50 to-indigo-100/50 dark:from-indigo-950/30 dark:to-indigo-900/20 border-indigo-200/50',
-      iconBg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
-    },
-  ];
+  if (!text) return <p className="text-muted-foreground italic">No information provided</p>;
+
+  const lines = text.split('\n') || [];
+  const shouldTruncate = lines.length > maxLines || text.length > 300;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {stats.map((stat, index) => (
-        <Card key={index} className={cn("border shadow-sm rounded-xl bg-gradient-to-br", stat.color)}>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {stat.label}
-                </p>
-                <p className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                  {stat.value}
-                </p>
-              </div>
-              <div className={cn("p-2.5 rounded-xl flex-shrink-0 ml-3", stat.iconBg)}>
-                <stat.icon className="h-5 w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-2">
+      <div className={cn(
+        "text-base leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap",
+        !isExpanded && "line-clamp-3"
+      )}>
+        {text}
+      </div>
+      {shouldTruncate && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-0 h-auto font-medium"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="h-4 w-4 mr-1" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4 mr-1" />
+              Read More
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 };
 
-// ============================================
-// HEADER CARD
-// ============================================
-
-interface HeaderCardProps {
-  quotation: QuotationRequest;
-}
-
-const HeaderCard = ({ quotation }: HeaderCardProps) => {
-  const isExpired = quotation.is_expired;
-  const isClosingSoon = quotation.is_closing_soon;
-  const timeRemaining = getTimeRemaining(quotation.closing_date);
-  const generatedByName = getUserName(quotation.generated_by);
-
-  return (
-    <Card className="border shadow-sm rounded-xl overflow-hidden transition-all duration-300 hover:shadow-md">
-      <CardContent className="p-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="flex items-center gap-5">
-            <div className="p-3.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20">
-              <FileText className="h-8 w-8 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-                  {quotation.qtn_number}
-                </h2>
-                <StatusBadge status={quotation.status} isExpired={isExpired} />
-                {isClosingSoon && !isExpired && (
-                  <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 rounded-full px-3 py-1 animate-pulse">
-                    <Clock className="h-3.5 w-3.5 mr-1.5" />
-                    Closing Soon
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Tag className="h-3.5 w-3.5" />
-                  {quotation.title}
-                </span>
-                <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                <span className="flex items-center gap-1">
-                  <Building2 className="h-3.5 w-3.5" />
-                  {quotation.requisition?.reference_number || 'N/A'}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  Issued by: {generatedByName}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-// ============================================
-// CONFIDENTIALITY BANNER
-// ============================================
-
-const ConfidentialityBanner = () => {
-  return (
-    <Alert className="border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl">
-      <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
-          <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-        </div>
-        <div>
-          <AlertTitle className="text-amber-800 dark:text-amber-300 font-semibold">
-            Pricing Information is Confidential
-          </AlertTitle>
-          <AlertDescription className="text-amber-700 dark:text-amber-400">
-            Estimated prices are not visible to suppliers. Submit your own competitive quotation.
-          </AlertDescription>
-        </div>
-      </div>
-    </Alert>
-  );
-};
-
-// ============================================
-// APPROVALS TIMELINE
-// ============================================
-
-interface ApprovalsTimelineProps {
-  approvals: any[];
-}
-
-const ApprovalsTimeline = ({ approvals }: ApprovalsTimelineProps) => {
+const ApprovalsTimeline = ({ approvals }: { approvals: any[] }) => {
   if (!approvals || approvals.length === 0) {
     return (
-      <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+      <div className="text-center py-8 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
         <FileCheck className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
         <p className="text-muted-foreground">No approval records found</p>
       </div>
     );
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return CheckCircle2;
-      case 'rejected':
-        return XCircleIcon;
-      case 'pending':
-        return ClockIcon;
-      default:
-        return AlertOctagon;
-    }
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved':
-        return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-      case 'rejected':
-        return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800';
-      case 'pending':
-        return 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-      default:
-        return 'bg-gray-100 dark:bg-gray-800/30 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700';
+      case 'approved': return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
+      case 'rejected': return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800';
+      case 'pending': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800';
+      default: return 'bg-gray-100 dark:bg-gray-800/30 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700';
     }
   };
 
   return (
     <div className="relative space-y-4">
       {approvals.map((approval: any, index: number) => {
-        const Icon = getStatusIcon(approval.status);
         const colorClass = getStatusColor(approval.status);
         const isLast = index === approvals.length - 1;
         const approverName = getApproverName(approval.approver);
@@ -566,14 +429,18 @@ const ApprovalsTimeline = ({ approvals }: ApprovalsTimelineProps) => {
             )}
 
             <div className={cn("p-2 rounded-full h-10 w-10 flex items-center justify-center flex-shrink-0 border", colorClass)}>
-              <Icon className="h-5 w-5" />
+              {approval.status === 'approved' ? (
+                <CheckCircle className="h-5 w-5" />
+              ) : approval.status === 'rejected' ? (
+                <XCircle className="h-5 w-5" />
+              ) : (
+                <Clock className="h-5 w-5" />
+              )}
             </div>
 
             <div className="flex-1 space-y-1.5 bg-gray-50 dark:bg-gray-800/30 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-sm">
-                  {approval.level_label}
-                </p>
+                <p className="font-semibold text-sm">{approval.level_label}</p>
                 <Badge variant="outline" className="text-xs rounded-full">
                   <Calendar className="h-3 w-3 mr-1" />
                   {formatDateTime(approval.updated_at)}
@@ -605,98 +472,6 @@ const ApprovalsTimeline = ({ approvals }: ApprovalsTimelineProps) => {
 };
 
 // ============================================
-// ITEMS TABLE
-// ============================================
-
-interface ItemsTableProps {
-  items: any[];
-  isLoading: boolean;
-}
-
-const ItemsTable = ({ items, isLoading }: ItemsTableProps) => {
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-12 w-full rounded-xl" />
-        <Skeleton className="h-16 w-full rounded-xl" />
-        <Skeleton className="h-16 w-full rounded-xl" />
-        <Skeleton className="h-16 w-full rounded-xl" />
-      </div>
-    );
-  }
-
-  if (!items || items.length === 0) {
-    return (
-      <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-        <Package className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-        <p className="text-muted-foreground">No items found for this RFQ</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border rounded-xl overflow-hidden dark:border-gray-700 shadow-sm transition-all duration-300 hover:shadow-md">
-      <ScrollArea className="w-full max-h-[400px]">
-        <Table>
-          <TableHeader className="sticky top-0 z-10">
-            <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-              <TableHead className="min-w-[150px] py-3.5 text-xs font-semibold uppercase tracking-wider">Item</TableHead>
-              <TableHead className="min-w-[120px] py-3.5 text-xs font-semibold uppercase tracking-wider">Description</TableHead>
-              <TableHead className="text-center w-[80px] py-3.5 text-xs font-semibold uppercase tracking-wider">Qty</TableHead>
-              <TableHead className="text-center w-[100px] py-3.5 text-xs font-semibold uppercase tracking-wider">Unit</TableHead>
-              <TableHead className="min-w-[200px] py-3.5 text-xs font-semibold uppercase tracking-wider">Specifications</TableHead>
-              <TableHead className="text-right w-[140px] py-3.5 text-xs font-semibold uppercase tracking-wider">Est. Price</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item: any) => (
-              <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
-                <TableCell>
-                  <div>
-                    <p className="font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {item.item_name}
-                    </p>
-                    {item.catalog_number && (
-                      <p className="text-xs text-muted-foreground">
-                        <Hash className="h-3 w-3 inline mr-0.5" />
-                        {item.catalog_number}
-                      </p>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <p className="text-sm text-muted-foreground">
-                    {item.description || '—'}
-                  </p>
-                </TableCell>
-                <TableCell className="text-center font-medium">
-                  {parseFloat(item.quantity).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-center text-sm text-muted-foreground">
-                  {item.unit_of_measure || 'Unit'}
-                </TableCell>
-                <TableCell>
-                  {item.specifications ? (
-                    <p className="text-sm text-muted-foreground max-w-[250px] line-clamp-2">
-                      {item.specifications}
-                    </p>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <BlurredPrice amount={item.estimated_unit_cost} showLock={true} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </ScrollArea>
-    </div>
-  );
-};
-
-// ============================================
 // MAIN PAGE
 // ============================================
 
@@ -712,7 +487,6 @@ export default function SupplierRFQInvitationDetailPage() {
 
   const { data: quotation, isLoading, refetch } = useQuotation(id);
 
-  // Safe supplier ID
   const supplierId = useMemo(() => {
     if (!supplier) return undefined;
     return (supplier as any)?.id as number | undefined;
@@ -757,8 +531,10 @@ export default function SupplierRFQInvitationDetailPage() {
     refetch();
   };
 
-  // Cast requisition to ExtendedRequisition
-  const extendedRequisition = quotation?.requisition as unknown as ExtendedRequisition | undefined;
+  const extendedRequisition = quotation?.requisition as unknown as Requisition | undefined;
+  const isService = useMemo(() => isServiceRequisition(extendedRequisition), [extendedRequisition]);
+  const timeRemaining = getTimeRemaining(quotation?.closing_date);
+  const generatedByName = getUserName(quotation?.generated_by);
 
   if (isLoading) {
     return (
@@ -774,18 +550,9 @@ export default function SupplierRFQInvitationDetailPage() {
           { label: 'RFQ Invitations', href: '/procurement/supplier/rfq-invitations' },
           { label: 'Loading...' },
         ]}
-        actions={
-          <Button variant="outline" size="sm" disabled className="gap-2 h-9 rounded-lg">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading...
-          </Button>
-        }
       >
         <div className="space-y-6">
           <Skeleton className="h-40 w-full rounded-xl" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-          </div>
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       </PageTemplate>
@@ -828,9 +595,6 @@ export default function SupplierRFQInvitationDetailPage() {
     );
   }
 
-  const generatedByName = getUserName(quotation.generated_by);
-  const generatedByEmail = getUserEmail(quotation.generated_by);
-
   return (
     <PageTemplate
       title={`RFQ ${quotation.qtn_number}`}
@@ -853,7 +617,6 @@ export default function SupplierRFQInvitationDetailPage() {
             className="gap-2 h-9 rounded-lg dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <RefreshCw className="h-4 w-4" />
-            Refresh
           </Button>
 
           {canRespond && (
@@ -988,45 +751,166 @@ export default function SupplierRFQInvitationDetailPage() {
           </Alert>
         )}
 
-        <HeaderCard quotation={quotation} />
-        <StatsGrid quotation={quotation} />
-        <ConfidentialityBanner />
+        {/* Header Card */}
+        <Card className="border shadow-sm rounded-xl overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+              <div className="flex items-center gap-5">
+                <div className="p-3.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20">
+                  <FileText className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                      {quotation.qtn_number}
+                    </h2>
+                    <StatusBadge status={quotation.status} isExpired={isExpired} />
+                    {isClosingSoon && !isExpired && (
+                      <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 rounded-full px-3 py-1 animate-pulse">
+                        <Clock className="h-3.5 w-3.5 mr-1.5" />
+                        Closing Soon
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Tag className="h-3.5 w-3.5" />
+                      {quotation.title}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                    <span className="flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {quotation.requisition?.reference_number || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      Issued by: {generatedByName}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {timeRemaining.text}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <Tabs defaultValue="items" className="space-y-4">
-          <TabsList className="w-full bg-gray-100 dark:bg-gray-800/50 p-1 rounded-xl h-auto">
-            <TabsTrigger value="items" className="flex-1 gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 data-[state=active]:shadow-sm py-2.5 rounded-lg text-sm font-medium transition-all">
-              <Package className="h-4 w-4" />
-              <span>Items & Specifications</span>
-            </TabsTrigger>
-            <TabsTrigger value="requisition" className="flex-1 gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 data-[state=active]:shadow-sm py-2.5 rounded-lg text-sm font-medium transition-all">
-              <FileText className="h-4 w-4" />
-              <span>Requisition Details</span>
-            </TabsTrigger>
-            <TabsTrigger value="approvals" className="flex-1 gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 data-[state=active]:shadow-sm py-2.5 rounded-lg text-sm font-medium transition-all">
-              <CheckCircle className="h-4 w-4" />
-              <span>Approvals Timeline</span>
-            </TabsTrigger>
-            <TabsTrigger value="terms" className="flex-1 gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-900 data-[state=active]:shadow-sm py-2.5 rounded-lg text-sm font-medium transition-all">
-              <Shield className="h-4 w-4" />
-              <span>Terms & Instructions</span>
-            </TabsTrigger>
-          </TabsList>
+        {/* Confidentiality Banner */}
+        <Alert className="border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+              <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <AlertTitle className="text-amber-800 dark:text-amber-300 font-semibold">
+                Pricing Information is Confidential
+              </AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                Estimated prices are not visible to suppliers. Submit your own competitive quotation.
+              </AlertDescription>
+            </div>
+          </div>
+        </Alert>
 
-          <TabsContent value="items">
-            <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Items Section */}
+            <Card className="border shadow-sm rounded-xl">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <div className={cn(
+                    "p-1.5 rounded-lg",
+                    isService ? "bg-purple-100 dark:bg-purple-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+                  )}>
+                    {isService ? (
+                      <Briefcase className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    ) : (
+                      <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    )}
                   </div>
-                  Items & Specifications
+                  {isService ? 'Service Items & Specifications' : 'Items & Specifications'}
                 </CardTitle>
                 <CardDescription>
-                  Items required for this RFQ with quantities and specifications
+                  {isService ? 'Service items required for this RFQ with scope and deliverables' : 'Items required for this RFQ with quantities and specifications'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
-                <ItemsTable items={extendedRequisition?.items || []} isLoading={isLoading} />
+                {isLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-12 w-full rounded-xl" />
+                    <Skeleton className="h-16 w-full rounded-xl" />
+                    <Skeleton className="h-16 w-full rounded-xl" />
+                  </div>
+                ) : !extendedRequisition?.items || extendedRequisition.items.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <Package className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="text-muted-foreground">No {isService ? 'service' : ''} items found for this RFQ</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-xl overflow-hidden dark:border-gray-700">
+                    <ScrollArea className="w-full max-h-[400px]">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10">
+                          <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                            <TableHead className="min-w-[150px] py-3.5 text-xs font-semibold uppercase tracking-wider">{isService ? 'Service' : 'Item'}</TableHead>
+                            <TableHead className="min-w-[120px] py-3.5 text-xs font-semibold uppercase tracking-wider">Description</TableHead>
+                            <TableHead className="text-center w-[80px] py-3.5 text-xs font-semibold uppercase tracking-wider">Qty</TableHead>
+                            <TableHead className="text-center w-[100px] py-3.5 text-xs font-semibold uppercase tracking-wider">Unit</TableHead>
+                            <TableHead className="min-w-[200px] py-3.5 text-xs font-semibold uppercase tracking-wider">Specifications</TableHead>
+                            <TableHead className="text-right w-[140px] py-3.5 text-xs font-semibold uppercase tracking-wider">Est. Price</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {extendedRequisition.items.map((item: any) => (
+                            <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                    {item.item_name}
+                                  </p>
+                                  {item.catalog_number && (
+                                    <p className="text-xs text-muted-foreground">
+                                      <Hash className="h-3 w-3 inline mr-0.5" />
+                                      {item.catalog_number}
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <p className="text-sm text-muted-foreground">{item.description || '—'}</p>
+                              </TableCell>
+                              <TableCell className="text-center font-medium">
+                                {parseFloat(item.quantity).toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-center text-sm text-muted-foreground">
+                                {item.unit_of_measure || (isService ? 'Service' : 'Unit')}
+                              </TableCell>
+                              <TableCell>
+                                {item.specifications ? (
+                                  <p className="text-sm text-muted-foreground max-w-[250px] line-clamp-2">
+                                    {item.specifications}
+                                  </p>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <BlurredPrice amount={item.estimated_unit_cost} showLock={true} />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="text-sm text-muted-foreground border-t pt-4">
                 <div className="flex items-center gap-2">
@@ -1035,85 +919,298 @@ export default function SupplierRFQInvitationDetailPage() {
                 </div>
               </CardFooter>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="requisition">
-            <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
+            {/* Service Details (if service) or Requisition Details */}
+            <Card className="border shadow-sm rounded-xl">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <div className={cn(
+                    "p-1.5 rounded-lg",
+                    isService ? "bg-purple-100 dark:bg-purple-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+                  )}>
+                    {isService ? (
+                      <Briefcase className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    ) : (
+                      <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    )}
                   </div>
-                  Requisition Details
+                  {isService ? 'Service Details' : 'Requisition Details'}
                 </CardTitle>
                 <CardDescription>
-                  Original requisition information for this RFQ
+                  {isService ? 'Detailed service information for this RFQ' : 'Original requisition information for this RFQ'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {extendedRequisition ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Reference Number</p>
-                      <p className="font-medium mt-0.5">{extendedRequisition.reference_number}</p>
+                  <div className="space-y-4">
+                    {/* Basic Info Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Reference</p>
+                        <p className="font-medium mt-0.5">{extendedRequisition.reference_number}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Status</p>
+                        <Badge className="mt-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                          {extendedRequisition.status_label}
+                        </Badge>
+                      </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Priority</p>
+                        <Badge className={cn(
+                          "mt-0.5 rounded-full",
+                          extendedRequisition.priority === 'high' ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" :
+                            extendedRequisition.priority === 'medium' ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" :
+                              "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                        )}>
+                          {extendedRequisition.priority_label}
+                        </Badge>
+                      </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Type</p>
+                        <p className="font-medium mt-0.5">{extendedRequisition.type_label}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Risk Level</p>
+                        <p className="font-medium mt-0.5">{extendedRequisition.risk_level_label}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Department</p>
+                        <p className="font-medium mt-0.5">{(extendedRequisition as any).department?.name || 'N/A'}</p>
+                      </div>
                     </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Status</p>
-                      <Badge className="mt-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                        {extendedRequisition.status_label}
-                      </Badge>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Priority</p>
-                      <Badge className={cn(
-                        "mt-0.5 rounded-full",
-                        extendedRequisition.priority === 'high' ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" :
-                          extendedRequisition.priority === 'medium' ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" :
-                            "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                      )}>
-                        {extendedRequisition.priority_label}
-                      </Badge>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Type</p>
-                      <p className="font-medium mt-0.5">{extendedRequisition.type_label}</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Risk Level</p>
-                      <p className="font-medium mt-0.5">{extendedRequisition.risk_level_label}</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Department</p>
-                      <p className="font-medium mt-0.5">{(extendedRequisition as any).department?.name || 'N/A'}</p>
-                    </div>
+
+                    {/* Service-Specific Details */}
+                    {isService && (
+                      <div className="space-y-3">
+                        <Separator className="my-3" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {extendedRequisition.service_category && (
+                            <InfoRow
+                              icon={Tag}
+                              label="Service Category"
+                              value={getServiceCategoryLabel(extendedRequisition.service_category)}
+                            />
+                          )}
+                          {extendedRequisition.service_scope_of_work && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={ClipboardList}
+                                label="Scope of Work"
+                                value={<ExpandableText text={extendedRequisition.service_scope_of_work} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_deliverables_expected && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={Target}
+                                label="Expected Deliverables"
+                                value={<ExpandableText text={extendedRequisition.service_deliverables_expected} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_expected_start_date && (
+                            <InfoRow
+                              icon={Calendar}
+                              label="Service Start Date"
+                              value={formatDate(extendedRequisition.service_expected_start_date)}
+                            />
+                          )}
+                          {extendedRequisition.service_expected_end_date && (
+                            <InfoRow
+                              icon={CalendarDays}
+                              label="Service End Date"
+                              value={formatDate(extendedRequisition.service_expected_end_date)}
+                            />
+                          )}
+                          {extendedRequisition.service_estimated_duration_days && (
+                            <InfoRow
+                              icon={Timer}
+                              label="Estimated Duration"
+                              value={`${extendedRequisition.service_estimated_duration_days} days`}
+                            />
+                          )}
+                          {extendedRequisition.service_requires_onsite_visit !== undefined && extendedRequisition.service_requires_onsite_visit !== null && (
+                            <InfoRow
+                              icon={MapPin}
+                              label="Requires Onsite Visit"
+                              value={extendedRequisition.service_requires_onsite_visit ? 'Yes' : 'No'}
+                              valueClassName={extendedRequisition.service_requires_onsite_visit ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}
+                            />
+                          )}
+                          {extendedRequisition.service_special_requirements && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={AlertTriangle}
+                                label="Special Requirements"
+                                value={<ExpandableText text={extendedRequisition.service_special_requirements} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_qualifications_required && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={UserCog}
+                                label="Qualifications Required"
+                                value={<ExpandableText text={extendedRequisition.service_qualifications_required} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_experience_required && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={Award}
+                                label="Experience Required"
+                                value={<ExpandableText text={extendedRequisition.service_experience_required} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_certifications_required && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={FileCheck}
+                                label="Certifications Required"
+                                value={<ExpandableText text={extendedRequisition.service_certifications_required} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_insurance_required !== undefined && extendedRequisition.service_insurance_required !== null && (
+                            <InfoRow
+                              icon={Shield}
+                              label="Insurance Required"
+                              value={extendedRequisition.service_insurance_required ? 'Yes' : 'No'}
+                              valueClassName={extendedRequisition.service_insurance_required ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}
+                            />
+                          )}
+                          {extendedRequisition.service_insurance_details && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={Shield}
+                                label="Insurance Details"
+                                value={<ExpandableText text={extendedRequisition.service_insurance_details} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.service_contract_type && (
+                            <InfoRow
+                              icon={FileSpreadsheet}
+                              label="Contract Type"
+                              value={extendedRequisition.service_contract_type.replace(/_/g, ' ')}
+                            />
+                          )}
+                          {extendedRequisition.service_contract_duration && (
+                            <InfoRow
+                              icon={Hourglass}
+                              label="Contract Duration"
+                              value={extendedRequisition.service_contract_duration}
+                            />
+                          )}
+                          {extendedRequisition.service_renewal_options && (
+                            <InfoRow
+                              icon={RotateCcw}
+                              label="Renewal Options"
+                              value={extendedRequisition.service_renewal_options}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Goods-Specific Details */}
+                    {!isService && extendedRequisition.goods_category && (
+                      <div className="space-y-3">
+                        <Separator className="my-3" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {extendedRequisition.goods_category && (
+                            <InfoRow
+                              icon={Tag}
+                              label="Goods Category"
+                              value={extendedRequisition.goods_category.replace(/_/g, ' ')}
+                            />
+                          )}
+                          {extendedRequisition.goods_warehouse_location && (
+                            <InfoRow
+                              icon={MapPin}
+                              label="Warehouse Location"
+                              value={extendedRequisition.goods_warehouse_location}
+                            />
+                          )}
+                          {extendedRequisition.goods_storage_requirements && (
+                            <InfoRow
+                              icon={Shield}
+                              label="Storage Requirements"
+                              value={extendedRequisition.goods_storage_requirements}
+                            />
+                          )}
+                          {extendedRequisition.goods_expected_delivery_date && (
+                            <InfoRow
+                              icon={Truck}
+                              label="Expected Delivery Date"
+                              value={formatDate(extendedRequisition.goods_expected_delivery_date)}
+                            />
+                          )}
+                          {extendedRequisition.goods_delivery_terms && (
+                            <InfoRow
+                              icon={FileCheck}
+                              label="Delivery Terms"
+                              value={extendedRequisition.goods_delivery_terms}
+                            />
+                          )}
+                          {extendedRequisition.goods_warranty_required !== undefined && extendedRequisition.goods_warranty_required !== null && (
+                            <InfoRow
+                              icon={Shield}
+                              label="Warranty Required"
+                              value={extendedRequisition.goods_warranty_required ? 'Yes' : 'No'}
+                              valueClassName={extendedRequisition.goods_warranty_required ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}
+                            />
+                          )}
+                          {extendedRequisition.goods_warranty_period && (
+                            <InfoRow
+                              icon={Clock}
+                              label="Warranty Period"
+                              value={extendedRequisition.goods_warranty_period}
+                            />
+                          )}
+                          {extendedRequisition.goods_specifications && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={FileText}
+                                label="Specifications"
+                                value={<ExpandableText text={extendedRequisition.goods_specifications} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.goods_quality_requirements && (
+                            <div className="col-span-2">
+                              <InfoRow
+                                icon={Award}
+                                label="Quality Requirements"
+                                value={<ExpandableText text={extendedRequisition.goods_quality_requirements} maxLines={2} />}
+                              />
+                            </div>
+                          )}
+                          {extendedRequisition.goods_installation_required !== undefined && extendedRequisition.goods_installation_required !== null && (
+                            <InfoRow
+                              icon={Construction}
+                              label="Installation Required"
+                              value={extendedRequisition.goods_installation_required ? 'Yes' : 'No'}
+                              valueClassName={extendedRequisition.goods_installation_required ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No requisition details available</p>
+                  <p className="text-muted-foreground">No details available</p>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="approvals">
-            <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                    <CheckCircle className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  Approvals Timeline
-                </CardTitle>
-                <CardDescription>Approval history for the original requisition</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ApprovalsTimeline approvals={extendedRequisition?.approvals || []} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="terms">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
+            {/* Terms & Conditions */}
+            {(quotation.delivery_terms || quotation.payment_terms || quotation.special_conditions) && (
+              <Card className="border shadow-sm rounded-xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
@@ -1122,41 +1219,43 @@ export default function SupplierRFQInvitationDetailPage() {
                     Terms & Conditions
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {quotation.delivery_terms && (
-                    <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <Truck className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Delivery Terms</p>
-                        <p className="font-medium">{quotation.delivery_terms}</p>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {quotation.delivery_terms && (
+                      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <Truck className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          <p className="text-sm text-muted-foreground">Delivery Terms</p>
+                          <p className="font-medium">{quotation.delivery_terms}</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {quotation.payment_terms && (
-                    <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Payment Terms</p>
-                        <p className="font-medium">{quotation.payment_terms}</p>
+                    )}
+                    {quotation.payment_terms && (
+                      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          <p className="text-sm text-muted-foreground">Payment Terms</p>
+                          <p className="font-medium">{quotation.payment_terms}</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {quotation.special_conditions && (
-                    <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <Shield className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Special Conditions</p>
-                        <p className="font-medium">{quotation.special_conditions}</p>
+                    )}
+                    {quotation.special_conditions && (
+                      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700 md:col-span-2">
+                        <Shield className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          <p className="text-sm text-muted-foreground">Special Conditions</p>
+                          <p className="font-medium">{quotation.special_conditions}</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {!quotation.delivery_terms && !quotation.payment_terms && !quotation.special_conditions && (
-                    <p className="text-muted-foreground text-center py-4">No additional terms specified</p>
-                  )}
+                    )}
+                  </div>
                 </CardContent>
               </Card>
+            )}
 
-              <Card className="border shadow-sm rounded-xl transition-all duration-300 hover:shadow-md">
+            {/* Instructions */}
+            {quotation.instructions && (
+              <Card className="border shadow-sm rounded-xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -1166,19 +1265,142 @@ export default function SupplierRFQInvitationDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {quotation.instructions ? (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{quotation.instructions}</p>
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-8">No special instructions</p>
-                  )}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{quotation.instructions}</p>
+                  </div>
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+            )}
+          </div>
 
+          {/* Right Column - Sidebar */}
+          <div className="space-y-6">
+            {/* RFQ Information */}
+            <Card className="border shadow-sm rounded-xl">
+              <CardHeader className="pb-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                <CardTitle className="text-base font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                  <Info className="h-4 w-4 text-gray-500" />
+                  RFQ Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
+                  <StatusBadge status={quotation.status} isExpired={isExpired} />
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Issue Date</span>
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">{formatDate(quotation.issue_date)}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Closing Date</span>
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">{formatDate(quotation.closing_date)}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Time Remaining</span>
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">{timeRemaining.text}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Requisition Type</span>
+                  <Badge className={cn(
+                    "rounded-full px-3 py-1",
+                    isService
+                      ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+                  )}>
+                    {isService ? 'Services (LSO)' : 'Goods (LPO)'}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Total Items</span>
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">{extendedRequisition?.items?.length || 0}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Generated By */}
+            <Card className="border shadow-sm rounded-xl">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <AvatarComponent className="h-12 w-12 border border-gray-200 dark:border-gray-700">
+                    <AvatarFallback className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base font-semibold">
+                      {getInitials(generatedByName)}
+                    </AvatarFallback>
+                  </AvatarComponent>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Generated By</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">{generatedByName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{getUserEmail(quotation.generated_by)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <Card className="border shadow-sm rounded-xl">
+              <CardHeader className="pb-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                <CardTitle className="text-base font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                  <Rocket className="h-4 w-4 text-gray-500" />
+                  Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {canRespond && (
+                  <Button
+                    className="w-full gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl h-11 shadow-lg shadow-emerald-600/20"
+                    onClick={handleSubmitQuotation}
+                  >
+                    <Send className="h-4 w-4" />
+                    Submit Quotation
+                  </Button>
+                )}
+
+                {canRespond && !hasDeclined && !hasResponded && (
+                  <Button
+                    className="w-full gap-2 rounded-xl h-11 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                    variant="outline"
+                    onClick={handleDecline}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Decline RFQ
+                  </Button>
+                )}
+
+                {hasResponded && (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 text-center">
+                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1" />
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Quotation Submitted</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">You have already submitted your quotation</p>
+                  </div>
+                )}
+
+                {hasDeclined && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 text-center">
+                    <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mx-auto mb-1" />
+                    <p className="text-sm font-medium text-red-700 dark:text-red-300">RFQ Declined</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">You have declined this RFQ</p>
+                  </div>
+                )}
+
+                {!canRespond && !hasResponded && !hasDeclined && quotation.status === 'sent' && isExpired && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-center">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mx-auto mb-1" />
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-300">RFQ Expired</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">The closing date has passed</p>
+                  </div>
+                )}
+
+                {!canRespond && !hasResponded && !hasDeclined && quotation.status !== 'sent' && !isExpired && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 text-center">
+                    <Clock className="h-5 w-5 text-gray-500 dark:text-gray-400 mx-auto mb-1" />
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Not Accepting Responses</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">This RFQ is not open for bidding</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
       <AlertDialog open={showDeclineDialog} onOpenChange={setShowDeclineDialog}>

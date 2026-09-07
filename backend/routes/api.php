@@ -522,6 +522,7 @@ Route::prefix('v1')->group(function () {
       Route::put('/branding', [CompanyProfileController::class, 'updateBranding']);
       Route::get('/social-links', [CompanyProfileController::class, 'getSocialLinks']);
       Route::put('/social-links', [CompanyProfileController::class, 'updateSocialLinks']);
+
       Route::post('/upload-logo', [CompanyProfileController::class, 'uploadLogo']);
       Route::get('/exists', [CompanyProfileController::class, 'exists']);
     });
@@ -531,11 +532,22 @@ Route::prefix('v1')->group(function () {
     // GOODS RECEIVED ROUTES
     // --------------------------------------------
     Route::prefix('goods-received')->group(function () {
+      // CRUD Operations
       Route::get('/', [GoodsReceivedController::class, 'index']);
       Route::post('/', [GoodsReceivedController::class, 'store']);
       Route::get('/{id}', [GoodsReceivedController::class, 'show']);
       Route::get('/{id}/summary', [GoodsReceivedController::class, 'summary']);
+
+      // PDF Generation Routes
       Route::get('/{id}/pdf', [GoodsReceivedController::class, 'pdf']);
+      Route::post('/{id}/track-download', [GoodsReceivedController::class, 'trackDownload']);
+      Route::get('/{id}/download-verified', [GoodsReceivedController::class, 'downloadVerifiedPDF']);
+      Route::get('/{id}/download-draft', [GoodsReceivedController::class, 'downloadDraftPDF']);
+      Route::get('/{id}/preview-pdf', [GoodsReceivedController::class, 'previewPDF']);
+      Route::get('/{id}/base64-pdf', [GoodsReceivedController::class, 'getBase64PDF']);
+      Route::post('/{id}/save-pdf', [GoodsReceivedController::class, 'savePDF']);
+
+      // Action Routes
       Route::post('/{id}/submit', [GoodsReceivedController::class, 'submit']);
       Route::post('/{id}/approve', [GoodsReceivedController::class, 'approve']);
       Route::post('/{id}/reject', [GoodsReceivedController::class, 'reject']);
@@ -546,15 +558,35 @@ Route::prefix('v1')->group(function () {
     // SERVICE ACKNOWLEDGMENT ROUTES
     // --------------------------------------------
     Route::prefix('service-acknowledgments')->group(function () {
+      // CRUD Operations
       Route::get('/', [GoodsReceivedController::class, 'index']);
       Route::post('/', [GoodsReceivedController::class, 'store']);
       Route::get('/{id}', [GoodsReceivedController::class, 'show']);
       Route::get('/{id}/summary', [GoodsReceivedController::class, 'sanSummary']);
+
+      // PDF Generation Routes
       Route::get('/{id}/pdf', [GoodsReceivedController::class, 'pdfSan']);
+      Route::post('/{id}/track-download', [GoodsReceivedController::class, 'trackDownloadSan']);
+      Route::get('/{id}/download-verified', [GoodsReceivedController::class, 'downloadVerifiedSanPDF']);
+      Route::get('/{id}/download-draft', [GoodsReceivedController::class, 'downloadDraftSanPDF']);
+      Route::get('/{id}/preview-pdf', [GoodsReceivedController::class, 'previewSanPDF']);
+      Route::get('/{id}/base64-pdf', [GoodsReceivedController::class, 'getBase64SanPDF']);
+      Route::post('/{id}/save-pdf', [GoodsReceivedController::class, 'saveSanPDF']);
+
+      // Action Routes
       Route::post('/{id}/submit', [GoodsReceivedController::class, 'submitSan']);
       Route::post('/{id}/approve', [GoodsReceivedController::class, 'approveSan']);
       Route::post('/{id}/reject', [GoodsReceivedController::class, 'rejectSan']);
       Route::post('/{id}/rate', [GoodsReceivedController::class, 'rateService']);
+    });
+
+    // --------------------------------------------
+    // COMPLETED GRN/SAN ROUTES (For History/Tracking)
+    // --------------------------------------------
+    Route::prefix('delivery')->group(function () {
+      Route::get('/completed-grns', [GoodsReceivedController::class, 'completedGrns']);
+      Route::get('/completed-sans', [GoodsReceivedController::class, 'completedSans']);
+      Route::get('/pending-approval', [GoodsReceivedController::class, 'pendingApproval']);
     });
 
     // --------------------------------------------
@@ -848,6 +880,11 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/force-decline', [RequisitionController::class, 'forceDecline']);
         Route::post('/{id}/force-return', [RequisitionController::class, 'forceReturn']);
         Route::post('/{id}/assign-approver', [RequisitionController::class, 'assignApprover']);
+        Route::get('/services', [RequisitionController::class, 'services']);
+        Route::get('/goods', [RequisitionController::class, 'goods']);
+        Route::get('/for-lpo', [RequisitionController::class, 'forLpo']);
+        Route::get('/for-lso', [RequisitionController::class, 'forLso']);
+        Route::get('/by-service-category/{category}', [RequisitionController::class, 'byServiceCategory']);
       });
 
       // Admin Approval Management

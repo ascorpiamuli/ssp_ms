@@ -212,4 +212,44 @@ class GoodsReceivedRepository extends BaseRepository implements GoodsReceivedRep
     }
     return $item->delete();
   }
+
+
+
+  // Add these methods to app/Services/Procurement/Repositories/GoodsReceivedRepository.php
+
+  /**
+   * Get all GRNs (no status filter).
+   */
+  public function getAllGrns(): array
+  {
+    return GoodsReceivedNote::with([
+      'requisition',
+      'purchaseOrder',
+      'receivedBy',
+      'inspectedBy',
+      'hodApprovedBy',
+      'principalApprovedBy',
+      'items'
+    ])
+      ->orderBy('created_at', 'desc')
+      ->get()
+      ->toArray();
+  }
+
+  /**
+   * Get all SANs (no status filter).
+   */
+  public function getAllSans(): array
+  {
+    return ServiceAcknowledgmentNote::with([
+      'requisition',
+      'purchaseOrder',
+      'acknowledgedBy',
+      'hodApprovedBy',
+      'principalApprovedBy'
+    ])
+      ->orderBy('created_at', 'desc')
+      ->get()
+      ->toArray();
+  }
 }

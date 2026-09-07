@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 
 class SupplierQuotation extends Model
 {
@@ -57,7 +58,6 @@ class SupplierQuotation extends Model
     'evaluation_notes',
     'evaluation_score',
     'metadata',
-    // ✅ New tracking fields
     'download_count',
     'last_downloaded_at',
     'pdf_storage_path',
@@ -91,7 +91,6 @@ class SupplierQuotation extends Model
     'evaluation_score' => 'integer',
     'metadata' => 'json',
     'deleted_at' => 'datetime',
-    // ✅ New tracking casts
     'download_count' => 'integer',
     'last_downloaded_at' => 'datetime',
     'view_count' => 'integer',
@@ -120,43 +119,80 @@ class SupplierQuotation extends Model
   // RELATIONSHIPS
   // ============================================
 
+  /**
+   * Get the quotation request that this quotation belongs to.
+   */
   public function quotationRequest(): BelongsTo
   {
     return $this->belongsTo(QuotationRequest::class, 'quotation_request_id');
   }
 
+  /**
+   * ✅ Get the requisition through the quotation request.
+   * This is a has-one-through relationship.
+   */
+  public function requisition(): HasOneThrough
+  {
+    return $this->hasOneThrough(
+      Requisition::class,
+      QuotationRequest::class,
+      'id', // Foreign key on QuotationRequest table
+      'id', // Foreign key on Requisition table
+      'quotation_request_id', // Local key on SupplierQuotation table
+      'requisition_id' // Local key on QuotationRequest table
+    );
+  }
+
+  /**
+   * Get the supplier (user) that submitted this quotation.
+   */
   public function supplier(): BelongsTo
   {
     return $this->belongsTo(User::class, 'supplier_id');
   }
 
+  /**
+   * Get the user who verified this quotation.
+   */
   public function verifiedBy(): BelongsTo
   {
     return $this->belongsTo(User::class, 'verified_by');
   }
 
+  /**
+   * Get the user who evaluated this quotation.
+   */
   public function evaluatedBy(): BelongsTo
   {
     return $this->belongsTo(User::class, 'evaluated_by');
   }
 
+  /**
+   * Get the items for this quotation.
+   */
   public function items(): HasMany
   {
     return $this->hasMany(SupplierQuotationItem::class, 'supplier_quotation_id');
   }
 
+  /**
+   * Get the purchase orders created from this quotation.
+   */
   public function purchaseOrders(): HasMany
   {
     return $this->hasMany(PurchaseOrder::class, 'supplier_quotation_id');
   }
 
+  /**
+   * Get the verifications for this quotation.
+   */
   public function verifications(): HasMany
   {
     return $this->hasMany(QuotationVerification::class, 'supplier_quotation_id');
   }
 
   /**
-   * ✅ Relationship to the uploaded PDF file
+   * ✅ Relationship to the uploaded PDF file.
    */
   public function pdfUpload(): BelongsTo
   {
@@ -299,21 +335,11 @@ class SupplierQuotation extends Model
     return $query->where('submission_method', $method);
   }
 
-  // ============================================
-  // TRACKING SCOPES
-  // ============================================
-
-  /**
-   * Scope to get most downloaded quotations
-   */
   public function scopeMostDownloaded($query, int $limit = 10)
   {
     return $query->orderBy('download_count', 'desc')->limit($limit);
   }
 
-  /**
-   * Scope to get recently downloaded quotations
-   */
   public function scopeRecentlyDownloaded($query, int $limit = 10)
   {
     return $query->whereNotNull('last_downloaded_at')
@@ -321,9 +347,6 @@ class SupplierQuotation extends Model
       ->limit($limit);
   }
 
-  /**
-   * Scope to get quotations that have never been downloaded
-   */
   public function scopeNeverDownloaded($query)
   {
     return $query->where(function ($q) {
@@ -386,17 +409,11 @@ class SupplierQuotation extends Model
     return $this->submission_method === 'manual';
   }
 
-  /**
-   * ✅ Check if the quotation has a PDF uploaded
-   */
   public function hasPDF(): bool
   {
     return !empty($this->pdf_storage_path) || !empty($this->pdf_upload_id);
   }
 
-  /**
-   * ✅ Get the PDF URL
-   */
   public function getPDFUrl(): ?string
   {
     if ($this->pdf_upload_id && $this->pdfUpload) {
@@ -410,9 +427,6 @@ class SupplierQuotation extends Model
     return null;
   }
 
-  /**
-   * ✅ Increment download count and update last_downloaded_at
-   */
   public function incrementDownloadCount(): self
   {
     $this->increment('download_count');
@@ -422,9 +436,6 @@ class SupplierQuotation extends Model
     return $this;
   }
 
-  /**
-   * ✅ Increment view count and update last_viewed_at
-   */
   public function incrementViewCount(): self
   {
     $this->increment('view_count');
@@ -434,9 +445,6 @@ class SupplierQuotation extends Model
     return $this;
   }
 
-  /**
-   * ✅ Increment shared count and update last_shared_at
-   */
   public function incrementSharedCount(): self
   {
     $this->increment('shared_count');

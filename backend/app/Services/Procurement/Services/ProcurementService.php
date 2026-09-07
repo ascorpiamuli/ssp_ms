@@ -11,6 +11,7 @@ use App\Models\QuotationRequest;
 use App\Models\SupplierQuotation;
 use App\Models\PurchaseOrder;
 use App\Models\GoodsReceivedNote;
+use App\Models\ServiceAcknowledgmentNote;
 use App\Models\Invoice;
 use App\Models\PaymentVoucher;
 use App\Services\Procurement\Base\BaseService;
@@ -36,7 +37,7 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
     'awaiting_quotations' => 30,
     'evaluating_quotations' => 45,
     'supplier_selected' => 60,
-    'goods_receipt_pending' => 75,
+    'delivery_pending' => 75,
     'invoicing_pending' => 85,
     'payment_pending' => 95,
     'completed' => 100,
@@ -51,7 +52,7 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
     'awaiting_quotations',
     'evaluating_quotations',
     'supplier_selected',
-    'goods_receipt_pending',
+    'delivery_pending',
     'invoicing_pending',
     'payment_pending',
     'completed',
@@ -121,7 +122,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         ])
       ]);
 
-      // Audit: Log procurement start
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
@@ -213,19 +213,40 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
     // Check if supplier is selected
     $isSupplierSelected = $this->isSupplierSelected($requisition);
 
-    // Check for PO/LPO
+    // Check for PO/LPO/LSO
     $po = PurchaseOrder::where('requisition_id', $requisition->id)->first();
 
-    // Check for GRN
-    $grn = $po ? GoodsReceivedNote::where('purchase_order_id', $po->id)->first() : null;
+    // ✅ FIX: Check for BOTH GRN and SAN based on PO type
+    $grn = null;
+    $san = null;
+    $deliveryExists = false;
+
+    if ($po) {
+      // Get GRN for LPO
+      $grn = GoodsReceivedNote::where('purchase_order_id', $po->id)->first();
+
+      // Get SAN for LSO
+      $san = ServiceAcknowledgmentNote::where('purchase_order_id', $po->id)->first();
+
+      // Delivery exists if either GRN or SAN exists
+      $deliveryExists = $grn !== null || $san !== null;
+    }
 
     // Check for Invoice
-    $invoice = $grn ? Invoice::where('goods_received_note_id', $grn->id)->first() : null;
+    $invoice = null;
+    if ($grn) {
+      $invoice = Invoice::where('goods_received_note_id', $grn->id)->first();
+    } elseif ($san) {
+      $invoice = Invoice::where('service_acknowledgment_note_id', $san->id)->first();
+    }
 
     // Check for Payment
     $payment = $invoice ? PaymentVoucher::where('invoice_id', $invoice->id)->first() : null;
 
-    // Determine statuses with dependencies
+    // Determine PO type (LPO or LSO)
+    $poType = $po ? $po->type : null;
+    $isService = $poType === 'lso';
+
     return [
       'quotation' => [
         'status' => $this->getQuotationStepStatus($qtn),
@@ -249,12 +270,14 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         'created_at' => $po ? $po->created_at->toDateTimeString() : null,
       ],
       'delivery' => [
-        'status' => $this->getDeliveryStepStatus($po, $grn),
+        'status' => $this->getDeliveryStepStatus($po, $grn, $san, $deliveryExists),
         'grn_number' => $grn ? $grn->grn_number : null,
-        'created_at' => $grn ? $grn->created_at->toDateTimeString() : null,
+        'san_number' => $san ? $san->san_number : null,
+        'delivery_type' => $isService ? 'san' : 'grn',
+        'created_at' => $grn ? $grn->created_at->toDateTimeString() : ($san ? $san->created_at->toDateTimeString() : null),
       ],
       'invoicing' => [
-        'status' => $this->getInvoicingStepStatus($grn, $invoice),
+        'status' => $this->getInvoicingStepStatus($grn, $san, $invoice),
         'invoice_number' => $invoice ? $invoice->invoice_number : null,
         'created_at' => $invoice ? $invoice->created_at->toDateTimeString() : null,
       ],
@@ -291,27 +314,22 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
    */
   protected function getSupplierQuotationsStepStatus($qtn, $supplierQuotes): string
   {
-    // Cannot have supplier quotations if no QTN
     if (!$qtn) {
       return 'waiting';
     }
 
-    // If QTN is not sent, quotations cannot be received
     if (!in_array($qtn->status, ['sent', 'responded', 'closed'])) {
       return 'waiting';
     }
 
-    // If QTN is closed and there are quotes, they are complete
     if ($qtn->status === 'closed' && $supplierQuotes->isNotEmpty()) {
       return 'completed';
     }
 
-    // If there are quotes, they are in progress
     if ($supplierQuotes->isNotEmpty()) {
       return 'in_progress';
     }
 
-    // QTN sent but no quotes yet
     if ($qtn->status === 'sent') {
       return 'in_progress';
     }
@@ -324,22 +342,18 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
    */
   protected function getSupplierSelectionStepStatus($qtn, $supplierQuotes, bool $isSupplierSelected): string
   {
-    // Cannot select supplier if no QTN
     if (!$qtn) {
       return 'waiting';
     }
 
-    // Cannot select supplier if QTN is not closed
     if ($qtn->status !== 'closed') {
       return 'waiting';
     }
 
-    // Cannot select supplier if no quotes received
     if ($supplierQuotes->isEmpty()) {
       return 'waiting';
     }
 
-    // Check if quotes are reviewed
     $allReviewed = $supplierQuotes->every(function ($quote) {
       return $quote->verification_status === 'verified' || $quote->status === 'evaluated';
     });
@@ -348,7 +362,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       return 'in_progress';
     }
 
-    // Now selection can happen
     if ($isSupplierSelected) {
       return 'completed';
     }
@@ -361,7 +374,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
    */
   protected function getPoStepStatus($po, bool $isSupplierSelected): string
   {
-    // Cannot have PO if supplier not selected
     if (!$isSupplierSelected) {
       return 'waiting';
     }
@@ -374,16 +386,17 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
   }
 
   /**
-   * Get delivery step status - DEPENDENT on PO
+   * ✅ FIXED: Get delivery step status - supports BOTH GRN and SAN
    */
-  protected function getDeliveryStepStatus($po, $grn): string
+  protected function getDeliveryStepStatus($po, $grn, $san, bool $deliveryExists): string
   {
     // Cannot have delivery if no PO
     if (!$po) {
       return 'waiting';
     }
 
-    if ($grn) {
+    // Check if delivery exists (either GRN or SAN)
+    if ($deliveryExists) {
       return 'completed';
     }
 
@@ -391,12 +404,12 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
   }
 
   /**
-   * Get invoicing step status - DEPENDENT on delivery
+   * ✅ FIXED: Get invoicing step status - supports BOTH GRN and SAN
    */
-  protected function getInvoicingStepStatus($grn, $invoice): string
+  protected function getInvoicingStepStatus($grn, $san, $invoice): string
   {
-    // Cannot have invoice if no GRN
-    if (!$grn) {
+    // Cannot have invoice if no delivery (GRN or SAN)
+    if (!$grn && !$san) {
       return 'waiting';
     }
 
@@ -425,7 +438,7 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
   }
 
   /**
-   * Determine overall procurement status based on step statuses
+   * ✅ FIXED: Determine overall procurement status based on step statuses
    */
   protected function determineProcurementStatus(Requisition $requisition, array $steps): string
   {
@@ -444,37 +457,40 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       return 'completed';
     }
 
-    // Check each stage in order
-    if ($statuses['quotation'] === 'in_progress') {
-      return 'quotation_in_progress';
+    // 🔥 FIX: Check stages in order, but don't stop prematurely
+
+    // Check if delivery is completed
+    if ($statuses['delivery'] === 'completed') {
+      // Check invoicing
+      if ($statuses['invoicing'] === 'completed') {
+        // Check payment
+        if ($statuses['payment'] === 'in_progress') {
+          return 'payment_pending';
+        }
+        return 'invoicing_pending';
+      }
+      return 'delivery_pending';
     }
 
-    if ($statuses['supplier_quotations'] === 'in_progress') {
-      return $steps['supplier_quotations']['quotes_received'] > 0 ? 'evaluating_quotations' : 'awaiting_quotations';
+    // If PO is generated but delivery not started
+    if ($statuses['po_generation'] === 'completed') {
+      return 'delivery_pending';
     }
 
-    if ($statuses['supplier_selection'] === 'in_progress') {
-      return 'evaluating_quotations';
-    }
-
+    // Supplier selected but PO not generated yet
     if ($statuses['supplier_selection'] === 'completed') {
       return 'supplier_selected';
     }
 
-    if ($statuses['po_generation'] === 'in_progress') {
-      return 'goods_receipt_pending';
+    // Supplier quotations in progress
+    if ($statuses['supplier_quotations'] === 'in_progress') {
+      $quotesReceived = $steps['supplier_quotations']['quotes_received'] ?? 0;
+      return $quotesReceived > 0 ? 'evaluating_quotations' : 'awaiting_quotations';
     }
 
-    if ($statuses['delivery'] === 'in_progress') {
-      return 'goods_receipt_pending';
-    }
-
-    if ($statuses['invoicing'] === 'in_progress') {
-      return 'invoicing_pending';
-    }
-
-    if ($statuses['payment'] === 'in_progress') {
-      return 'payment_pending';
+    // Quotation in progress
+    if ($statuses['quotation'] === 'in_progress') {
+      return 'quotation_in_progress';
     }
 
     // Check if supplier is selected but no PO yet
@@ -499,7 +515,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
 
     return 'initiated';
   }
-
   /**
    * Check if supplier is selected
    */
@@ -508,7 +523,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
     $metadata = $requisition->metadata ?? [];
     $procurementMeta = $metadata['procurement'] ?? [];
 
-    // Check metadata flags
     if (isset($procurementMeta['supplier_selected']) && $procurementMeta['supplier_selected'] === true) {
       return true;
     }
@@ -517,7 +531,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       return true;
     }
 
-    // Check if there's a PO (means supplier was selected)
     $po = PurchaseOrder::where('requisition_id', $requisition->id)->first();
     if ($po) {
       return true;
@@ -566,10 +579,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       throw ProcurementException::procurementNotStarted();
     }
 
-    // Check if all steps are complete
     $status = $this->getProcurementStatus($requisitionId);
     if ($status['current_status'] !== 'completed') {
-      // Check if payment is complete
       $payment = PaymentVoucher::where('requisition_id', $requisition->id)
         ->where('status', 'paid')
         ->first();
@@ -597,7 +608,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         'status' => 'procurement_completed',
       ]);
 
-      // Audit: Log procurement completion
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
@@ -652,7 +662,6 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
         'is_procurement_created' => false,
       ]);
 
-      // Audit: Log procurement cancellation
       $this->auditLogService->logModelUpdated(
         $requisition,
         $oldValues,
@@ -719,12 +728,10 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       'completion_rate' => 0,
     ];
 
-    // Calculate time to start
     if ($requisition->procurement_created_at && $requisition->submitted_at) {
       $metrics['time_to_start'] = $requisition->submitted_at->diffInHours($requisition->procurement_created_at);
     }
 
-    // Calculate time to complete
     $metadata = $requisition->metadata ?? [];
     if (isset($metadata['procurement']['completed_at'])) {
       $completedAt = $metadata['procurement']['completed_at'];
@@ -736,10 +743,8 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       }
     }
 
-    // Get approvals count
     $metrics['total_approvals'] = $requisition->approvals()->count();
 
-    // Get quote count and financial metrics
     $qtn = QuotationRequest::where('requisition_id', $requisition->id)->first();
     if ($qtn) {
       $submittedQuotes = $qtn->supplierQuotations()
@@ -748,9 +753,7 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
 
       $metrics['total_quotes'] = $submittedQuotes->count();
 
-      // Get lowest quote and calculate savings
       if ($submittedQuotes->isNotEmpty()) {
-        // ✅ FIX: Use sortBy() on Collection instead of orderBy()
         $lowest = $submittedQuotes->sortBy('net_amount')->first();
 
         if ($lowest && $requisition->total_amount) {
@@ -762,29 +765,23 @@ class ProcurementService extends BaseService implements ProcurementServiceInterf
       }
     }
 
-    // Calculate completion rate based on stage
     $status = $this->getProcurementStatus($requisitionId);
     $currentStatus = $status['current_status'];
 
-    // Use stage-based completion rate
     if ($currentStatus === 'completed') {
       $metrics['completion_rate'] = 100;
     } elseif ($currentStatus === 'not_started') {
       $metrics['completion_rate'] = 0;
     } else {
-      // Calculate based on stage weights
       $metrics['completion_rate'] = self::STAGE_WEIGHTS[$currentStatus] ?? 0;
 
-      // Add progress within the current stage if applicable
       if ($currentStatus === 'supplier_selected') {
-        // Check if PO is generated (adds progress)
         $po = PurchaseOrder::where('requisition_id', $requisition->id)->first();
         if ($po) {
-          $metrics['completion_rate'] += 5; // Extra progress for PO
+          $metrics['completion_rate'] += 5;
         }
       }
 
-      // Ensure we don't exceed 100
       $metrics['completion_rate'] = min($metrics['completion_rate'], 100);
     }
 

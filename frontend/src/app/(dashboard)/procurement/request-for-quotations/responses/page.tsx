@@ -34,6 +34,10 @@ import {
   Download,
   Star,
   MoreHorizontal,
+  Briefcase,
+  Tag,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,6 +157,14 @@ const formatCurrency = (amount: number | string | null | undefined): string => {
   }).format(num);
 };
 
+// Safe parse amount - handles both string and number
+const parseAmount = (value: any): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseFloat(value) || 0;
+  return 0;
+};
+
 const getStatusLabel = (status: string): string => {
   return STATUS_LABELS[status] || status;
 };
@@ -258,6 +270,11 @@ const ResponseDetailsDialog = ({ open, onOpenChange, rfq }: ResponseDetailsDialo
               <div className="space-y-3">
                 {rfq.supplier_quotations.map((sq: any) => {
                   const supplierName = getSupplierName(sq);
+                  // Use safe parse for amount
+                  const netAmount = parseAmount(sq.net_amount);
+                  const totalAmount = parseAmount(sq.total_amount);
+                  const amount = netAmount > 0 ? netAmount : totalAmount;
+
                   return (
                     <div
                       key={sq.id}
@@ -300,7 +317,7 @@ const ResponseDetailsDialog = ({ open, onOpenChange, rfq }: ResponseDetailsDialo
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatCurrency(sq.net_amount)}
+                            {formatCurrency(amount)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Submitted {formatDate(sq.submission_date)}
@@ -379,6 +396,34 @@ const ResponsesTable = ({
     return `Supplier #${sq.supplier_id}`;
   };
 
+  // Get best bid with proper amount using safe parse
+  const getBestBid = (rfq: QuotationRequest): { amount: number; supplier: string } | null => {
+    if (!rfq.supplier_quotations || rfq.supplier_quotations.length === 0) {
+      return null;
+    }
+    const sorted = [...rfq.supplier_quotations].sort((a: any, b: any) => {
+      const aNet = parseAmount(a.net_amount);
+      const aTotal = parseAmount(a.total_amount);
+      const aAmount = aNet > 0 ? aNet : aTotal;
+
+      const bNet = parseAmount(b.net_amount);
+      const bTotal = parseAmount(b.total_amount);
+      const bAmount = bNet > 0 ? bNet : bTotal;
+
+      return aAmount - bAmount;
+    });
+    if (sorted.length === 0) return null;
+    const best = sorted[0];
+    const netAmount = parseAmount(best.net_amount);
+    const totalAmount = parseAmount(best.total_amount);
+    const amount = netAmount > 0 ? netAmount : totalAmount;
+
+    return {
+      amount,
+      supplier: getSupplierName(best),
+    };
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -417,41 +462,30 @@ const ResponsesTable = ({
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-transparent">
-                <TableHead className="w-[80px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">#</TableHead>
-                <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                <TableHead className="w-[60px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">#</TableHead>
+                <TableHead className="min-w-[160px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <FileText className="h-3.5 w-3.5" />
                     RFQ Number
                   </div>
                 </TableHead>
-                <TableHead className="min-w-[200px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Title</TableHead>
+                <TableHead className="min-w-[180px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Title</TableHead>
+                <TableHead className="min-w-[100px] py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">Type</TableHead>
                 <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">Responses</TableHead>
                 <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-right">Best Bid</TableHead>
+                <TableHead className="py-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rfqs.map((rfq, index) => {
                 const hasResponses = (rfq.response_count || 0) > 0;
-                const canEvaluate = rfq.status === 'responded' && hasResponses;
-                const canSelect = rfq.status === 'evaluating' && hasResponses;
-                const canVerify = rfq.status === 'responded' && hasResponses;
                 const status = rfq.status || 'draft';
                 const statusColor = statusColorMap[status] || 'gray';
                 const statusLabel = getStatusLabel(status);
 
-                // Calculate best bid with supplier name
-                let bestBid: number | null = null;
-                let bestBidSupplier = 'Unknown';
-                if (rfq.supplier_quotations && rfq.supplier_quotations.length > 0) {
-                  const sorted = [...rfq.supplier_quotations].sort((a: any, b: any) =>
-                    parseFloat(a.net_amount || 0) - parseFloat(b.net_amount || 0)
-                  );
-                  if (sorted.length > 0) {
-                    bestBid = parseFloat(String(sorted[0].net_amount || 0));
-                    bestBidSupplier = getSupplierName(sorted[0]);
-                  }
-                }
+                const bestBid = getBestBid(rfq);
                 const responseRate = rfq.response_rate || 0;
+                const isService = rfq.requisition?.requisition_type === 'services';
 
                 return (
                   <TableRow
@@ -476,7 +510,6 @@ const ResponsesTable = ({
                             offsetX="8px"
                             offsetY="24px"
                             animated={true}
-
                           />
                         </div>
                         {/* Number */}
@@ -504,10 +537,10 @@ const ResponsesTable = ({
                     </TableCell>
                     <TableCell className="py-4">
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[220px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {rfq.title}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate max-w-[220px]">
+                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                           {rfq.description || 'No description'}
                         </p>
                         {rfq.requisition && (
@@ -522,6 +555,23 @@ const ResponsesTable = ({
                           </Badge>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="py-4 text-center">
+                      <Badge className={cn(
+                        "rounded-full px-3 py-1 text-xs font-medium",
+                        isService
+                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+                      )}>
+                        <div className="flex items-center gap-1.5">
+                          {isService ? (
+                            <Briefcase className="h-3 w-3" />
+                          ) : (
+                            <Package className="h-3 w-3" />
+                          )}
+                          {isService ? 'LSO' : 'LPO'}
+                        </div>
+                      </Badge>
                     </TableCell>
                     <TableCell className="py-4">
                       <div className="flex flex-col items-center gap-1">
@@ -567,18 +617,21 @@ const ResponsesTable = ({
                       </div>
                     </TableCell>
                     <TableCell className="text-right py-4">
-                      {bestBid !== null ? (
+                      {bestBid && bestBid.amount > 0 ? (
                         <div>
                           <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatCurrency(bestBid)}
+                            {formatCurrency(bestBid.amount)}
                           </p>
                           <p className="text-xs text-muted-foreground truncate max-w-[120px] ml-auto">
-                            {bestBidSupplier}
+                            {bestBid.supplier}
                           </p>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center py-4">
+                      <StatusBadge status={rfq.status} />
                     </TableCell>
                   </TableRow>
                 );
@@ -635,6 +688,7 @@ export default function RFQResponsesPage() {
   const [filters, setFilters] = useState<{
     search?: string;
     status?: string;
+    type?: string;
   }>({});
 
   // Fetch RFQs with responses
@@ -648,10 +702,25 @@ export default function RFQResponsesPage() {
   // Extract data
   const quotations = useMemo(() => {
     const raw = Array.isArray(quotationsData) ? quotationsData : quotationsData?.data || [];
-    return raw.filter((q: QuotationRequest) =>
+    let filtered = raw.filter((q: QuotationRequest) =>
       q.status === 'responded' || q.status === 'evaluating' || q.status === 'closed'
     );
-  }, [quotationsData]);
+
+    // Filter by type if specified
+    if (filters.type) {
+      if (filters.type === 'services') {
+        filtered = filtered.filter((q: QuotationRequest) =>
+          q.requisition?.requisition_type === 'services'
+        );
+      } else if (filters.type === 'goods') {
+        filtered = filtered.filter((q: QuotationRequest) =>
+          q.requisition?.requisition_type === 'goods'
+        );
+      }
+    }
+
+    return filtered;
+  }, [quotationsData, filters.type]);
 
   const pagination = useMemo(() => {
     return quotationsData?.meta || { total: 0, current_page: 1, last_page: 1 };
@@ -663,7 +732,6 @@ export default function RFQResponsesPage() {
     const responded = quotations.filter(q => q.status === 'responded').length;
     const evaluating = quotations.filter(q => q.status === 'evaluating').length;
     const closed = quotations.filter(q => q.status === 'closed').length;
-    const sent = quotations.filter(q => q.status === 'sent').length;
 
     const totalResponses = quotations.reduce((sum, q) => sum + (q.response_count || 0), 0);
     const avgResponseRate = total > 0 ? Math.round(quotations.reduce((sum, q) => sum + (q.response_rate || 0), 0) / total) : 0;
@@ -675,6 +743,9 @@ export default function RFQResponsesPage() {
       return sum;
     }, 0);
 
+    const servicesCount = quotations.filter(q => q.requisition?.requisition_type === 'services').length;
+    const goodsCount = quotations.filter(q => q.requisition?.requisition_type === 'goods').length;
+
     return [
       {
         label: "Total RFQs",
@@ -685,12 +756,20 @@ export default function RFQResponsesPage() {
         subtitle: "All RFQs",
       },
       {
-        label: "Sent",
-        value: sent,
-        icon: Send,
-        tagLabel: "SENT",
+        label: "Services",
+        value: servicesCount,
+        icon: Briefcase,
+        tagLabel: "LSO",
+        tagColor: "purple",
+        subtitle: "Service requisitions",
+      },
+      {
+        label: "Goods",
+        value: goodsCount,
+        icon: Package,
+        tagLabel: "LPO",
         tagColor: "blue",
-        subtitle: "Sent to suppliers",
+        subtitle: "Goods requisitions",
       },
       {
         label: "Responded",
@@ -723,14 +802,6 @@ export default function RFQResponsesPage() {
         tagLabel: "ACCEPTED",
         tagColor: "emerald",
         subtitle: "Accepted bids",
-      },
-      {
-        label: "Closed",
-        value: closed,
-        icon: CheckCircle,
-        tagLabel: "CLOSED",
-        tagColor: "teal",
-        subtitle: "Completed RFQs",
       },
       {
         label: "Avg Response",
@@ -816,7 +887,7 @@ export default function RFQResponsesPage() {
         </div>
       }
     >
-      {/* Stats Cards - Using the flexible component */}
+      {/* Stats Cards */}
       <StatsCards
         stats={statsItems}
         isLoading={isLoading}
@@ -864,11 +935,24 @@ export default function RFQResponsesPage() {
                 />
               </div>
               <Select
+                value={filters.type || 'all'}
+                onValueChange={(value) => handleFilterChange('type', value === 'all' ? undefined : value)}
+              >
+                <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 w-full sm:w-[160px]">
+                  <SelectValue placeholder="Requisition Type" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="goods">Goods (LPO)</SelectItem>
+                  <SelectItem value="services">Services (LSO)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
                 value={filters.status || 'all'}
                 onValueChange={(value) => handleFilterChange('status', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 w-full sm:w-[180px]">
-                  <SelectValue placeholder="All Statuses" />
+                <SelectTrigger className="h-11 rounded-xl dark:bg-gray-900 dark:border-gray-700 w-full sm:w-[160px]">
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-900 dark:border-gray-700">
                   <SelectItem value="all">All Statuses</SelectItem>

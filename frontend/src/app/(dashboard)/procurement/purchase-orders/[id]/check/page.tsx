@@ -97,7 +97,6 @@ import { format } from 'date-fns';
 import { PageTemplate } from '@/components/dashboard/PageTemplate';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from '@/components/ui/toast-context';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Table as UITable,
@@ -295,47 +294,59 @@ interface ItemComparisonProps {
 }
 
 const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onToggle }: ItemComparisonProps) => {
-  const itemNameMatch = poItem?.item_name?.toLowerCase() === requisitionItem?.item_name?.toLowerCase();
-  const quantityMatch = poItem?.quantity === requisitionItem?.quantity;
-  const unitMatch = poItem?.unit_of_measure === requisitionItem?.unit_of_measure;
+  // ✅ Check if this is a supplier-added item (no requisition_item_id)
+  const isSupplierAdded = !poItem?.requisition_item_id || !requisitionItem;
+
+  // For supplier-added items, we consider them as "match" by default
+  const itemNameMatch = isSupplierAdded ? true : poItem?.item_name?.toLowerCase() === requisitionItem?.item_name?.toLowerCase();
+  const quantityMatch = isSupplierAdded ? true : poItem?.quantity === requisitionItem?.quantity;
+  const unitMatch = isSupplierAdded ? true : poItem?.unit_of_measure === requisitionItem?.unit_of_measure;
 
   const estimatedPrice = requisitionItem?.estimated_unit_cost || 0;
   const actualPrice = poItem?.unit_price || 0;
   const priceDifference = actualPrice - estimatedPrice;
   const pricePercentChange = estimatedPrice > 0 ? (priceDifference / estimatedPrice) * 100 : 0;
 
-  const isItemMatch = itemNameMatch && quantityMatch && unitMatch;
-  const isQuantityMatch = quantityMatch;
-  const isNameMatch = itemNameMatch;
-  const isUnitMatch = unitMatch;
-
   let statusBadge;
   let statusColor;
   let statusIcon;
+  let statusDescription;
 
-  if (!requisitionItem) {
+  if (isSupplierAdded) {
+    // ✅ Supplier-added items get a special purple badge
+    statusBadge = 'Supplier Added';
+    statusColor = 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
+    statusIcon = <Sparkles className="h-4 w-4" />;
+    statusDescription = 'Item added by supplier during quotation';
+  } else if (!requisitionItem) {
     statusBadge = 'Not in Requisition';
     statusColor = 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
     statusIcon = <XCircle className="h-4 w-4" />;
-  } else if (!isNameMatch) {
+    statusDescription = 'Item not found in the original requisition';
+  } else if (!itemNameMatch) {
     statusBadge = 'Name Mismatch';
     statusColor = 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
     statusIcon = <AlertCircle className="h-4 w-4" />;
-  } else if (!isQuantityMatch) {
+    statusDescription = 'Item name does not match requisition';
+  } else if (!quantityMatch) {
     statusBadge = 'Quantity Mismatch';
     statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
     statusIcon = <AlertCircle className="h-4 w-4" />;
-  } else if (!isUnitMatch) {
+    statusDescription = 'Quantity differs from requisition';
+  } else if (!unitMatch) {
     statusBadge = 'Unit Mismatch';
     statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
     statusIcon = <AlertCircle className="h-4 w-4" />;
+    statusDescription = 'Unit of measure differs from requisition';
   } else {
     statusBadge = 'Verified';
     statusColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
     statusIcon = <CheckCircle className="h-4 w-4" />;
+    statusDescription = 'Matches requisition';
   }
 
-  const isMatch = statusBadge === 'Verified';
+  // ✅ Supplier-added items are considered acceptable for HOD check
+  const isAcceptable = isSupplierAdded || statusBadge === 'Verified';
 
   return (
     <motion.div
@@ -344,11 +355,13 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
       transition={{ delay: index * 0.05 }}
       className={cn(
         "rounded-xl border transition-all duration-300 overflow-hidden",
-        isMatch
-          ? "bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/50 hover:border-emerald-300 dark:hover:border-emerald-700"
-          : statusBadge === 'Name Mismatch' || statusBadge === 'Not in Requisition'
-            ? "bg-rose-50/30 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-800/50 hover:border-rose-300 dark:hover:border-rose-700"
-            : "bg-amber-50/30 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/50 hover:border-amber-300 dark:hover:border-amber-700"
+        isSupplierAdded
+          ? "bg-purple-50/30 dark:bg-purple-950/20 border-purple-200/50 dark:border-purple-800/50 hover:border-purple-300 dark:hover:border-purple-700"
+          : statusBadge === 'Verified'
+            ? "bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/50 hover:border-emerald-300 dark:hover:border-emerald-700"
+            : statusBadge === 'Name Mismatch' || statusBadge === 'Not in Requisition'
+              ? "bg-rose-50/30 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-800/50 hover:border-rose-300 dark:hover:border-rose-700"
+              : "bg-amber-50/30 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/50 hover:border-amber-300 dark:hover:border-amber-700"
       )}
     >
       <div
@@ -356,7 +369,12 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
         onClick={onToggle}
       >
         <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-sm">
+          <div className={cn(
+            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm",
+            isSupplierAdded ? "bg-gradient-to-br from-purple-400 to-purple-600" :
+              statusBadge === 'Verified' ? "bg-gradient-to-br from-emerald-400 to-emerald-600" :
+                "bg-gradient-to-br from-amber-400 to-amber-600"
+          )}>
             {index + 1}
           </div>
 
@@ -369,7 +387,19 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                 {statusIcon}
                 <span className="ml-1">{statusBadge}</span>
               </Badge>
+              {isSupplierAdded && (
+                <Badge className="text-[10px] rounded-full bg-purple-200/50 text-purple-800 dark:bg-purple-800/30 dark:text-purple-300 border-0">
+                  <Sparkles className="h-3 w-3 mr-0.5" />
+                  New Item
+                </Badge>
+              )}
             </div>
+
+            {isSupplierAdded && (
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
+                This item was added by the supplier during quotation
+              </p>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 text-sm">
               <div>
@@ -377,12 +407,13 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={cn(
                     "font-semibold",
-                    isQuantityMatch && requisitionItem ? "text-emerald-600 dark:text-emerald-400" :
-                      requisitionItem ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
+                    isSupplierAdded ? "text-purple-600 dark:text-purple-400" :
+                      quantityMatch && requisitionItem ? "text-emerald-600 dark:text-emerald-400" :
+                        requisitionItem ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
                   )}>
                     {poItem?.formatted_quantity || poItem?.quantity || '—'}
                   </span>
-                  {requisitionItem && (
+                  {requisitionItem && !isSupplierAdded && (
                     <>
                       <ArrowRight className="h-3 w-3 text-muted-foreground" />
                       <span className="text-muted-foreground text-sm">
@@ -390,7 +421,10 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                       </span>
                     </>
                   )}
-                  {!requisitionItem && (
+                  {isSupplierAdded && (
+                    <span className="text-purple-500 text-xs font-medium">(Supplier added)</span>
+                  )}
+                  {!requisitionItem && !isSupplierAdded && (
                     <span className="text-rose-500 text-xs font-medium">(Not requested)</span>
                   )}
                 </div>
@@ -401,12 +435,13 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={cn(
                     "font-semibold",
-                    isUnitMatch && requisitionItem ? "text-emerald-600 dark:text-emerald-400" :
-                      requisitionItem ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
+                    isSupplierAdded ? "text-purple-600 dark:text-purple-400" :
+                      unitMatch && requisitionItem ? "text-emerald-600 dark:text-emerald-400" :
+                        requisitionItem ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
                   )}>
                     {poItem?.unit_of_measure || '—'}
                   </span>
-                  {requisitionItem && (
+                  {requisitionItem && !isSupplierAdded && (
                     <>
                       <ArrowRight className="h-3 w-3 text-muted-foreground" />
                       <span className="text-muted-foreground text-sm">
@@ -420,17 +455,22 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Est. Price (Req)</p>
                 <p className="font-semibold text-gray-700 dark:text-gray-300 mt-0.5">
-                  {requisitionItem ? formatCurrency(requisitionItem.estimated_unit_cost) : '—'}
+                  {requisitionItem ? formatCurrency(requisitionItem.estimated_unit_cost) :
+                    isSupplierAdded ? '—' : '—'}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Actual Price (PO)</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  <span className={cn(
+                    "font-semibold",
+                    isSupplierAdded ? "text-purple-600 dark:text-purple-400" :
+                      "text-blue-600 dark:text-blue-400"
+                  )}>
                     {poItem ? formatCurrency(poItem.unit_price) : '—'}
                   </span>
-                  {requisitionItem && priceDifference !== 0 && (
+                  {requisitionItem && !isSupplierAdded && priceDifference !== 0 && (
                     <span className={cn(
                       "text-xs font-medium px-1.5 py-0.5 rounded-full",
                       priceDifference < 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -442,7 +482,7 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
               </div>
             </div>
 
-            {requisitionItem && priceDifference !== 0 && (
+            {requisitionItem && !isSupplierAdded && priceDifference !== 0 && (
               <div className={cn(
                 "mt-2 text-xs p-2 rounded-lg flex items-center gap-2",
                 priceDifference < 0 ? "bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300" :
@@ -455,10 +495,24 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                 </span>
               </div>
             )}
+
+            {isSupplierAdded && (
+              <div className="mt-2 text-xs p-2 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>
+                  This item was not in the original requisition but is required for the complete solution.
+                  Please verify the item and price.
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex-shrink-0 flex items-center gap-2">
-            {isMatch ? (
+            {isSupplierAdded ? (
+              <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+              </div>
+            ) : statusBadge === 'Verified' ? (
               <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
               </div>
@@ -508,6 +562,14 @@ const ItemComparison = ({ poItem, requisitionItem, index, expanded = false, onTo
                   <p className="text-sm font-medium mt-0.5">{poItem?.tax_rate || 0}%</p>
                 </div>
               </div>
+              {isSupplierAdded && (
+                <div className="mt-3 p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200/50 dark:border-purple-800/50">
+                  <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                    <Info className="h-3.5 w-3.5" />
+                    <span>This item was added by the supplier. It has been approved as part of the quotation.</span>
+                  </p>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -524,7 +586,6 @@ export default function PurchaseOrderCheckPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { success, error } = useToast();
   const { user } = useAuthContext();
 
   // State
@@ -533,7 +594,7 @@ export default function PurchaseOrderCheckPage() {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'table'>('list');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'mismatch' | 'missing'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'supplier_added' | 'mismatch' | 'missing'>('all');
 
   // Hooks
   const { data: po, isLoading, refetch } = usePurchaseOrder(id);
@@ -541,7 +602,7 @@ export default function PurchaseOrderCheckPage() {
   const { data: suppliersData } = useAllSuppliers();
   const checkMutation = useCheckPurchaseOrder();
 
-  // User department - FIXED: Using type assertion to access properties safely
+  // User department
   const userDepartmentId = useMemo(() => {
     const userAny = user as any;
     return userAny?.effective_department?.id ||
@@ -572,10 +633,21 @@ export default function PurchaseOrderCheckPage() {
 
   const supplierName = getSupplierName(supplier || po?.supplier);
 
-  // Comparison stats
+  // ✅ FIXED: Comparison stats - supplier-added items count as verified
   const comparisonStats = useMemo(() => {
     if (!po?.items || !po?.requisition?.items) {
-      return { total: 0, verified: 0, quantityMismatch: 0, nameMismatch: 0, missing: 0, matchRate: 0 };
+      return {
+        total: 0,
+        verified: 0,
+        quantityMismatch: 0,
+        nameMismatch: 0,
+        missing: 0,
+        supplierAdded: 0,
+        matchRate: 0,
+        canCheck: false,
+        hasIssues: false,
+        message: ''
+      };
     }
 
     const poItems = po.items || [];
@@ -586,8 +658,16 @@ export default function PurchaseOrderCheckPage() {
     let quantityMismatch = 0;
     let nameMismatch = 0;
     let missing = 0;
+    let supplierAdded = 0;
 
     poItems.forEach((item: any) => {
+      // ✅ Supplier-added items - no requisition_item_id
+      if (!item.requisition_item_id) {
+        supplierAdded++;
+        verified++; // ✅ Count as verified for approval
+        return;
+      }
+
       const reqItem = reqItems.find((ri: any) => ri.id === item.requisition_item_id);
       if (!reqItem) {
         missing++;
@@ -606,13 +686,37 @@ export default function PurchaseOrderCheckPage() {
       }
     });
 
+    const totalAcceptable = verified;
+    const totalItems = total > 0 ? total : 1;
+
+    // ✅ Can check if there are no missing items and no name mismatches
+    const canCheck = missing === 0 && nameMismatch === 0;
+    const hasIssues = !canCheck;
+
+    let message = '';
+    if (missing > 0 && nameMismatch > 0) {
+      message = `${missing} items not found in requisition and ${nameMismatch} items have name mismatches.`;
+    } else if (missing > 0) {
+      message = `${missing} items are not in the requisition. These items must be added to the requisition first.`;
+    } else if (nameMismatch > 0) {
+      message = `${nameMismatch} items have name mismatches. Please correct the item names.`;
+    } else if (quantityMismatch > 0) {
+      message = `${quantityMismatch} items have quantity mismatches. Please review the quantities.`;
+    } else {
+      message = 'All items are verified. You can proceed with checking.';
+    }
+
     return {
       total,
       verified,
       quantityMismatch,
       nameMismatch,
       missing,
-      matchRate: total > 0 ? Math.round((verified / total) * 100) : 0,
+      supplierAdded,
+      matchRate: Math.round((totalAcceptable / totalItems) * 100),
+      canCheck,
+      hasIssues,
+      message
     };
   }, [po]);
 
@@ -666,13 +770,22 @@ export default function PurchaseOrderCheckPage() {
     // Filter by status
     if (filterStatus !== 'all') {
       items = items.filter((item: any) => {
+        const isSupplierAddedItem = !item.requisition_item_id;
+
+        if (filterStatus === 'supplier_added') {
+          return isSupplierAddedItem;
+        }
+
         const reqItem = po.requisition?.items?.find((ri: any) => ri.id === item.requisition_item_id);
         if (!reqItem) return filterStatus === 'missing';
+
         const nameMatch = item.item_name?.toLowerCase() === reqItem.item_name?.toLowerCase();
         const qtyMatch = item.quantity === reqItem.quantity;
         const unitMatch = item.unit_of_measure === reqItem.unit_of_measure;
-        if (filterStatus === 'verified') return nameMatch && qtyMatch && unitMatch;
-        if (filterStatus === 'mismatch') return !nameMatch || !qtyMatch || !unitMatch;
+
+        if (filterStatus === 'verified') return nameMatch && qtyMatch && unitMatch && !isSupplierAddedItem;
+        if (filterStatus === 'mismatch') return (!nameMatch || !qtyMatch || !unitMatch) && !isSupplierAddedItem;
+
         return true;
       });
     }
@@ -684,7 +797,9 @@ export default function PurchaseOrderCheckPage() {
   const handleBack = () => router.push('/procurement/purchase-orders/pending-check');
 
   const handleCheck = () => {
-    setShowCheckDialog(true);
+    if (comparisonStats.canCheck) {
+      setShowCheckDialog(true);
+    }
   };
 
   const handleConfirmCheck = () => {
@@ -693,7 +808,6 @@ export default function PurchaseOrderCheckPage() {
         { id: po.id, comment: checkComment || undefined },
         {
           onSuccess: () => {
-            success(`Purchase Order ${po.po_number} checked successfully`);
             setShowCheckDialog(false);
             router.push('/procurement/purchase-orders/pending-check');
           }
@@ -725,9 +839,6 @@ export default function PurchaseOrderCheckPage() {
   // Check permissions
   const poDepartmentId = po?.requisition?.department_id;
   const canCheck = userDepartmentId === poDepartmentId;
-
-  // Determine if all items match
-  const allItemsMatch = comparisonStats.verified === comparisonStats.total && comparisonStats.total > 0;
 
   // Loading state
   if (isLoading) {
@@ -931,6 +1042,22 @@ export default function PurchaseOrderCheckPage() {
             </Tooltip>
           </TooltipProvider>
 
+          {/* ✅ Show supplier-added items count */}
+          {comparisonStats.supplierAdded > 0 && (
+            <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 rounded-full px-3 py-1.5">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              {comparisonStats.supplierAdded} Supplier-Added Items
+            </Badge>
+          )}
+
+          {/* ✅ Show missing items warning */}
+          {comparisonStats.missing > 0 && (
+            <Badge className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 rounded-full px-3 py-1.5">
+              <XCircle className="h-3.5 w-3.5 mr-1.5" />
+              {comparisonStats.missing} Missing Items
+            </Badge>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -942,16 +1069,21 @@ export default function PurchaseOrderCheckPage() {
           </Button>
 
           <Button
-            className="h-10 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 transition-all duration-300"
+            className={cn(
+              "h-10 rounded-xl transition-all duration-300",
+              comparisonStats.canCheck
+                ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50"
+                : "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+            )}
             onClick={handleCheck}
-            disabled={checkMutation.isPending || !allItemsMatch}
+            disabled={checkMutation.isPending || !comparisonStats.canCheck}
           >
             {checkMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <UserCheck className="h-4 w-4 mr-2" />
             )}
-            {allItemsMatch ? 'Check & Approve' : 'Fix Issues First'}
+            {comparisonStats.canCheck ? 'Check & Approve' : 'Fix Issues First'}
           </Button>
         </div>
       }
@@ -975,7 +1107,11 @@ export default function PurchaseOrderCheckPage() {
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white text-lg">Review Summary</h3>
                     <p className="text-sm text-muted-foreground">
-                      {comparisonStats.total} items • {comparisonStats.verified} verified • {comparisonStats.quantityMismatch} quantity mismatches • {comparisonStats.nameMismatch} name mismatches • {comparisonStats.missing} missing
+                      {comparisonStats.total} items • {comparisonStats.verified} verified •
+                      {comparisonStats.supplierAdded > 0 && ` ${comparisonStats.supplierAdded} supplier-added`}
+                      {comparisonStats.quantityMismatch > 0 && ` • ${comparisonStats.quantityMismatch} qty mismatches`}
+                      {comparisonStats.nameMismatch > 0 && ` • ${comparisonStats.nameMismatch} name mismatches`}
+                      {comparisonStats.missing > 0 && ` • ${comparisonStats.missing} missing`}
                     </p>
                   </div>
                 </div>
@@ -1048,24 +1184,55 @@ export default function PurchaseOrderCheckPage() {
         </motion.div>
 
         {/* ============================================ */}
-        {/* STATUS ALERTS */}
+        {/* STATUS ALERTS - ENHANCED */}
         {/* ============================================ */}
         <AnimatePresence>
-          {allItemsMatch && (
+          {comparisonStats.canCheck && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
             >
-              <Alert className="rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/50 shadow-sm">
+              <Alert className={cn(
+                "rounded-xl shadow-sm",
+                comparisonStats.supplierAdded > 0
+                  ? "bg-purple-50/80 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50"
+                  : "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/50"
+              )}>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
-                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    comparisonStats.supplierAdded > 0
+                      ? "bg-purple-100 dark:bg-purple-900/40"
+                      : "bg-emerald-100 dark:bg-emerald-900/40"
+                  )}>
+                    {comparisonStats.supplierAdded > 0 ? (
+                      <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    ) : (
+                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    )}
                   </div>
                   <div className="flex-1">
-                    <AlertTitle className="text-emerald-700 dark:text-emerald-300 font-semibold">All Items Verified</AlertTitle>
-                    <AlertDescription className="text-emerald-600 dark:text-emerald-400">
-                      All {comparisonStats.total} items in this purchase order match the requisition. You can proceed to check and approve this order.
+                    <AlertTitle className={cn(
+                      "font-semibold",
+                      comparisonStats.supplierAdded > 0
+                        ? "text-purple-700 dark:text-purple-300"
+                        : "text-emerald-700 dark:text-emerald-300"
+                    )}>
+                      {comparisonStats.supplierAdded > 0
+                        ? `${comparisonStats.supplierAdded} Supplier-Added Items Included`
+                        : 'All Items Verified'
+                      }
+                    </AlertTitle>
+                    <AlertDescription className={cn(
+                      comparisonStats.supplierAdded > 0
+                        ? "text-purple-600 dark:text-purple-400"
+                        : "text-emerald-600 dark:text-emerald-400"
+                    )}>
+                      {comparisonStats.supplierAdded > 0
+                        ? `${comparisonStats.supplierAdded} item(s) were added by the supplier during quotation. These items have been reviewed and accepted as part of the complete solution.`
+                        : `All ${comparisonStats.total} items in this purchase order match the requisition. You can proceed to check and approve this order.`
+                      }
                     </AlertDescription>
                   </div>
                 </div>
@@ -1073,7 +1240,7 @@ export default function PurchaseOrderCheckPage() {
             </motion.div>
           )}
 
-          {!allItemsMatch && comparisonStats.total > 0 && (
+          {!comparisonStats.canCheck && comparisonStats.total > 0 && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1087,10 +1254,11 @@ export default function PurchaseOrderCheckPage() {
                   <div className="flex-1">
                     <AlertTitle className="text-amber-700 dark:text-amber-300 font-semibold">Items Need Review</AlertTitle>
                     <AlertDescription className="text-amber-600 dark:text-amber-400">
-                      {comparisonStats.quantityMismatch > 0 && `${comparisonStats.quantityMismatch} item(s) have quantity mismatches. `}
-                      {comparisonStats.nameMismatch > 0 && `${comparisonStats.nameMismatch} item(s) have name mismatches. `}
                       {comparisonStats.missing > 0 && `${comparisonStats.missing} item(s) are not in the requisition. `}
+                      {comparisonStats.nameMismatch > 0 && `${comparisonStats.nameMismatch} item(s) have name mismatches. `}
+                      {comparisonStats.quantityMismatch > 0 && `${comparisonStats.quantityMismatch} item(s) have quantity mismatches. `}
                       Please review and correct these issues before checking.
+                      <strong>Note:</strong> Supplier-added items are automatically approved.
                     </AlertDescription>
                   </div>
                 </div>
@@ -1100,7 +1268,7 @@ export default function PurchaseOrderCheckPage() {
         </AnimatePresence>
 
         {/* ============================================ */}
-        {/* PO HEADER CARD - ENHANCED */}
+        {/* PO HEADER CARD */}
         {/* ============================================ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -1178,7 +1346,7 @@ export default function PurchaseOrderCheckPage() {
         </motion.div>
 
         {/* ============================================ */}
-        {/* SUPPLIER CARD - ENHANCED */}
+        {/* SUPPLIER CARD */}
         {/* ============================================ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -1362,7 +1530,7 @@ export default function PurchaseOrderCheckPage() {
                     )}
                   </div>
 
-                  {/* Filter */}
+                  {/* Filter - Updated with supplier_added option */}
                   <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
                     <SelectTrigger className="h-8 w-[130px] text-xs rounded-lg bg-muted/30 border-0">
                       <SelectValue placeholder="Filter" />
@@ -1370,6 +1538,7 @@ export default function PurchaseOrderCheckPage() {
                     <SelectContent>
                       <SelectItem value="all" className="text-xs">All items</SelectItem>
                       <SelectItem value="verified" className="text-xs">Verified</SelectItem>
+                      <SelectItem value="supplier_added" className="text-xs">Supplier Added</SelectItem>
                       <SelectItem value="mismatch" className="text-xs">Mismatch</SelectItem>
                       <SelectItem value="missing" className="text-xs">Missing</SelectItem>
                     </SelectContent>
@@ -1377,11 +1546,15 @@ export default function PurchaseOrderCheckPage() {
                 </div>
               </div>
 
-              {/* Legend */}
+              {/* Legend - Updated with supplier added */}
               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   <span>Verified</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                  <span>Supplier Added</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
@@ -1440,9 +1613,10 @@ export default function PurchaseOrderCheckPage() {
                       {filteredItems.map((item: any, index: number) => {
                         const reqItem = po.requisition?.items?.find(
                           (ri: any) => ri.id === item.requisition_item_id);
-                        const nameMatch = item.item_name?.toLowerCase() === reqItem?.item_name?.toLowerCase();
-                        const qtyMatch = item.quantity === reqItem?.quantity;
-                        const unitMatch = item.unit_of_measure === reqItem?.unit_of_measure;
+                        const isSupplierAdded = !item.requisition_item_id;
+                        const nameMatch = isSupplierAdded ? true : item.item_name?.toLowerCase() === reqItem?.item_name?.toLowerCase();
+                        const qtyMatch = isSupplierAdded ? true : item.quantity === reqItem?.quantity;
+                        const unitMatch = isSupplierAdded ? true : item.unit_of_measure === reqItem?.unit_of_measure;
                         const isMatch = nameMatch && qtyMatch && unitMatch;
 
                         return (
@@ -1453,11 +1627,13 @@ export default function PurchaseOrderCheckPage() {
                             transition={{ delay: index * 0.03 }}
                             className={cn(
                               "p-4 rounded-xl border transition-all duration-300",
-                              isMatch
-                                ? "bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/50"
-                                : !reqItem || !nameMatch
-                                  ? "bg-rose-50/30 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-800/50"
-                                  : "bg-amber-50/30 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/50"
+                              isSupplierAdded
+                                ? "bg-purple-50/30 dark:bg-purple-950/20 border-purple-200/50 dark:border-purple-800/50"
+                                : isMatch
+                                  ? "bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/50"
+                                  : !reqItem || !nameMatch
+                                    ? "bg-rose-50/30 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-800/50"
+                                    : "bg-amber-50/30 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/50"
                             )}
                           >
                             <div className="flex items-start justify-between">
@@ -1467,12 +1643,20 @@ export default function PurchaseOrderCheckPage() {
                                   {item.item_name}
                                 </h4>
                               </div>
-                              {isMatch ? (
+                              {isSupplierAdded ? (
+                                <Sparkles className="h-4 w-4 text-purple-500" />
+                              ) : isMatch ? (
                                 <CheckCircle className="h-4 w-4 text-emerald-500" />
                               ) : (
                                 <XCircle className="h-4 w-4 text-rose-500" />
                               )}
                             </div>
+                            {isSupplierAdded && (
+                              <Badge className="mt-1 text-[10px] rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                <Sparkles className="h-3 w-3 mr-0.5" />
+                                Supplier Added
+                              </Badge>
+                            )}
                             <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
                               <div>
                                 <p className="text-muted-foreground">Qty</p>
@@ -1491,7 +1675,7 @@ export default function PurchaseOrderCheckPage() {
                                 <p className="font-medium">{formatCurrency((item.unit_price || 0) * (item.quantity || 0))}</p>
                               </div>
                             </div>
-                            {reqItem && (
+                            {reqItem && !isSupplierAdded && (
                               <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-gray-700/50 text-xs text-muted-foreground">
                                 <p>Req: {reqItem.quantity} × {formatCurrency(reqItem.estimated_unit_cost)}</p>
                               </div>
@@ -1524,14 +1708,19 @@ export default function PurchaseOrderCheckPage() {
                             const reqItem = po.requisition?.items?.find(
                               (ri: any) => ri.id === item.requisition_item_id
                             );
-                            const nameMatch = item.item_name?.toLowerCase() === reqItem?.item_name?.toLowerCase();
-                            const qtyMatch = item.quantity === reqItem?.quantity;
-                            const unitMatch = item.unit_of_measure === reqItem?.unit_of_measure;
+                            const isSupplierAdded = !item.requisition_item_id;
+                            const nameMatch = isSupplierAdded ? true : item.item_name?.toLowerCase() === reqItem?.item_name?.toLowerCase();
+                            const qtyMatch = isSupplierAdded ? true : item.quantity === reqItem?.quantity;
+                            const unitMatch = isSupplierAdded ? true : item.unit_of_measure === reqItem?.unit_of_measure;
                             const isMatch = nameMatch && qtyMatch && unitMatch;
 
                             let statusText = 'Verified';
                             let statusColor = 'text-emerald-600 dark:text-emerald-400';
-                            if (!reqItem) {
+
+                            if (isSupplierAdded) {
+                              statusText = 'Supplier Added';
+                              statusColor = 'text-purple-600 dark:text-purple-400';
+                            } else if (!reqItem) {
                               statusText = 'Missing';
                               statusColor = 'text-rose-600 dark:text-rose-400';
                             } else if (!nameMatch) {
@@ -1544,18 +1733,19 @@ export default function PurchaseOrderCheckPage() {
 
                             return (
                               <TableRow key={item.id} className={cn(
-                                isMatch ? "bg-emerald-50/20 dark:bg-emerald-950/10" : "bg-amber-50/20 dark:bg-amber-950/10"
+                                isSupplierAdded ? "bg-purple-50/20 dark:bg-purple-950/10" :
+                                  isMatch ? "bg-emerald-50/20 dark:bg-emerald-950/10" : "bg-amber-50/20 dark:bg-amber-950/10"
                               )}>
                                 <TableCell className="text-center text-xs text-muted-foreground font-medium">{index + 1}</TableCell>
                                 <TableCell className="font-medium">{item.item_name}</TableCell>
                                 <TableCell className="text-center">{item.quantity}</TableCell>
-                                <TableCell className="text-center">{reqItem?.quantity || '—'}</TableCell>
+                                <TableCell className="text-center">{isSupplierAdded ? '—' : (reqItem?.quantity || '—')}</TableCell>
                                 <TableCell className="text-center">{item.unit_of_measure || '—'}</TableCell>
                                 <TableCell className="text-right font-medium text-blue-600 dark:text-blue-400">
                                   {formatCurrency(item.unit_price)}
                                 </TableCell>
                                 <TableCell className="text-right text-muted-foreground">
-                                  {reqItem ? formatCurrency(reqItem.estimated_unit_cost) : '—'}
+                                  {isSupplierAdded ? '—' : (reqItem ? formatCurrency(reqItem.estimated_unit_cost) : '—')}
                                 </TableCell>
                                 <TableCell className="text-right font-medium">
                                   {formatCurrency((item.unit_price || 0) * (item.quantity || 0))}
@@ -1585,6 +1775,12 @@ export default function PurchaseOrderCheckPage() {
                   <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full">
                     {comparisonStats.verified} verified
                   </Badge>
+                  {comparisonStats.supplierAdded > 0 && (
+                    <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      {comparisonStats.supplierAdded} added
+                    </Badge>
+                  )}
                   <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full">
                     {comparisonStats.quantityMismatch + comparisonStats.nameMismatch} mismatches
                   </Badge>
@@ -1671,7 +1867,7 @@ export default function PurchaseOrderCheckPage() {
         )}
 
         {/* ============================================ */}
-        {/* COST SUMMARY - ENHANCED */}
+        {/* COST SUMMARY */}
         {/* ============================================ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -1793,6 +1989,13 @@ export default function PurchaseOrderCheckPage() {
                 <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(po?.total_amount)}</p>
               </div>
             </div>
+
+            {comparisonStats.supplierAdded > 0 && (
+              <div className="flex items-center gap-2 p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl text-xs text-purple-700 dark:text-purple-300">
+                <Sparkles className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                <span>{comparisonStats.supplierAdded} supplier-added items are included and approved.</span>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">Comment (Optional)</Label>

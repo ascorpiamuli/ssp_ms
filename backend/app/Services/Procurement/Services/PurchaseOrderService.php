@@ -34,242 +34,277 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
   ) {
     parent::__construct();
   }
+public function generatePurchaseOrder(PurchaseOrderDTO $dto): PurchaseOrder
+{
+  Log::info('[PurchaseOrderService] generatePurchaseOrder - START', [
+    'requisition_id' => $dto->requisitionId,
+    'type' => $dto->type,
+    'title' => $dto->title,
+    'items_count' => count($dto->items ?? []),
+  ]);
 
-  /**
-   * Generate a purchase order from a requisition
-   */
-  public function generatePurchaseOrder(PurchaseOrderDTO $dto): PurchaseOrder
-  {
-    Log::info('[PurchaseOrderService] generatePurchaseOrder - START', [
-      'requisition_id' => $dto->requisitionId,
-      'type' => $dto->type,
-      'title' => $dto->title,
+  $requisition = Requisition::with(['items', 'supplier'])->find($dto->requisitionId);
+
+  if (!$requisition) {
+    Log::error('[PurchaseOrderService] Requisition not found', [
+      'requisition_id' => $dto->requisitionId
     ]);
+    throw PurchaseOrderException::requisitionNotFound($dto->requisitionId);
+  }
 
-    $requisition = Requisition::with(['items', 'supplier'])->find($dto->requisitionId);
+  Log::info('[PurchaseOrderService] Requisition found', [
+    'requisition_id' => $requisition->id,
+    'reference_number' => $requisition->reference_number ?? $requisition->id,
+    'supplier_id' => $requisition->supplier_id,
+    'requisition_items_count' => $requisition->items->count(),
+  ]);
 
-    if (!$requisition) {
-      Log::error('[PurchaseOrderService] Requisition not found', [
-        'requisition_id' => $dto->requisitionId
-      ]);
-      throw PurchaseOrderException::requisitionNotFound($dto->requisitionId);
-    }
-
-    Log::info('[PurchaseOrderService] Requisition found', [
-      'requisition_id' => $requisition->id,
-      'reference_number' => $requisition->reference_number ?? $requisition->id,
-      'supplier_id' => $requisition->supplier_id,
-      'items_count' => $requisition->items->count(),
+  if (!$requisition->supplier_id) {
+    Log::error('[PurchaseOrderService] No supplier selected for requisition', [
+      'requisition_id' => $requisition->id
     ]);
+    throw PurchaseOrderException::noSupplierSelected();
+  }
 
-    if (!$requisition->supplier_id) {
-      Log::error('[PurchaseOrderService] No supplier selected for requisition', [
-        'requisition_id' => $requisition->id
-      ]);
-      throw PurchaseOrderException::noSupplierSelected();
-    }
+  $supplierId = $requisition->supplier_id;
 
-    $supplierId = $requisition->supplier_id;
-
-    $supplier = Supplier::find($supplierId);
-    if (!$supplier) {
-      Log::error('[PurchaseOrderService] Supplier not found', [
-        'supplier_id' => $supplierId,
-      ]);
-      throw new \Exception("Supplier with ID {$supplierId} not found");
-    }
-
-    Log::info('[PurchaseOrderService] Supplier verified', [
+  $supplier = Supplier::find($supplierId);
+  if (!$supplier) {
+    Log::error('[PurchaseOrderService] Supplier not found', [
       'supplier_id' => $supplierId,
-      'supplier_name' => $supplier->company_name ?? $supplier->name,
+    ]);
+    throw new \Exception("Supplier with ID {$supplierId} not found");
+  }
+
+  Log::info('[PurchaseOrderService] Supplier verified', [
+    'supplier_id' => $supplierId,
+    'supplier_name' => $supplier->company_name ?? $supplier->name,
+  ]);
+
+  $existing = PurchaseOrder::where('requisition_id', $requisition->id)
+    ->whereNotIn('status', ['cancelled', 'closed', 'completed'])
+    ->first();
+
+  if ($existing) {
+    Log::warning('[PurchaseOrderService] PO already exists for requisition', [
+      'requisition_id' => $requisition->id,
+      'existing_po_id' => $existing->id,
+      'existing_po_number' => $existing->po_number,
+    ]);
+    throw PurchaseOrderException::poAlreadyExists();
+  }
+
+  $userId = $this->getCurrentUserId();
+  if (!$userId) {
+    Log::error('[PurchaseOrderService] No authenticated user found');
+    throw new \Exception('User must be authenticated to create a purchase order');
+  }
+
+  Log::info('[PurchaseOrderService] User authenticated', [
+    'user_id' => $userId,
+  ]);
+
+  return $this->transaction(function () use ($requisition, $dto, $userId, $supplierId) {
+    $metadata = $requisition->metadata ?? [];
+    $selectedQuotationId = $metadata['procurement']['selected_quotation_id'] ??
+      $metadata['selected_quotation_id'] ??
+      $dto->supplier_quotation_id ??
+      null;
+
+    Log::info('[PurchaseOrderService] Looking for selected quotation', [
+      'selected_quotation_id' => $selectedQuotationId,
     ]);
 
-    $existing = PurchaseOrder::where('requisition_id', $requisition->id)
-      ->whereNotIn('status', ['cancelled', 'closed', 'completed'])
-      ->first();
+    $quotation = null;
+    if ($selectedQuotationId) {
+      $quotation = SupplierQuotation::with(['items', 'supplier'])
+        ->where('id', $selectedQuotationId)
+        ->first();
 
-    if ($existing) {
-      Log::warning('[PurchaseOrderService] PO already exists for requisition', [
-        'requisition_id' => $requisition->id,
-        'existing_po_id' => $existing->id,
-        'existing_po_number' => $existing->po_number,
-      ]);
-      throw PurchaseOrderException::poAlreadyExists();
+      if ($quotation) {
+        Log::info('[PurchaseOrderService] Quotation found', [
+          'quotation_id' => $quotation->id,
+          'quotation_number' => $quotation->quotation_number,
+          'quotation_items_count' => $quotation->items->count(),
+        ]);
+      } else {
+        Log::warning('[PurchaseOrderService] Quotation not found', [
+          'selected_quotation_id' => $selectedQuotationId,
+        ]);
+      }
     }
 
-    $userId = $this->getCurrentUserId();
-    if (!$userId) {
-      Log::error('[PurchaseOrderService] No authenticated user found');
-      throw new \Exception('User must be authenticated to create a purchase order');
-    }
+    // ✅ FIXED: Calculate totals from the items array in the DTO
+    // This allows supplier-added items to be included
+    $totalAmount = 0;
+    $taxAmount = 0;
+    $totalWithTax = 0;
 
-    Log::info('[PurchaseOrderService] User authenticated', [
-      'user_id' => $userId,
+    // Create a lookup map of requisition items by ID for quick access
+    $requisitionItemsMap = $requisition->items->keyBy('id');
+
+    Log::info('[PurchaseOrderService] Processing items from DTO', [
+      'dto_items_count' => count($dto->items ?? []),
+      'requisition_items_count' => $requisitionItemsMap->count(),
     ]);
 
-    return $this->transaction(function () use ($requisition, $dto, $userId, $supplierId) {
-      $metadata = $requisition->metadata ?? [];
-      $selectedQuotationId = $metadata['procurement']['selected_quotation_id'] ??
-        $metadata['selected_quotation_id'] ??
-        $dto->supplier_quotation_id ??
-        null;
+    // ✅ Process items from the DTO (which includes supplier-added items)
+    foreach ($dto->items as $itemData) {
+      $requisitionItemId = $itemData['requisition_item_id'] ?? null;
+      $quantity = $itemData['quantity'] ?? 0;
+      $unitPrice = $itemData['unit_price'] ?? 0;
+      $itemTotal = $quantity * $unitPrice;
+      $totalAmount += $itemTotal;
 
-      Log::info('[PurchaseOrderService] Looking for selected quotation', [
-        'selected_quotation_id' => $selectedQuotationId,
+      $itemTaxRate = $itemData['tax_rate'] ?? 0;
+      $taxAmount += $itemTotal * ($itemTaxRate / 100);
+
+      Log::debug('[PurchaseOrderService] Processing item', [
+        'requisition_item_id' => $requisitionItemId,
+        'item_name' => $itemData['item_name'] ?? 'Unknown',
+        'quantity' => $quantity,
+        'unit_price' => $unitPrice,
+        'item_total' => $itemTotal,
+        'is_from_requisition' => $requisitionItemId !== null && $requisitionItemsMap->has($requisitionItemId),
+        'is_supplier_added' => $requisitionItemId === null || !$requisitionItemsMap->has($requisitionItemId),
+      ]);
+    }
+
+    $totalWithTax = $totalAmount + $taxAmount;
+
+    Log::info('[PurchaseOrderService] Calculated totals', [
+      'total_amount' => $totalAmount,
+      'tax_amount' => $taxAmount,
+      'total_with_tax' => $totalWithTax,
+    ]);
+
+    $poNumber = $this->referenceGenerator->generatePoNumber($dto->type);
+
+    Log::info('[PurchaseOrderService] Generated PO number', [
+      'po_number' => $poNumber,
+      'type' => $dto->type,
+    ]);
+
+    $po = $this->repository->createPurchaseOrder([
+      'requisition_id' => $requisition->id,
+      'supplier_id' => $supplierId,
+      'supplier_quotation_id' => $quotation?->id,
+      'po_number' => $poNumber,
+      'type' => $dto->type,
+      'title' => $dto->title ?? "Order from {$requisition->reference_number}",
+      'description' => $dto->description ?? $requisition->description,
+      'total_amount' => $totalAmount,
+      'tax_amount' => $taxAmount,
+      'total_with_tax' => $totalWithTax,
+      'currency' => $dto->currency ?? 'KES',
+      'issue_date' => $dto->issueDate?->toDateString() ?? now()->toDateString(),
+      'expected_delivery_date' => $dto->expectedDeliveryDate?->toDateString(),
+      'delivery_address' => $dto->deliveryAddress ?? $requisition->delivery_address,
+      'delivery_contact' => $dto->deliveryContact ?? $requisition->delivery_contact,
+      'delivery_phone' => $dto->deliveryPhone ?? $requisition->delivery_phone,
+      'delivery_email' => $dto->deliveryEmail ?? $requisition->delivery_email,
+      'payment_terms' => $dto->paymentTerms ?? $requisition->payment_terms,
+      'delivery_terms' => $dto->deliveryTerms ?? $requisition->delivery_terms,
+      'special_conditions' => $dto->specialConditions,
+      'terms_and_conditions' => $dto->termsAndConditions,
+      'validity_period_days' => $dto->validityPeriodDays ?? 30,
+      'contract_number' => $dto->contractNumber,
+      'contract_start_date' => $dto->contractStartDate?->toDateString(),
+      'contract_end_date' => $dto->contractEndDate?->toDateString(),
+      'status' => 'draft',
+      'generated_by' => $userId,
+      'metadata' => array_merge($dto->metadata ?? [], [
+        'selected_quotation_id' => $quotation?->id,
+        'generated_from' => 'purchase_order_creation',
+        'generated_at' => now()->toIso8601String(),
+        'total_items' => count($dto->items ?? []),
+        'requisition_items_count' => $requisitionItemsMap->count(),
+        'supplier_added_items_count' => collect($dto->items)->filter(function ($item) use ($requisitionItemsMap) {
+          $reqItemId = $item['requisition_item_id'] ?? null;
+          return $reqItemId === null || !$requisitionItemsMap->has($reqItemId);
+        })->count(),
+      ]),
+    ]);
+
+    // Audit: Log PO creation
+    $this->auditLogService->logModelCreated(
+      $po,
+      "Purchase Order {$po->po_number} generated for requisition #{$requisition->id}"
+    );
+
+    Log::info('[PurchaseOrderService] Purchase order created', [
+      'po_id' => $po->id,
+      'po_number' => $po->po_number,
+      'supplier_id' => $po->supplier_id,
+    ]);
+
+    // ✅ FIXED: Create PO items from the DTO items (including supplier-added items)
+    foreach ($dto->items as $itemData) {
+      $requisitionItemId = $itemData['requisition_item_id'] ?? null;
+      $supplierQuotationItemId = $itemData['supplier_quotation_item_id'] ?? null;
+
+      // Check if this item exists in the requisition (for logging)
+      $requisitionItem = $requisitionItemsMap->get($requisitionItemId);
+      $isFromRequisition = $requisitionItem !== null;
+
+      $quantity = $itemData['quantity'] ?? 0;
+      $unitPrice = $itemData['unit_price'] ?? 0;
+      $itemTotal = $quantity * $unitPrice;
+      $taxRate = $itemData['tax_rate'] ?? 0;
+      $itemTaxAmount = $itemTotal * ($taxRate / 100);
+      $itemNetPrice = $itemTotal + $itemTaxAmount;
+
+      Log::info('[PurchaseOrderService] Creating PO item', [
+        'requisition_item_id' => $requisitionItemId,
+        'supplier_quotation_item_id' => $supplierQuotationItemId,
+        'item_name' => $itemData['item_name'] ?? 'Unknown',
+        'quantity' => $quantity,
+        'unit_price' => $unitPrice,
+        'total_price' => $itemTotal,
+        'is_from_requisition' => $isFromRequisition,
+        'is_supplier_added' => !$isFromRequisition,
       ]);
 
-      $quotation = null;
-      if ($selectedQuotationId) {
-        $quotation = SupplierQuotation::with(['items', 'supplier'])
-          ->where('id', $selectedQuotationId)
-          ->first();
-
-        if ($quotation) {
-          Log::info('[PurchaseOrderService] Quotation found', [
-            'quotation_id' => $quotation->id,
-            'quotation_number' => $quotation->quotation_number,
-          ]);
-        } else {
-          Log::warning('[PurchaseOrderService] Quotation not found', [
-            'selected_quotation_id' => $selectedQuotationId,
-          ]);
-        }
-      }
-
-      $totalAmount = 0;
-      $taxAmount = 0;
-      $totalWithTax = 0;
-
-      foreach ($requisition->items as $item) {
-        $quotationItem = null;
-        if ($quotation && $quotation->items) {
-          $quotationItem = $quotation->items->firstWhere('requisition_item_id', $item->id);
-        }
-
-        $unitPrice = $quotationItem?->unit_price ??
-          $item->estimated_unit_cost ??
-          $item->unit_price ??
-          0;
-        $itemTotal = $item->quantity * $unitPrice;
-        $totalAmount += $itemTotal;
-
-        $itemTaxRate = $quotationItem?->tax_rate ?? 0;
-        $taxAmount += $itemTotal * ($itemTaxRate / 100);
-      }
-
-      $totalWithTax = $totalAmount + $taxAmount;
-
-      Log::info('[PurchaseOrderService] Calculated totals', [
-        'total_amount' => $totalAmount,
-        'tax_amount' => $taxAmount,
-        'total_with_tax' => $totalWithTax,
+      $this->repository->createPurchaseOrderItem([
+        'purchase_order_id' => $po->id,
+        'requisition_item_id' => $requisitionItemId, // ✅ Can be null for supplier-added items
+        'supplier_quotation_item_id' => $supplierQuotationItemId,
+        'item_name' => $itemData['item_name'],
+        'description' => $itemData['description'] ?? null,
+        'unit_of_measure' => $itemData['unit_of_measure'] ?? ($isFromRequisition ? $requisitionItem->unit_of_measure : 'pcs'),
+        'quantity' => $quantity,
+        'unit_price' => $unitPrice,
+        'total_price' => $itemTotal,
+        'tax_rate' => $taxRate,
+        'tax_amount' => $itemTaxAmount,
+        'discount_rate' => $itemData['discount_rate'] ?? 0,
+        'discount_amount' => 0,
+        'net_price' => $itemNetPrice,
+        'delivery_days' => $itemData['delivery_days'] ?? ($isFromRequisition ? $requisitionItem->delivery_days : null),
+        'warranty_months' => $itemData['warranty_months'] ?? ($isFromRequisition ? $requisitionItem->warranty_months : null),
+        'specifications' => $itemData['specifications'] ?? ($isFromRequisition ? $requisitionItem->specifications : null),
+        'brand' => $itemData['brand'] ?? null,
+        'model' => $itemData['model'] ?? null,
+        'catalog_number' => $itemData['catalog_number'] ?? null,
+        'status' => 'pending',
+        'metadata' => [
+          'is_from_requisition' => $isFromRequisition,
+          'is_supplier_added' => !$isFromRequisition,
+          'requisition_item_exists' => $isFromRequisition,
+        ],
       ]);
+    }
 
-      $poNumber = $this->referenceGenerator->generatePoNumber($dto->type);
+    $po->updateTotalAmount();
 
-      Log::info('[PurchaseOrderService] Generated PO number', [
-        'po_number' => $poNumber,
-        'type' => $dto->type,
-      ]);
+    // ✅ Update requisition status if all items are from requisition
+    // If there are supplier-added items, we keep the requisition status as is
+    $hasSupplierAddedItems = collect($dto->items)->contains(function ($item) use ($requisitionItemsMap) {
+      $reqItemId = $item['requisition_item_id'] ?? null;
+      return $reqItemId === null || !$requisitionItemsMap->has($reqItemId);
+    });
 
-      $po = $this->repository->createPurchaseOrder([
-        'requisition_id' => $requisition->id,
-        'supplier_id' => $supplierId,
-        'supplier_quotation_id' => $quotation?->id,
-        'po_number' => $poNumber,
-        'type' => $dto->type,
-        'title' => $dto->title ?? "Order from {$requisition->reference_number}",
-        'description' => $dto->description ?? $requisition->description,
-        'total_amount' => $totalAmount,
-        'tax_amount' => $taxAmount,
-        'total_with_tax' => $totalWithTax,
-        'currency' => $dto->currency ?? 'KES',
-        'issue_date' => $dto->issueDate?->toDateString() ?? now()->toDateString(),
-        'expected_delivery_date' => $dto->expectedDeliveryDate?->toDateString(),
-        'delivery_address' => $dto->deliveryAddress ?? $requisition->delivery_address,
-        'delivery_contact' => $dto->deliveryContact ?? $requisition->delivery_contact,
-        'delivery_phone' => $dto->deliveryPhone ?? $requisition->delivery_phone,
-        'delivery_email' => $dto->deliveryEmail ?? $requisition->delivery_email,
-        'payment_terms' => $dto->paymentTerms ?? $requisition->payment_terms,
-        'delivery_terms' => $dto->deliveryTerms ?? $requisition->delivery_terms,
-        'special_conditions' => $dto->specialConditions,
-        'terms_and_conditions' => $dto->termsAndConditions,
-        'validity_period_days' => $dto->validityPeriodDays ?? 30,
-        'contract_number' => $dto->contractNumber,
-        'contract_start_date' => $dto->contractStartDate?->toDateString(),
-        'contract_end_date' => $dto->contractEndDate?->toDateString(),
-        'status' => 'draft',
-        'generated_by' => $userId,
-        'metadata' => array_merge($dto->metadata ?? [], [
-          'selected_quotation_id' => $quotation?->id,
-          'generated_from' => 'purchase_order_creation',
-          'generated_at' => now()->toIso8601String(),
-        ]),
-      ]);
-
-      // Audit: Log PO creation
-      $this->auditLogService->logModelCreated(
-        $po,
-        "Purchase Order {$po->po_number} generated for requisition #{$requisition->id}"
-      );
-
-      Log::info('[PurchaseOrderService] Purchase order created', [
-        'po_id' => $po->id,
-        'po_number' => $po->po_number,
-        'supplier_id' => $po->supplier_id,
-      ]);
-
-      foreach ($requisition->items as $item) {
-        $quotationItem = null;
-        if ($quotation && $quotation->items) {
-          $quotationItem = $quotation->items->firstWhere('requisition_item_id', $item->id);
-        }
-
-        $unitPrice = $quotationItem?->unit_price ??
-          $item->estimated_unit_cost ??
-          $item->unit_price ??
-          0;
-
-        $itemTotal = $item->quantity * $unitPrice;
-        $taxRate = $quotationItem?->tax_rate ?? 0;
-        $itemTaxAmount = $itemTotal * ($taxRate / 100);
-        $itemNetPrice = $itemTotal + $itemTaxAmount;
-
-        Log::info('[PurchaseOrderService] Creating PO item', [
-          'requisition_item_id' => $item->id,
-          'item_name' => $item->item_name,
-          'quantity' => $item->quantity,
-          'unit_price' => $unitPrice,
-          'total_price' => $itemTotal,
-        ]);
-
-        $this->repository->createPurchaseOrderItem([
-          'purchase_order_id' => $po->id,
-          'requisition_item_id' => $item->id,
-          'supplier_quotation_item_id' => $quotationItem?->id,
-          'item_name' => $item->item_name,
-          'description' => $item->description ?? $quotationItem?->description,
-          'unit_of_measure' => $item->unit_of_measure ?? $quotationItem?->unit_of_measure ?? 'pcs',
-          'quantity' => $item->quantity,
-          'unit_price' => $unitPrice,
-          'total_price' => $itemTotal,
-          'tax_rate' => $taxRate,
-          'tax_amount' => $itemTaxAmount,
-          'discount_rate' => $quotationItem?->discount_rate ?? 0,
-          'discount_amount' => 0,
-          'net_price' => $itemNetPrice,
-          'delivery_days' => $quotationItem?->delivery_days ?? $item->delivery_days ?? null,
-          'warranty_months' => $quotationItem?->warranty_months ?? $item->warranty_months ?? null,
-          'specifications' => $item->specifications ?? $quotationItem?->specifications,
-          'brand' => $quotationItem?->brand ?? $item->brand,
-          'model' => $quotationItem?->model ?? $item->model,
-          'catalog_number' => $quotationItem?->catalog_number ?? $item->catalog_number,
-          'status' => 'pending',
-        ]);
-      }
-
-      $po->updateTotalAmount();
-
+    if (!$hasSupplierAddedItems) {
       try {
         $requisition->status = 'final_approved';
         $requisition->save();
@@ -284,34 +319,52 @@ class PurchaseOrderService extends BaseService implements PurchaseOrderServiceIn
           'error' => $e->getMessage(),
         ]);
       }
+    } else {
+      Log::info('[PurchaseOrderService] Requisition status unchanged - supplier added items present', [
+        'requisition_id' => $requisition->id,
+        'current_status' => $requisition->status,
+        'supplier_added_items_count' => collect($dto->items)->filter(function ($item) use ($requisitionItemsMap) {
+          $reqItemId = $item['requisition_item_id'] ?? null;
+          return $reqItemId === null || !$requisitionItemsMap->has($reqItemId);
+        })->count(),
+      ]);
+    }
 
-      $this->logHistory(
-        $requisition->id,
-        'po_generated',
-        'purchase_order',
-        $po->id,
-        $userId,
-        null,
-        [
-          'po_number' => $po->po_number,
-          'type' => $po->type,
-          'total_amount' => $po->total_amount,
-          'requisition_status' => 'final_approved',
-        ],
-        "Purchase Order {$po->po_number} generated for requisition {$requisition->reference_number}"
-      );
-
-      Log::info('[PurchaseOrderService] generatePurchaseOrder - COMPLETED', [
-        'po_id' => $po->id,
+    $this->logHistory(
+      $requisition->id,
+      'po_generated',
+      'purchase_order',
+      $po->id,
+      $userId,
+      null,
+      [
         'po_number' => $po->po_number,
-        'status' => $po->status,
+        'type' => $po->type,
         'total_amount' => $po->total_amount,
         'requisition_status' => $requisition->status,
-      ]);
+        'total_items' => count($dto->items ?? []),
+        'supplier_added_items_count' => $hasSupplierAddedItems ? collect($dto->items)->filter(function ($item) use ($requisitionItemsMap) {
+          $reqItemId = $item['requisition_item_id'] ?? null;
+          return $reqItemId === null || !$requisitionItemsMap->has($reqItemId);
+        })->count() : 0,
+      ],
+      "Purchase Order {$po->po_number} generated for requisition {$requisition->reference_number}" .
+      ($hasSupplierAddedItems ? " (with supplier-added items)" : "")
+    );
 
-      return $po;
-    });
-  }
+    Log::info('[PurchaseOrderService] generatePurchaseOrder - COMPLETED', [
+      'po_id' => $po->id,
+      'po_number' => $po->po_number,
+      'status' => $po->status,
+      'total_amount' => $po->total_amount,
+      'requisition_status' => $requisition->status,
+      'total_items' => $po->items->count(),
+      'has_supplier_added_items' => $hasSupplierAddedItems,
+    ]);
+
+    return $po;
+  });
+}
 
   public function getPurchaseOrder(int $poId): PurchaseOrder
   {

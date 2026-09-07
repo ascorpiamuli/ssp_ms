@@ -75,7 +75,7 @@ class SupplierQuotationResource extends JsonResource
       }
     }
 
-    // ✅ Get upload data if pdf_upload_id exists
+    // Get upload data if pdf_upload_id exists
     $uploadData = null;
     if (!empty($this->pdf_upload_id)) {
       // Check if upload is loaded via relationship
@@ -165,25 +165,25 @@ class SupplierQuotationResource extends JsonResource
       'verification_status_label' => $this->verification_status_label,
       'notes' => $this->notes,
 
-      // ✅ Download tracking fields
+      // Download tracking fields
       'download_count' => (int) ($this->download_count ?? 0),
       'last_downloaded_at' => $this->last_downloaded_at?->toDateTimeString(),
       'pdf_storage_path' => $this->pdf_storage_path,
       'pdf_filename' => $this->pdf_filename,
       'pdf_upload_id' => $this->pdf_upload_id,
 
-      // ✅ Upload data (included when upload exists)
+      // Upload data (included when upload exists)
       'upload' => $uploadData,
 
       // Supplier data
       'supplier' => $supplierData,
 
-      // ✅ Items relationship - NOW INCLUDING requisition_item_id
+      // ✅ Items relationship - INCLUDING requisition_item_id
       'items' => $this->whenLoaded('items', function () {
         return $this->items->map(function ($item) {
           return [
             'id' => $item->id,
-            'requisition_item_id' => $item->requisition_item_id, // ✅ CRITICAL: Added this field
+            'requisition_item_id' => $item->requisition_item_id,
             'item_name' => $item->item_name,
             'description' => $item->description,
             'unit_of_measure' => $item->unit_of_measure,
@@ -209,17 +209,33 @@ class SupplierQuotationResource extends JsonResource
         });
       }),
 
-      // Quotation request relationship
+      // ✅ FULL Quotation request relationship with requisition details
       'quotation_request' => $this->whenLoaded('quotationRequest', function () {
+        $quotationRequest = $this->quotationRequest;
+
         return [
-          'id' => $this->quotationRequest->id,
-          'qtn_number' => $this->quotationRequest->qtn_number,
-          'title' => $this->quotationRequest->title,
-          'status' => $this->quotationRequest->status,
-          'status_label' => $this->quotationRequest->status_label,
-          'requisition_id' => $this->quotationRequest->requisition_id,
-          'closing_date' => $this->quotationRequest->closing_date?->toDateString(),
-          'issue_date' => $this->quotationRequest->issue_date?->toDateString(),
+          'id' => $quotationRequest->id,
+          'qtn_number' => $quotationRequest->qtn_number,
+          'title' => $quotationRequest->title,
+          'description' => $quotationRequest->description,
+          'status' => $quotationRequest->status,
+          'status_label' => $quotationRequest->status_label,
+          'requisition_id' => $quotationRequest->requisition_id,
+          'closing_date' => $quotationRequest->closing_date?->toDateString(),
+          'issue_date' => $quotationRequest->issue_date?->toDateString(),
+          'closing_time' => $quotationRequest->closing_time,
+          'delivery_terms' => $quotationRequest->delivery_terms,
+          'payment_terms' => $quotationRequest->payment_terms,
+          'special_conditions' => $quotationRequest->special_conditions,
+          'instructions' => $quotationRequest->instructions,
+          'is_automated' => $quotationRequest->is_automated,
+          'is_tender' => $quotationRequest->is_tender,
+          'tender_number' => $quotationRequest->tender_number,
+
+          // ✅ Include the full requisition with all details
+          'requisition' => $this->whenLoaded('requisition', function () {
+            return $this->formatFullRequisition($this->requisition);
+          }),
         ];
       }),
 
@@ -231,6 +247,182 @@ class SupplierQuotationResource extends JsonResource
       ],
       'created_at' => $this->created_at?->toDateTimeString(),
       'updated_at' => $this->updated_at?->toDateTimeString(),
+    ];
+  }
+
+  /**
+   * ✅ Format full requisition with all details
+   */
+  private function formatFullRequisition($requisition): array
+  {
+    if (!$requisition) {
+      return [];
+    }
+
+    return [
+      'id' => $requisition->id,
+      'reference_number' => $requisition->reference_number,
+      'title' => $requisition->title,
+      'description' => $requisition->description,
+      'total_amount' => $requisition->total_amount,
+      'formatted_total_amount' => number_format((float) ($requisition->total_amount ?? 0), 2),
+      'status' => $requisition->status,
+      'status_label' => $requisition->status_label,
+      'status_color' => $requisition->status_color,
+
+      // ✅ Requisition Type Fields
+      'requisition_type' => $requisition->requisition_type,
+      'requisition_type_label' => $requisition->requisition_type_label ?? $this->getRequisitionTypeLabel($requisition->requisition_type),
+      'procurement_type' => $requisition->procurement_type,
+      'procurement_type_label' => $requisition->procurement_type_label ?? $this->getProcurementTypeLabel($requisition->procurement_type),
+      'is_service_requisition' => $requisition->is_service_requisition ?? ($requisition->requisition_type === 'services'),
+      'is_goods_requisition' => $requisition->is_goods_requisition ?? ($requisition->requisition_type === 'goods'),
+      'will_generate_lpo' => $requisition->will_generate_lpo ?? false,
+      'will_generate_lso' => $requisition->will_generate_lso ?? false,
+      'order_type' => $requisition->order_type ?? ($requisition->requisition_type === 'services' ? 'LSO' : 'LPO'),
+
+      // ✅ Service-Specific Fields
+      'service_category' => $requisition->service_category,
+      'service_category_label' => $requisition->service_category_label ?? $this->getServiceCategoryLabel($requisition->service_category),
+      'service_scope_of_work' => $requisition->service_scope_of_work,
+      'service_deliverables_expected' => $requisition->service_deliverables_expected,
+      'service_expected_start_date' => $requisition->service_expected_start_date?->toDateString(),
+      'service_expected_end_date' => $requisition->service_expected_end_date?->toDateString(),
+      'service_estimated_duration_days' => $requisition->service_estimated_duration_days,
+      'service_requires_onsite_visit' => $requisition->service_requires_onsite_visit ?? false,
+      'service_special_requirements' => $requisition->service_special_requirements,
+      'service_qualifications_required' => $requisition->service_qualifications_required,
+      'service_experience_required' => $requisition->service_experience_required,
+      'service_certifications_required' => $requisition->service_certifications_required,
+      'service_insurance_required' => $requisition->service_insurance_required ?? false,
+      'service_insurance_details' => $requisition->service_insurance_details,
+      'service_contract_type' => $requisition->service_contract_type,
+      'service_contract_duration' => $requisition->service_contract_duration,
+      'service_renewal_options' => $requisition->service_renewal_options,
+
+      // ✅ Goods-Specific Fields
+      'goods_category' => $requisition->goods_category,
+      'goods_warehouse_location' => $requisition->goods_warehouse_location,
+      'goods_storage_requirements' => $requisition->goods_storage_requirements,
+      'goods_expected_delivery_date' => $requisition->goods_expected_delivery_date?->toDateString(),
+      'goods_delivery_terms' => $requisition->goods_delivery_terms,
+      'goods_warranty_required' => $requisition->goods_warranty_required ?? false,
+      'goods_warranty_period' => $requisition->goods_warranty_period,
+      'goods_specifications' => $requisition->goods_specifications,
+      'goods_quality_requirements' => $requisition->goods_quality_requirements,
+      'goods_installation_required' => $requisition->goods_installation_required ?? false,
+
+      // ✅ Additional Fields
+      'priority' => $requisition->priority,
+      'priority_label' => $requisition->priority_label,
+      'type' => $requisition->type,
+      'type_label' => $requisition->type_label,
+      'urgency' => $requisition->urgency,
+      'urgency_label' => $requisition->urgency_label,
+      'justification' => $requisition->justification,
+      'required_by_date' => $requisition->required_by_date?->toDateString(),
+      'required_delivery_date' => $requisition->required_delivery_date?->toDateTimeString(),
+      'budget_code' => $requisition->budget_code,
+      'budget_source' => $requisition->budget_source,
+      'funding_source' => $requisition->funding_source,
+      'project_code' => $requisition->project_code,
+      'procurement_method' => $requisition->procurement_method,
+      'risk_level' => $requisition->risk_level,
+      'risk_level_label' => $requisition->risk_level_label,
+      'is_compliant' => $requisition->is_compliant,
+      'currency' => $requisition->currency,
+      'exchange_rate' => $requisition->exchange_rate,
+
+      // ✅ Dates
+      'submitted_at' => $requisition->submitted_at?->toDateTimeString(),
+      'created_at' => $requisition->created_at?->toDateTimeString(),
+      'updated_at' => $requisition->updated_at?->toDateTimeString(),
+
+      // ✅ Relationships - Department
+      'department' => $requisition->department ? [
+        'id' => $requisition->department->id,
+        'name' => $requisition->department->name,
+        'code' => $requisition->department->code,
+      ] : null,
+
+      // ✅ Relationships - User (Requester)
+      'user' => $requisition->user ? [
+        'id' => $requisition->user->id,
+        'full_name' => $requisition->user->full_name,
+        'email' => $requisition->user->email,
+        'first_name' => $requisition->user->first_name,
+        'last_name' => $requisition->user->last_name,
+        'role_label' => $requisition->user->role_label,
+      ] : null,
+
+      // ✅ Relationships - Supplier
+      'supplier' => $requisition->supplier ? [
+        'id' => $requisition->supplier->id,
+        'company_name' => $requisition->supplier->company_name,
+        'company_email' => $requisition->supplier->company_email,
+        'company_phone' => $requisition->supplier->company_phone,
+      ] : null,
+
+      // ✅ Items from requisition
+      'items' => $requisition->items ? $requisition->items->map(function ($item) {
+        return [
+          'id' => $item->id,
+          'item_name' => $item->item_name,
+          'description' => $item->description,
+          'unit_of_measure' => $item->unit_of_measure,
+          'quantity' => $item->quantity,
+          'estimated_unit_cost' => $item->estimated_unit_cost,
+          'total_cost' => $item->total_cost,
+          'specifications' => $item->specifications,
+          'catalog_number' => $item->catalog_number,
+          'manufacturer' => $item->manufacturer,
+          'model_number' => $item->model_number,
+          'tax_rate' => $item->tax_rate,
+          'discount_percentage' => $item->discount_percentage,
+          'is_inventory_item' => $item->is_inventory_item,
+          'inventory_code' => $item->inventory_code,
+          'status' => $item->status,
+          'status_label' => $item->status_label,
+        ];
+      }) : [],
+
+      // ✅ Approvals
+      'approvals' => $requisition->approvals ? $requisition->approvals->map(function ($approval) {
+        return [
+          'id' => $approval->id,
+          'level' => $approval->level,
+          'level_label' => $approval->level_label,
+          'status' => $approval->status,
+          'status_label' => $approval->status_label,
+          'comment' => $approval->comment,
+          'reason' => $approval->reason,
+          'is_delegated' => $approval->is_delegated,
+          'reviewed_at' => $approval->reviewed_at?->toDateTimeString(),
+          'due_date' => $approval->due_date?->toDateTimeString(),
+          'approver' => $approval->approver ? [
+            'id' => $approval->approver->id,
+            'full_name' => $approval->approver->full_name,
+            'email' => $approval->approver->email,
+            'role_label' => $approval->approver->role_label,
+          ] : null,
+          'delegate' => $approval->delegate ? [
+            'id' => $approval->delegate->id,
+            'full_name' => $approval->delegate->full_name,
+            'role_label' => $approval->delegate->role_label,
+          ] : null,
+          'created_at' => $approval->created_at?->toDateTimeString(),
+          'updated_at' => $approval->updated_at?->toDateTimeString(),
+        ];
+      }) : [],
+
+      // ✅ Metadata
+      'metadata' => $requisition->metadata,
+
+      // ✅ Flags
+      'is_editable' => $requisition->is_editable ?? false,
+      'is_approvable' => $requisition->is_approvable ?? false,
+      'is_returnable' => $requisition->is_returnable ?? false,
+      'can_be_revised' => $requisition->can_be_revised ?? false,
     ];
   }
 
@@ -290,7 +482,6 @@ class SupplierQuotationResource extends JsonResource
    */
   private function formatUploadData($upload): array
   {
-    // ✅ Get the user who uploaded the file
     $uploadedByUser = null;
     $uploadedByName = null;
 
@@ -307,25 +498,10 @@ class SupplierQuotationResource extends JsonResource
             'role_label' => $user->role_label,
           ];
           $uploadedByName = $user->full_name;
-
-          Log::info('SupplierQuotationResource - Uploaded by user found', [
-            'upload_id' => $upload->id,
-            'user_id' => $user->id,
-            'user_name' => $user->full_name,
-          ]);
         } else {
-          Log::warning('SupplierQuotationResource - Uploaded by user not found', [
-            'upload_id' => $upload->id,
-            'uploaded_by' => $upload->uploaded_by,
-          ]);
           $uploadedByName = 'Unknown User (ID: ' . $upload->uploaded_by . ')';
         }
       } catch (\Exception $e) {
-        Log::error('SupplierQuotationResource - Error fetching uploaded by user', [
-          'upload_id' => $upload->id,
-          'uploaded_by' => $upload->uploaded_by,
-          'error' => $e->getMessage(),
-        ]);
         $uploadedByName = 'Unknown User';
       }
     }
@@ -426,5 +602,50 @@ class SupplierQuotationResource extends JsonResource
 
     $imageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
     return in_array($upload->mime_type, $imageMimeTypes);
+  }
+
+  /**
+   * Get requisition type label
+   */
+  private function getRequisitionTypeLabel(?string $type): string
+  {
+    $labels = [
+      'goods' => 'Goods (LPO)',
+      'services' => 'Services (LSO)',
+    ];
+    return $labels[$type] ?? ucfirst($type ?? 'Unknown');
+  }
+
+  /**
+   * Get procurement type label
+   */
+  private function getProcurementTypeLabel(?string $type): string
+  {
+    $labels = [
+      'goods' => 'Goods (LPO)',
+      'services' => 'Services (LSO)',
+    ];
+    return $labels[$type] ?? ucfirst($type ?? 'Unknown');
+  }
+
+  /**
+   * Get service category label
+   */
+  private function getServiceCategoryLabel(?string $category): string
+  {
+    $labels = [
+      'consultancy' => 'Consultancy',
+      'maintenance' => 'Maintenance',
+      'training' => 'Training',
+      'installation' => 'Installation',
+      'cleaning' => 'Cleaning',
+      'security' => 'Security',
+      'transport' => 'Transport',
+      'construction' => 'Construction',
+      'professional_services' => 'Professional Services',
+      'it_services' => 'IT Services',
+      'other' => 'Other',
+    ];
+    return $labels[$category] ?? ucfirst($category ?? 'Not Specified');
   }
 }

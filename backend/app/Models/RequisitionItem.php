@@ -131,9 +131,9 @@ class RequisitionItem extends Model
     'total_with_tax',
   ];
 
-    // ============================================
-    // RELATIONSHIPS
-    // ============================================
+  // ============================================
+  // RELATIONSHIPS
+  // ============================================
 
   /**
    * Get the requisition this item belongs to.
@@ -159,9 +159,137 @@ class RequisitionItem extends Model
     return $this->belongsTo(User::class, 'quality_inspected_by');
   }
 
-    // ============================================
-    // ACCESSORS & MUTATORS
-    // ============================================
+  // ============================================
+  // ACCESSORS & MUTATORS
+  // ============================================
+
+  /**
+   * ✅ Get item name in uppercase when accessed
+   */
+  public function getItemNameAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set item name to uppercase when saved
+   */
+  public function setItemNameAttribute(?string $value): void
+  {
+    $this->attributes['item_name'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get description in proper case when accessed
+   */
+  public function getDescriptionAttribute(?string $value): ?string
+  {
+    return $value;
+  }
+
+  /**
+   * ✅ Set description with proper formatting
+   */
+  public function setDescriptionAttribute(?string $value): void
+  {
+    $this->attributes['description'] = $value ? trim($value) : null;
+  }
+
+  /**
+   * ✅ Get specifications in proper case when accessed
+   */
+  public function getSpecificationsAttribute(?string $value): ?string
+  {
+    return $value;
+  }
+
+  /**
+   * ✅ Set specifications with proper formatting
+   */
+  public function setSpecificationsAttribute(?string $value): void
+  {
+    $this->attributes['specifications'] = $value ? trim($value) : null;
+  }
+
+  /**
+   * ✅ Get manufacturer name in uppercase when accessed
+   */
+  public function getManufacturerAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set manufacturer name to uppercase when saved
+   */
+  public function setManufacturerAttribute(?string $value): void
+  {
+    $this->attributes['manufacturer'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get catalog number in uppercase when accessed
+   */
+  public function getCatalogNumberAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set catalog number to uppercase when saved
+   */
+  public function setCatalogNumberAttribute(?string $value): void
+  {
+    $this->attributes['catalog_number'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get model number in uppercase when accessed
+   */
+  public function getModelNumberAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set model number to uppercase when saved
+   */
+  public function setModelNumberAttribute(?string $value): void
+  {
+    $this->attributes['model_number'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get inventory code in uppercase when accessed
+   */
+  public function getInventoryCodeAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set inventory code to uppercase when saved
+   */
+  public function setInventoryCodeAttribute(?string $value): void
+  {
+    $this->attributes['inventory_code'] = $value ? strtoupper(trim($value)) : null;
+  }
+
+  /**
+   * ✅ Get unit of measure in uppercase when accessed
+   */
+  public function getUnitOfMeasureAttribute(?string $value): string
+  {
+    return $value ? strtoupper($value) : '';
+  }
+
+  /**
+   * ✅ Set unit of measure to uppercase when saved
+   */
+  public function setUnitOfMeasureAttribute(?string $value): void
+  {
+    $this->attributes['unit_of_measure'] = $value ? strtoupper(trim($value)) : null;
+  }
 
   /**
    * Get formatted total cost.
@@ -196,13 +324,12 @@ class RequisitionItem extends Model
   }
 
   /**
-   * ✅ FIXED: Get status label with null safety.
+   * Get status label with null safety.
    */
   public function getStatusLabelAttribute(): string
   {
     $status = $this->status;
 
-    // If status is null, return 'Pending'
     if (is_null($status)) {
       return 'Pending';
     }
@@ -225,7 +352,7 @@ class RequisitionItem extends Model
   }
 
   /**
-   * ✅ FIXED: Get status color with null safety.
+   * Get status color with null safety.
    */
   public function getStatusColorAttribute(): string
   {
@@ -253,7 +380,7 @@ class RequisitionItem extends Model
   }
 
   /**
-   * ✅ FIXED: Get quality status label with null safety.
+   * Get quality status label with null safety.
    */
   public function getQualityStatusLabelAttribute(): string
   {
@@ -273,14 +400,6 @@ class RequisitionItem extends Model
     ];
 
     return $labels[strtolower($status)] ?? ucfirst(strtolower($status));
-  }
-
-  /**
-   * Set item name to uppercase words.
-   */
-  public function setItemNameAttribute(string $value): void
-  {
-    $this->attributes['item_name'] = ucwords(strtolower(trim($value)));
   }
 
   /**
@@ -332,9 +451,9 @@ class RequisitionItem extends Model
     return (float) ($this->total_cost - $this->discount_amount + $this->tax_amount);
   }
 
-    // ============================================
-    // SCOPES
-    // ============================================
+  // ============================================
+  // SCOPES
+  // ============================================
 
   /**
    * Scope for pending items.
@@ -401,9 +520,9 @@ class RequisitionItem extends Model
     return $query->whereRaw('received_quantity < quantity');
   }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
+  // ============================================
+  // HELPER METHODS
+  // ============================================
 
   /**
    * Calculate total cost.

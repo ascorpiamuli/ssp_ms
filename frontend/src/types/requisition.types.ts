@@ -31,6 +31,25 @@ export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 export type SlaStatus = 'on_track' | 'at_risk' | 'breached';
 
 // ============================================
+// NEW: REQUISITION TYPE ENUMS
+// ============================================
+
+export type RequisitionTypeEnum = 'goods' | 'services';
+export type ProcurementTypeEnum = 'goods' | 'services';
+export type ServiceCategory =
+  | 'consultancy'
+  | 'maintenance'
+  | 'training'
+  | 'installation'
+  | 'cleaning'
+  | 'security'
+  | 'transport'
+  | 'construction'
+  | 'professional_services'
+  | 'it_services'
+  | 'other';
+
+// ============================================
 // REQUISITION ITEM
 // ============================================
 
@@ -182,7 +201,7 @@ export interface RequisitionHistory {
   action: HistoryAction;
   action_label: string;
   action_color: string;
-  user_agent:string,
+  user_agent: string,
   old_values: Record<string, any> | null;
   new_values: Record<string, any> | null;
   comment: string | null;
@@ -397,7 +416,7 @@ export interface RequisitionTemplate {
 }
 
 // ============================================
-// MAIN REQUISITION
+// MAIN REQUISITION - UPDATED WITH NEW FIELDS
 // ============================================
 
 export interface Requisition {
@@ -491,6 +510,58 @@ export interface Requisition {
   updated_at: string;
   deleted_at: string | null;
 
+  // ============================================
+  // NEW: REQUISITION TYPE FIELDS
+  // ============================================
+
+  // Requisition Type (Goods vs Services)
+  requisition_type: RequisitionTypeEnum;
+  requisition_type_label: string;
+
+  // Procurement Type (Determines LPO vs LSO)
+  procurement_type: ProcurementTypeEnum;
+  procurement_type_label: string;
+
+  // === SERVICE-SPECIFIC FIELDS ===
+  service_category: ServiceCategory | null;
+  service_category_label: string | null;
+  service_scope_of_work: string | null;
+  service_deliverables_expected: string | null;
+  service_expected_start_date: string | null;
+  service_expected_end_date: string | null;
+  service_estimated_duration_days: number | null;
+  service_requires_onsite_visit: boolean;
+  service_special_requirements: string | null;
+  service_qualifications_required: string | null;
+  service_experience_required: string | null;
+  service_certifications_required: string | null;
+  service_licenses_required: string | null;
+  service_insurance_required: string | null;
+  service_insurance_details: string | null;
+  service_contract_duration:number | null;
+  service_contract_type:string | null;
+  service_renewal_options:boolean | null;
+
+
+  // === GOODS-SPECIFIC FIELDS ===
+  goods_category: string | null;
+  goods_warehouse_location: string | null;
+  goods_storage_requirements: string | null;
+  goods_expected_delivery_date: string | null;
+  goods_delivery_terms: string | null;
+  goods_warranty_required: boolean | null;
+  goods_warranty_period: number | null;
+  goods_specifications: string | null;
+  goods_quality_requirements: string | null;
+  goods_installation_required: boolean | null;
+  
+  // === FLAGS ===
+  is_service_requisition: boolean;
+  is_goods_requisition: boolean;
+  will_generate_lpo: boolean;
+  will_generate_lso: boolean;
+  order_type: 'LPO' | 'LSO' | null;
+
   // Relationships
   user?: User;
   department?: Department;
@@ -525,7 +596,7 @@ export interface Requisition {
 }
 
 // ============================================
-// REQUISITION FILTERS
+// REQUISITION FILTERS - UPDATED
 // ============================================
 
 export interface RequisitionFilters {
@@ -540,10 +611,14 @@ export interface RequisitionFilters {
   date_to?: string;
   page?: number;
   per_page?: number;
+  // NEW FILTERS
+  requisition_type?: RequisitionTypeEnum | 'all';
+  procurement_type?: ProcurementTypeEnum | 'all';
+  service_category?: ServiceCategory | 'all';
 }
 
 // ============================================
-// REQUISITION STATS
+// REQUISITION STATS - UPDATED
 // ============================================
 
 export interface RequisitionStats {
@@ -570,14 +645,19 @@ export interface RequisitionStats {
   by_department?: Record<string, number>;
   by_priority?: Record<string, number>;
   by_urgency?: Record<string, number>;
+  // NEW STATS
+  goods_requisitions: number;
+  services_requisitions: number;
+  by_service_category?: Record<string, number>;
+  by_procurement_type?: Record<string, number>;
 }
 
 // ============================================
-// REQUEST/RESPONSE TYPES
+// REQUEST/RESPONSE TYPES - UPDATED
 // ============================================
 
 export interface CreateRequisitionData {
-  reference_number:string,
+  reference_number: string,
   title: string;
   description?: string;
   department_id: number;
@@ -604,6 +684,24 @@ export interface CreateRequisitionData {
   metadata?: Record<string, any>;
   custom_fields?: Record<string, any>;
   items?: CreateRequisitionItemData[];
+  // NEW FIELDS
+  requisition_type?: RequisitionTypeEnum;
+  procurement_type?: ProcurementTypeEnum;
+  // Service fields
+  service_category?: ServiceCategory;
+  service_scope_of_work?: string;
+  service_deliverables_expected?: string;
+  service_expected_start_date?: string;
+  service_expected_end_date?: string;
+  service_estimated_duration_days?: number;
+  service_requires_onsite_visit?: boolean;
+  service_special_requirements?: string;
+  service_qualifications_required?: string;
+  // Goods fields
+  goods_category?: string;
+  goods_warehouse_location?: string;
+  goods_storage_requirements?: string;
+  goods_expected_delivery_date?: string;
 }
 
 export interface CreateRequisitionItemData {
@@ -650,6 +748,24 @@ export interface UpdateRequisitionData {
   metadata?: Record<string, any>;
   custom_fields?: Record<string, any>;
   items?: UpdateRequisitionItemData[];
+  // NEW FIELDS
+  requisition_type?: RequisitionTypeEnum;
+  procurement_type?: ProcurementTypeEnum;
+  // Service fields
+  service_category?: ServiceCategory;
+  service_scope_of_work?: string;
+  service_deliverables_expected?: string;
+  service_expected_start_date?: string;
+  service_expected_end_date?: string;
+  service_estimated_duration_days?: number;
+  service_requires_onsite_visit?: boolean;
+  service_special_requirements?: string;
+  service_qualifications_required?: string;
+  // Goods fields
+  goods_category?: string;
+  goods_warehouse_location?: string;
+  goods_storage_requirements?: string;
+  goods_expected_delivery_date?: string;
 }
 
 export interface UpdateRequisitionItemData {
