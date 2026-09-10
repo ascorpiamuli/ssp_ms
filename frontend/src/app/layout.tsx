@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import { cn } from "@/lib/utils"
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import { ToastProvider } from '@/components/ui/toast-context'
@@ -13,6 +14,13 @@ import { GlobalModals } from '@/components/global-modals'
 import { QueryProvider } from '@/providers/QueryProvider'
 import { ThemeManager } from '../providers/ThemeManager'
 import './globals.css'
+
+// ─── Font ───
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'SSPMS - School Supplies & Purchases Management System',
@@ -54,8 +62,6 @@ export default function RootLayout({
               <ProgressBarProvider>
                 <ScrollRestoration>
                   <ToastProvider>
-                    {/* CHANGED: Use bg-background instead of hardcoded colors.
-                        This will now respect the black background defined in globals.css for dark mode. */}
                     <main className="min-h-screen bg-background text-foreground">
                       {children}
                     </main>
@@ -71,9 +77,11 @@ export default function RootLayout({
   );
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      {/* Added bg-background here as well to ensure full coverage */}
-      <body className="antialiased bg-background text-foreground">
+    <html lang="en" suppressHydrationWarning className={cn(inter.variable)}>
+      <body className={cn(
+        "antialiased bg-background text-foreground",
+        "font-sans"
+      )}>
         {isDevelopment ? (
           <ErrorBoundary>{content}</ErrorBoundary>
         ) : (
