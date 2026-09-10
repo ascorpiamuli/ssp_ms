@@ -43,31 +43,31 @@ export function PageTemplate({
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Background variants
+  // Background variants - UPDATED to use bg-background for pure black in dark mode
   const getBackgroundStyles = () => {
     switch (background) {
       case 'gradient':
         return {
-          main: 'bg-gradient-to-br from-blue-50/50 via-white to-indigo-50/50 dark:from-gray-950 dark:via-gray-950 dark:to-indigo-950/50',
-          header: 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl',
-          content: 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm',
+          main: 'bg-gradient-to-br from-blue-50/50 via-background to-indigo-50/50 dark:from-background dark:via-background dark:to-indigo-950/30',
+          header: 'bg-white/80 dark:bg-background/80 backdrop-blur-xl',
+          content: 'bg-white/60 dark:bg-background/60 backdrop-blur-sm',
         }
       case 'glass':
         return {
-          main: 'bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-sm',
-          header: 'bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-800/20',
-          content: 'bg-white/40 dark:bg-gray-900/40 backdrop-blur-sm border border-white/10 dark:border-gray-800/10',
+          main: 'bg-background/50 backdrop-blur-sm',
+          header: 'bg-white/70 dark:bg-background/70 backdrop-blur-xl border border-white/20 dark:border-gray-800/20',
+          content: 'bg-white/40 dark:bg-background/40 backdrop-blur-sm border border-white/10 dark:border-gray-800/10',
         }
       case 'minimal':
         return {
-          main: 'bg-white dark:bg-gray-950',
-          header: 'bg-white dark:bg-gray-950',
-          content: 'bg-white dark:bg-gray-950',
+          main: 'bg-background',
+          header: 'bg-background',
+          content: 'bg-background',
         }
       default:
         return {
-          main: 'bg-gray-50/80 dark:bg-gray-950/80',
-          header: 'bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl',
+          main: 'bg-background/80',
+          header: 'bg-white/90 dark:bg-background/90 backdrop-blur-xl',
           content: 'bg-transparent',
         }
     }
@@ -152,7 +152,6 @@ export function PageTemplate({
         )}
         initial={animated ? "hidden" : undefined}
         animate={animated ? "visible" : undefined}
-        
       >
         {/* Decorative Background Elements */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -203,7 +202,7 @@ export function PageTemplate({
             "sticky top-0 z-20 transition-all duration-300",
             bgStyles.header,
             isScrolled
-              ? "shadow-lg shadow-gray-200/20 dark:shadow-gray-950/20 border-b border-gray-200/50 dark:border-gray-800/50"
+              ? "shadow-lg shadow-gray-200/20 dark:shadow-black/40 border-b border-gray-200/50 dark:border-gray-800/50"
               : "border-b border-gray-200/30 dark:border-gray-800/30",
             variant === 'full' && "border-b-0"
           )}
@@ -322,7 +321,7 @@ export function PageTemplate({
               className={cn(
                 "rounded-2xl transition-all duration-300",
                 bgStyles.content,
-                variant !== 'full' && "shadow-sm shadow-gray-200/20 dark:shadow-gray-950/20",
+                variant !== 'full' && "shadow-sm shadow-gray-200/20 dark:shadow-black/40",
                 variant === 'centered' && "p-6 sm:p-8",
                 variant === 'compact' && "p-6 sm:p-8",
                 variant === 'default' && "p-4 sm:p-6",

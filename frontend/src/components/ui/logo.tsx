@@ -1,5 +1,8 @@
 // src/components/ui/logo.tsx
 
+"use client"
+
+import { useState } from 'react'
 import { cn } from '../../lib/utils'
 
 interface LogoProps {
@@ -10,6 +13,9 @@ interface LogoProps {
   variant?: 'default' | 'compact' | 'minimal'
 }
 
+// Default logo path - change this if your file is elsewhere
+const DEFAULT_LOGO_SRC = '/images/logo.png'
+
 export function Logo({
   className,
   showText = true,
@@ -17,13 +23,17 @@ export function Logo({
   companyLogo = null,
   variant = 'default'
 }: LogoProps) {
+  const [imageError, setImageError] = useState(false)
+  const [companyImageError, setCompanyImageError] = useState(false)
+
   // Determine sizes based on variant and collapsed state
   const getSizes = () => {
     if (collapsed) {
       return {
         container: 'h-10 w-10',
-        iconSize: 'text-base',
-        padding: 'p-2'
+        padding: 'p-1',
+        textSize: 'text-base',
+        subtitleSize: 'text-[10px]',
       }
     }
 
@@ -31,113 +41,113 @@ export function Logo({
       case 'compact':
         return {
           container: 'h-10 w-10',
-          iconSize: 'text-base',
-          padding: 'p-2'
+          padding: 'p-1',
+          textSize: 'text-base',
+          subtitleSize: 'text-[10px]',
         }
       case 'minimal':
         return {
           container: 'h-8 w-8',
-          iconSize: 'text-sm',
-          padding: 'p-1.5'
+          padding: 'p-0.5',
+          textSize: 'text-sm',
+          subtitleSize: 'text-[9px]',
         }
       default:
         return {
           container: 'h-11 w-11',
-          iconSize: 'text-lg',
-          padding: 'p-2.5'
+          padding: 'p-1',
+          textSize: 'text-lg',
+          subtitleSize: 'text-[10px]',
         }
     }
   }
 
   const sizes = getSizes()
 
-  // If company logo is provided, show it instead
-  if (companyLogo) {
-    return (
-      <div className={cn(
-        "flex items-center",
+  // Determine which image to use (company logo takes priority)
+  const logoSrc = companyLogo && !companyImageError ? companyLogo : DEFAULT_LOGO_SRC
+  const currentImageError = companyLogo && !companyImageError ? companyImageError : imageError
+  const handleImageError = () => {
+    if (companyLogo && !companyImageError) {
+      setCompanyImageError(true)
+    } else {
+      setImageError(true)
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-center group relative",
         className
-      )}>
-        <div className={cn(
-          "flex-shrink-0 transition-all duration-300",
-          collapsed ? "h-8 w-8" : "h-10 w-10"
-        )}>
+      )}
+    >
+      {/* Logo Image */}
+      <div
+        className={cn(
+          "relative flex-shrink-0 transition-all duration-300",
+          sizes.container,
+          "hover:scale-105 active:scale-95"
+        )}
+      >
+        {!currentImageError ? (
           <img
-            src={companyLogo}
-            alt="Company Logo"
+            src={logoSrc}
+            alt="SSPMIS Logo"
+            onError={handleImageError}
             className={cn(
-              "w-full h-full object-contain rounded-xl",
+              "w-full h-full object-contain",
+              "rounded-xl",
               "transition-all duration-300",
-              "hover:scale-105"
+              "drop-shadow-md group-hover:drop-shadow-lg",
+              "group-hover:scale-105"
             )}
           />
-        </div>
-        {!collapsed && showText && (
-          <div className="ml-2.5 flex flex-col min-w-0">
-            <span className="font-bold text-sm leading-tight text-gray-800 dark:text-white truncate">
-              SSPMIS
-            </span>
-            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 truncate">
-              School Supplies
+        ) : (
+          // Fallback if image fails to load
+          <div
+            className={cn(
+              "flex items-center justify-center rounded-xl w-full h-full",
+              "bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-600",
+              "shadow-md shadow-blue-500/25",
+              "transition-all duration-300",
+              "group-hover:shadow-lg group-hover:shadow-blue-500/35"
+            )}
+          >
+            <span className="font-extrabold text-white text-sm tracking-tight drop-shadow-sm">
+              S
             </span>
           </div>
         )}
       </div>
-    )
-  }
-
-  return (
-    <div className={cn(
-      "flex items-center group",
-      className
-    )}>
-      {/* Logo Icon */}
-      <div className={cn(
-        "relative flex-shrink-0 transition-all duration-300",
-        sizes.container,
-        "hover:scale-105 active:scale-95"
-      )}>
-        <div className={cn(
-          "flex items-center justify-center rounded-xl",
-          "w-full h-full",
-          "bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-600",
-          "shadow-md shadow-blue-500/25",
-          "transition-all duration-300",
-          "group-hover:shadow-lg group-hover:shadow-blue-500/35",
-          "group-hover:scale-105",
-          sizes.padding
-        )}>
-          <span className={cn(
-            "font-extrabold text-white",
-            sizes.iconSize,
-            "tracking-tight",
-            "drop-shadow-sm"
-          )}>
-            S
-          </span>
-        </div>
-      </div>
 
       {/* Text Section */}
-      <div className={cn(
-        "flex flex-col min-w-0 ml-2.5 transition-all duration-300",
-        (!showText || collapsed) ? "hidden md:hidden" : "flex"
-      )}>
-        <span className={cn(
-          "font-bold leading-tight tracking-tight",
-          "text-gray-800 dark:text-white",
-          variant === 'compact' ? "text-base" : "text-lg",
-          "transition-all duration-300",
-          "group-hover:text-blue-600 dark:group-hover:text-blue-400"
-        )}>
+      <div
+        className={cn(
+          "flex flex-col min-w-0 ml-2.5 transition-all duration-300",
+          (!showText || collapsed) ? "hidden md:hidden" : "flex"
+        )}
+      >
+        <span
+          className={cn(
+            "font-bold leading-tight tracking-tight",
+            "text-gray-800 dark:text-white",
+            sizes.textSize,
+            "transition-all duration-300",
+            "group-hover:text-blue-600 dark:group-hover:text-blue-400"
+          )}
+        >
           SSPMIS
         </span>
-        <span className={cn(
-          "text-[10px] font-medium tracking-wider uppercase",
-          "text-gray-500 dark:text-gray-400",
-          "transition-all duration-300",
-          "group-hover:text-blue-500 dark:group-hover:text-blue-400"
-        )}>
+        <span
+          className={cn(
+            "font-medium tracking-wider uppercase",
+            "text-gray-500 dark:text-gray-400",
+            sizes.subtitleSize,
+            "transition-all duration-300",
+            "group-hover:text-blue-500 dark:group-hover:text-blue-400"
+          )}
+        >
           School Supplies
         </span>
       </div>

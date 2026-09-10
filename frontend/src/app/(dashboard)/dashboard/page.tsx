@@ -1,8 +1,10 @@
 // app/dashboard/page.tsx
 
-'use client'
+'use client';
 
-import { useAuthContext } from '@/contexts/AuthContext'
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthContext } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   FileText,
@@ -78,1113 +80,1340 @@ import {
   Crown,
   Sparkles,
   Info,
-} from 'lucide-react'
-import Link from 'next/link'
-import { useState, useEffect } from 'react'
+  Loader2,
+  Lightbulb,
+  ThumbsUp,
+  Rocket,
+  ShieldCheck,
+  Gauge,
+  Gem,
+  Sparkle,
+} from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { format, formatDistanceToNow } from 'date-fns';
 
-// ============================================================
-// TYPES
-// ============================================================
+// Hooks
+import {
+  useRequisitions,
+  useRequisitionStats,
+} from '@/hooks/useRequisitionQueries';
+import { useSuppliers } from '@/hooks/useSuppliers';
+import { useQuotations } from '@/hooks/useQuotation';
+import {
+  usePurchaseOrders,
+  useOverduePurchaseOrders as useOverduePOs,
+} from '@/hooks/usePurchaseOrder';
+import {
+  useRequisitionAnalyticsSummary,
+  useRequisitionTrends,
+  useApprovalFunnel,
+  useApprovalCycle,
+  useSlaCompliance,
+  useBudgetUtilization,
+  useTopSuppliers,
+} from '@/hooks/useAnalytics';
+import { useGrns, useSans } from '@/hooks/useGoodsReceived';
+import { useProcurementStatistics } from '@/hooks/useProcurement';
 
-interface Stats {
-  totalRequisitions: number
-  pendingApprovals: number
-  activeOrders: number
-  totalSpent: string
-  approvedRequisitions: number
-  declinedRequisitions: number
-  totalSuppliers: number
-  pendingInvoices: number
-  budgetUtilization: string
-  onTimeDeliveries: string
-  averageApprovalTime: string
-}
+// Types
+import type { Requisition, RequisitionStats } from '@/types/requisition.types';
+import type { PaginatedResponse } from '@/types/common.types';
+import type { PurchaseOrder } from '@/types/purchaseOrder.types';
+import type { GoodsReceivedNote, ServiceAcknowledgmentNote } from '@/types/goodsReceived.types';
+import type { QuotationRequest } from '@/types/quotations.types';
+import type { Supplier } from '@/services/supplier.service';
 
-interface Activity {
-  id: string
-  icon: any
-  title: string
-  description: string
-  time: string
-  color: string
-  type: 'requisition' | 'approval' | 'order' | 'payment' | 'supplier' | 'system'
-}
+// UI Components
+import StatsCards, { type StatCardItem } from '@/components/ui/stat-cards';
+import { PageTemplate } from '@/components/dashboard/PageTemplate';
 
-interface Requisition {
-  id: string
-  number: string
-  title: string
-  department: string
-  type: 'goods' | 'service'
-  amount: string
-  status: 'draft' | 'pending_hod' | 'pending_accountant' | 'pending_principal' | 'pending_final_approval' | 'approved' | 'declined' | 'returned'
-  date: string
-  requester: string
-  isEmergency: boolean
-}
+// Recharts
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  Line,
+  ComposedChart,
+} from 'recharts';
 
-interface Order {
-  id: string
-  number: string
-  type: 'lpo' | 'lso'
-  supplier: string
-  amount: string
-  status: 'draft' | 'approved' | 'issued' | 'completed' | 'cancelled'
-  date: string
-  department: string
-}
+// ============================================
+// CONSTANTS
+// ============================================
 
-interface Supplier {
-  id: string
-  name: string
-  company: string
-  email: string
-  phone: string
-  rating: number
-  status: 'active' | 'blacklisted'
-  orders: number
-}
+const MAX_PER_PAGE = 100;
+const CHART_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#94a3b8', '#06b6d4'];
 
-interface Notification {
-  id: string
-  title: string
-  message: string
-  time: string
-  read: boolean
-  type: 'info' | 'success' | 'warning' | 'error'
-}
+// Enhanced status colors for better visibility
+const STATUS_COLORS = {
+  draft: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0', dot: '#94a3b8' },
+  submitted: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#3b82f6' },
+  hod_approved: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#f59e0b' },
+  hod_declined: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  accountant_approved: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#f59e0b' },
+  accountant_declined: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  principal_approved: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#f59e0b' },
+  principal_declined: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  final_approved: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#10b981' },
+  final_declined: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  returned: { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe', dot: '#8b5cf6' },
+  cancelled: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  revised: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#3b82f6' },
+  draft_po: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0', dot: '#94a3b8' },
+  issued: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#3b82f6' },
+  sent: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#10b981' },
+  acknowledged: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#f59e0b' },
+  delivered: { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe', dot: '#8b5cf6' },
+  completed: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#10b981' },
+  cancelled_po: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', dot: '#ef4444' },
+  closed: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0', dot: '#94a3b8' },
+};
 
-// ============================================================
-// STATS CARD COMPONENT
-// ============================================================
+const getStatusStyle = (status: string, type: 'requisition' | 'po' = 'requisition') => {
+  const key = type === 'po' ? `${status}_po` : status;
+  return STATUS_COLORS[key as keyof typeof STATUS_COLORS] || STATUS_COLORS.draft;
+};
 
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  color,
-  href,
-  trend,
-  trendValue,
-}: {
-  title: string
-  value: string | number
-  icon: any
-  color: string
-  href?: string
-  trend?: 'up' | 'down' | 'neutral'
-  trendValue?: string
-}) {
-  const card = (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-all duration-200 group">
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1 truncate">
-            {value}
-          </p>
-          {trend && trendValue && (
-            <div className="flex items-center gap-1 mt-1">
-              {trend === 'up' && <ArrowUp className="h-3 w-3 text-green-500" />}
-              {trend === 'down' && <ArrowDown className="h-3 w-3 text-red-500" />}
-              <span className={`text-xs font-medium ${trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-gray-500'}`}>
-                {trendValue}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className={`p-3 rounded-lg ${color} flex-shrink-0 transition-transform group-hover:scale-110`}>
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </div>
-    </div>
-  )
+// ============================================
+// HELPERS
+// ============================================
 
-  if (href) {
-    return <Link href={href}>{card}</Link>
+function extractData<T>(response: PaginatedResponse<T> | T[] | undefined): T[] {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (response && typeof response === 'object' && 'data' in response) {
+    return Array.isArray(response.data) ? response.data : [];
   }
-
-  return card
+  return [];
 }
 
-// ============================================================
-// QUICK ACTION BUTTON
-// ============================================================
-
-function QuickAction({
-  title,
-  icon: Icon,
-  href,
-  color,
-  description,
-}: {
-  title: string
-  icon: any
-  href: string
-  color: string
-  description?: string
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all group"
-    >
-      <div className={`p-3 rounded-lg ${color} transition-transform group-hover:scale-110`}>
-        <Icon className="h-5 w-5 text-white" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <span className="font-medium text-gray-900 dark:text-white block">{title}</span>
-        {description && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{description}</span>
-        )}
-      </div>
-      <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-    </Link>
-  )
+function extractStats(response: any): RequisitionStats {
+  if (!response) return {
+    total: 0, draft: 0, submitted: 0, pending: 0, approved: 0,
+    hod_approved: 0, accountant_approved: 0, principal_approved: 0,
+    final_approved: 0, declined: 0, hod_declined: 0,
+    accountant_declined: 0, principal_declined: 0, final_declined: 0,
+    returned: 0, cancelled: 0, revised: 0, total_amount: 0,
+    emergency: 0, average_amount: 0,
+    goods_requisitions: 0, services_requisitions: 0,
+  };
+  return response as RequisitionStats;
 }
 
-// ============================================================
-// ACTIVITY ITEM
-// ============================================================
+const formatCurrency = (amount: number | null | undefined): string => {
+  if (amount == null) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
 
-function ActivityItem({
-  icon: Icon,
-  title,
-  description,
-  time,
-  color,
-}: {
-  icon: any
-  title: string
-  description: string
-  time: string
-  color: string
-}) {
-  return (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded-lg transition-colors">
-      <div className={`p-2 rounded-lg ${color} mt-0.5 flex-shrink-0`}>
-        <Icon className="h-4 w-4 text-white" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">{title}</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{description}</p>
-      </div>
-      <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap flex-shrink-0">{time}</span>
-    </div>
-  )
-}
-
-// ============================================================
-// REQUISITION TABLE ROW
-// ============================================================
-
-function RequisitionRow({ requisition }: { requisition: Requisition }) {
-  const statusColors = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-    pending_hod: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    pending_accountant: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    pending_principal: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    pending_final_approval: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    declined: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    returned: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+const formatDate = (date: string | Date | null): string => {
+  if (!date) return 'N/A';
+  try {
+    return format(new Date(date), 'dd MMM yyyy');
+  } catch {
+    return 'Invalid Date';
   }
+};
 
-  const statusLabels = {
+const formatTimeAgo = (date: string | Date | null): string => {
+  if (!date) return 'N/A';
+  try {
+    return formatDistanceToNow(new Date(date), { addSuffix: true });
+  } catch {
+    return 'Invalid Date';
+  }
+};
+
+const getRequisitionStatusColor = (status: string): string => {
+  const map: Record<string, string> = {
+    draft: '#94a3b8',
+    submitted: '#3b82f6',
+    hod_approved: '#f59e0b',
+    hod_declined: '#ef4444',
+    accountant_approved: '#f59e0b',
+    accountant_declined: '#ef4444',
+    principal_approved: '#f59e0b',
+    principal_declined: '#ef4444',
+    final_approved: '#10b981',
+    final_declined: '#ef4444',
+    returned: '#8b5cf6',
+    cancelled: '#ef4444',
+    revised: '#3b82f6',
+  };
+  return map[status] || '#94a3b8';
+};
+
+const getRequisitionStatusLabel = (status: string): string => {
+  const map: Record<string, string> = {
     draft: 'Draft',
-    pending_hod: 'Pending HOD',
-    pending_accountant: 'Pending Accountant',
-    pending_principal: 'Pending Principal',
-    pending_final_approval: 'Pending Final',
-    approved: 'Approved',
-    declined: 'Declined',
+    submitted: 'Submitted',
+    hod_approved: 'HOD Approved',
+    hod_declined: 'HOD Declined',
+    accountant_approved: 'Accountant Approved',
+    accountant_declined: 'Accountant Declined',
+    principal_approved: 'Principal Approved',
+    principal_declined: 'Principal Declined',
+    final_approved: 'Final Approved',
+    final_declined: 'Final Declined',
     returned: 'Returned',
-  }
+    cancelled: 'Cancelled',
+    revised: 'Revised',
+  };
+  return map[status] || status;
+};
 
-  return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900 dark:text-white">{requisition.number}</span>
-          {requisition.isEmergency && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-medium rounded-full">
-              <Flame className="h-2.5 w-2.5" />
-              Emergency
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="text-sm text-gray-900 dark:text-white">{requisition.title}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{requisition.department}</div>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className="text-sm text-gray-900 dark:text-white">{requisition.type}</span>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className="text-sm font-medium text-gray-900 dark:text-white">{requisition.amount}</span>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[requisition.status]}`}>
-          {statusLabels[requisition.status]}
-        </span>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-        {requisition.date}
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <button className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-            <Eye className="h-4 w-4" />
-          </button>
-          {requisition.status === 'draft' && (
-            <button className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              <Edit className="h-4 w-4" />
-            </button>
-          )}
-          {requisition.status === 'pending_hod' && (
-            <button className="p-1 text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors">
-              <Check className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </td>
-    </tr>
-  )
-}
+const getSupplierName = (supplier: any): string => {
+  if (!supplier) return 'Unknown Supplier';
+  return supplier.company_name || supplier.full_name || supplier.name || supplier.supplier_name || 'Unknown Supplier';
+};
 
-// ============================================================
-// ORDER CARD
-// ============================================================
-
-function OrderCard({ order }: { order: Order }) {
-  const statusColors = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-    approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    issued: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    completed: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-    cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  }
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900 dark:text-white">{order.number}</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}>
-              {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-            </span>
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Supplier: {order.supplier}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Department: {order.department}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-lg font-bold text-gray-900 dark:text-white">{order.amount}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">{order.date}</p>
-          <div className="flex items-center gap-1 mt-1 justify-end">
-            <button className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              <Eye className="h-3.5 w-3.5" />
-            </button>
-            <button className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              <Download className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================
-// SUPPLIER CARD
-// ============================================================
-
-function SupplierCard({ supplier }: { supplier: Supplier }) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">
-          <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-white truncate">{supplier.name}</h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{supplier.company}</p>
-            </div>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${supplier.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-              {supplier.status}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
-            <span className="flex items-center gap-1">
-              <Star className="h-3 w-3 text-yellow-400" />
-              {supplier.rating} / 5
-            </span>
-            <span>•</span>
-            <span>{supplier.orders} orders</span>
-            <span>•</span>
-            <span>{supplier.email}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================
-// NOTIFICATION ITEM
-// ============================================================
-
-function NotificationItem({ notification }: { notification: Notification }) {
-  const colors = {
-    info: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    success: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  }
-
-  return (
-    <div className={`flex items-start gap-3 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 ${!notification.read ? 'bg-blue-50/50 dark:bg-blue-900/10 -mx-2 px-2 rounded-lg' : ''}`}>
-      <div className={`p-2 rounded-lg ${colors[notification.type]} flex-shrink-0 mt-0.5`}>
-        {notification.type === 'info' && <Info className="h-3.5 w-3.5" />}
-        {notification.type === 'success' && <CheckCircle className="h-3.5 w-3.5" />}
-        {notification.type === 'warning' && <AlertCircle className="h-3.5 w-3.5" />}
-        {notification.type === 'error' && <AlertTriangle className="h-3.5 w-3.5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">{notification.title}</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{notification.message}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notification.time}</p>
-      </div>
-      {!notification.read && (
-        <span className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full flex-shrink-0 mt-2"></span>
-      )}
-    </div>
-  )
-}
-
-// ============================================================
-// CHART PLACEHOLDER
-// ============================================================
-
-function ChartPlaceholder({ title, height = 200 }: { title: string; height?: number }) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">{title}</h3>
-      <div className={`h-[${height}px] bg-gradient-to-b from-gray-100/50 to-gray-50/50 dark:from-gray-700/30 dark:to-gray-800/30 rounded-lg flex items-center justify-center`}>
-        <div className="text-center">
-          <BarChart3 className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-          <p className="text-xs text-gray-400 dark:text-gray-500">Chart visualization will appear here</p>
-          <p className="text-[10px] text-gray-300 dark:text-gray-600">(Data will be loaded from API)</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================
+// ============================================
 // MAIN DASHBOARD PAGE
-// ============================================================
+// ============================================
 
 export default function DashboardPage() {
-  const { user, isAuthenticated } = useAuthContext()
-  const [activeTab, setActiveTab] = useState<'overview' | 'requisitions' | 'orders' | 'suppliers'>('overview')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedFilter, setSelectedFilter] = useState('all')
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthContext();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
 
-  // ============================================================
-  // MOCK DATA
-  // ============================================================
+  // ============================================
+  // SUPPLIER HOOKS
+  // ============================================
 
-  const stats: Stats = {
-    totalRequisitions: 47,
-    pendingApprovals: 8,
-    activeOrders: 12,
-    totalSpent: 'KSh 1,245,000',
-    approvedRequisitions: 32,
-    declinedRequisitions: 5,
-    totalSuppliers: 18,
-    pendingInvoices: 6,
-    budgetUtilization: '72%',
-    onTimeDeliveries: '94%',
-    averageApprovalTime: '2.4 days',
+  const suppliersHook = useSuppliers();
+  const { data: allSuppliersData, isLoading: suppliersLoading, refetch: refetchSuppliers } = suppliersHook.useAllSuppliers();
+  const { data: activeSuppliersData, isLoading: activeSuppliersLoading } = suppliersHook.useActiveSuppliers();
+
+  // Build filters with user_id and department_id
+  const userFilters = useMemo(() => {
+    if (!user) return {};
+    return {
+      user_id: user.id,
+      ...(user.department?.id ? { department_id: user.department.id } : {}),
+    };
+  }, [user]);
+
+  // ============================================
+  // HOOKS – all filtered by current user
+  // ============================================
+
+  const { data: requisitionsData, isLoading: requisitionsLoading, refetch: refetchRequisitions } = useRequisitions({
+    per_page: MAX_PER_PAGE,
+    ...userFilters,
+  });
+
+  const { data: requisitionStatsData, isLoading: statsLoading, refetch: refetchStats } = useRequisitionStats({
+    ...userFilters,
+  });
+
+  const { data: quotationsData, isLoading: quotesLoading, refetch: refetchQuotes } = useQuotations({
+    page: 1,
+    per_page: MAX_PER_PAGE,
+    ...userFilters,
+  });
+
+  const { data: purchaseOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = usePurchaseOrders({
+    per_page: MAX_PER_PAGE,
+    ...userFilters,
+  });
+
+  const { data: grnsData, isLoading: grnsLoading, refetch: refetchGrns } = useGrns({
+    per_page: MAX_PER_PAGE,
+    ...userFilters,
+  });
+
+  const { data: sansData, isLoading: sansLoading, refetch: refetchSans } = useSans({
+    per_page: MAX_PER_PAGE,
+    ...userFilters,
+  });
+
+  // Analytics hooks – pass user filters
+  const { data: requisitionAnalytics, refetch: refetchRequisitionAnalytics } = useRequisitionAnalyticsSummary(userFilters);
+  const { data: requisitionTrends, refetch: refetchRequisitionTrends } = useRequisitionTrends(userFilters);
+  const { data: approvalFunnel, refetch: refetchApprovalFunnel } = useApprovalFunnel(userFilters);
+  const { data: approvalCycle, refetch: refetchApprovalCycle } = useApprovalCycle(userFilters);
+  const { data: slaCompliance, refetch: refetchSlaCompliance } = useSlaCompliance(userFilters);
+  const { data: budgetUtilization, refetch: refetchBudgetUtilization } = useBudgetUtilization({
+    ...userFilters,
+  });
+  const { data: topSuppliers, refetch: refetchTopSuppliers } = useTopSuppliers(5, userFilters);
+  const { data: overduePOs, refetch: refetchOverduePOs } = useOverduePOs(userFilters);
+
+  // ============================================
+  // EXTRACT DATA
+  // ============================================
+
+  const requisitions = extractData(requisitionsData) as Requisition[];
+  const quotations = extractData(quotationsData);
+  const purchaseOrders = extractData(purchaseOrdersData) as PurchaseOrder[];
+  const allSuppliers = extractData(allSuppliersData) as Supplier[];
+  const grns = extractData(grnsData) as GoodsReceivedNote[];
+  const sans = extractData(sansData) as ServiceAcknowledgmentNote[];
+
+  // ============================================
+  // BUILD SUPPLIER MAP FOR LOOKUP
+  // ============================================
+
+  const supplierMap = useMemo(() => {
+    const map = new Map<number, Supplier>();
+    allSuppliers.forEach(supplier => {
+      if (supplier.id) {
+        map.set(supplier.id, supplier);
+      }
+    });
+    return map;
+  }, [allSuppliers]);
+
+  // ============================================
+  // DERIVED DATA – all user-specific
+  // ============================================
+
+  const totalRequisitions = requisitions.length;
+
+  const pendingApprovals = requisitions.filter(
+    (r) => ['submitted', 'hod_approved', 'accountant_approved', 'principal_approved'].includes(r.status)
+  ).length;
+
+  const activeOrders = purchaseOrders.filter(p => p.status === 'issued' || p.status === 'sent').length;
+
+  const totalSpent = purchaseOrders.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+
+  const approvedRequisitions = requisitions.filter(r => r.status === 'final_approved').length;
+
+  const declinedRequisitions = requisitions.filter(
+    r => r.status.includes('declined')
+  ).length;
+
+  const userSupplierIds = useMemo(() => {
+    const ids = new Set<number>();
+    requisitions.forEach(req => {
+      if (req.supplier_id) ids.add(req.supplier_id);
+    });
+    purchaseOrders.forEach(po => {
+      if (po.supplier_id) ids.add(po.supplier_id);
+    });
+    return ids;
+  }, [requisitions, purchaseOrders]);
+
+  const userSuppliers = useMemo(() => {
+    const suppliers: Supplier[] = [];
+    userSupplierIds.forEach(id => {
+      const supplier = supplierMap.get(id);
+      if (supplier) {
+        suppliers.push(supplier);
+      }
+    });
+    return suppliers;
+  }, [userSupplierIds, supplierMap]);
+
+  const totalSuppliers = userSuppliers.length;
+
+
+  const avgApprovalTime = approvalCycle?.cycle_time?.total_cycle || 0;
+
+  const slaComplianceRate = slaCompliance?.compliance_rate || 0;
+
+  const totalQtns = quotations.length;
+  const totalGrns = grns.length;
+  const completedGrns = grns.filter(g => g.status === 'completed').length;
+  const totalSans = sans.length;
+  const completedSans = sans.filter(s => s.status === 'completed').length;
+
+  const isLoading = requisitionsLoading || statsLoading || quotesLoading || ordersLoading ||
+    suppliersLoading || grnsLoading || sansLoading;
+
+  // ============================================
+  // STATUS DISTRIBUTION
+  // ============================================
+
+  const requisitionStatusDistribution = useMemo(() => {
+    const map: Record<string, number> = {};
+    requisitions.forEach((r: Requisition) => {
+      map[r.status] = (map[r.status] || 0) + 1;
+    });
+    return Object.entries(map).map(([status, count]) => ({
+      name: getRequisitionStatusLabel(status),
+      value: count,
+      status,
+      color: getRequisitionStatusColor(status),
+    }));
+  }, [requisitions]);
+
+  // ============================================
+  // DAILY TREND
+  // ============================================
+
+  const dailyTrend = useMemo(() => {
+    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+    const data = [];
+    const now = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+
+      const dayReqs = requisitions.filter((r: Requisition) => {
+        if (!r.created_at) return false;
+        return format(new Date(r.created_at), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+      });
+
+      const dayPOs = purchaseOrders.filter((p: PurchaseOrder) => {
+        if (!p.created_at) return false;
+        return format(new Date(p.created_at), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+      });
+
+      data.push({
+        date: format(date, 'MMM dd'),
+        requisitions: dayReqs.length,
+        orders: dayPOs.length,
+      });
+    }
+    return data;
+  }, [requisitions, purchaseOrders, timeRange]);
+
+  // ============================================
+  // BUILD STATS CARDS
+  // ============================================
+
+  const statsItems: StatCardItem[] = useMemo(() => {
+    return [
+      {
+        label: "My Requisitions",
+        value: totalRequisitions,
+        icon: ClipboardList,
+        tagLabel: "TOTAL",
+        tagColor: "blue",
+        subtitle: `${approvedRequisitions} approved`,
+      },
+      {
+        label: "Pending My Action",
+        value: pendingApprovals,
+        icon: Clock,
+        tagLabel: "PENDING",
+        tagColor: "amber",
+        subtitle: `Awaiting my approval`,
+      },
+      {
+        label: "My Active Orders",
+        value: activeOrders,
+        icon: ShoppingCart,
+        tagLabel: "ACTIVE",
+        tagColor: "emerald",
+        subtitle: `${purchaseOrders.length} total orders`,
+      },
+      {
+        label: "My Total Spent",
+        value: formatCurrency(totalSpent),
+        icon: DollarSign,
+        tagLabel: "SPENT",
+        tagColor: "purple",
+        subtitle: `Across ${purchaseOrders.length} orders`,
+        compact: false,
+      },
+      {
+        label: "Suppliers I Use",
+        value: totalSuppliers,
+        icon: Users,
+        tagLabel: "ACTIVE",
+        tagColor: "indigo",
+        subtitle: `${Math.min(userSuppliers.length, 5)} active suppliers`,
+      },
+
+      {
+        label: "My Avg Approval Time",
+        value: Math.round(avgApprovalTime),
+        icon: Timer,
+        tagLabel: "AVG",
+        tagColor: "amber",
+        suffix: 'h',
+        subtitle: `${approvedRequisitions} approvals`,
+      },
+      {
+        label: "My SLA Compliance",
+        value: Math.round(slaComplianceRate),
+        icon: Shield,
+        tagLabel: "SLA",
+        tagColor: "emerald",
+        suffix: '%',
+        subtitle: `${slaComplianceRate.toFixed(0)}% compliance`,
+      },
+    ];
+  }, [
+    totalRequisitions, pendingApprovals, activeOrders, totalSpent, totalSuppliers,
+    avgApprovalTime, slaComplianceRate, approvedRequisitions,
+    purchaseOrders.length, userSuppliers, budgetUtilization,
+  ]);
+
+  // ============================================
+  // TIPS & SUGGESTIONS
+  // ============================================
+
+  const tips = useMemo(() => {
+    const items = [];
+
+    if (pendingApprovals > 0) {
+      items.push({
+        icon: Clock,
+        title: `${pendingApprovals} requisitions pending your approval`,
+        description: 'Review and take action on pending requisitions to keep procurement moving',
+        action: 'Review Now',
+        href: '/requisitions/pending',
+        color: 'amber',
+      });
+    }
+
+    if (totalRequisitions === 0) {
+      items.push({
+        icon: Rocket,
+        title: 'Start your first requisition',
+        description: 'Create a new requisition to begin the procurement process',
+        action: 'Create Requisition',
+        href: '/requisitions/create',
+        color: 'blue',
+      });
+    }
+
+    if (totalSuppliers === 0) {
+      items.push({
+        icon: Users,
+        title: 'Add suppliers to your network',
+        description: 'Build your supplier base to streamline procurement',
+        action: 'Add Supplier',
+        href: '/procurement/suppliers',
+        color: 'purple',
+      });
+    }
+
+    if (slaComplianceRate < 80 && slaComplianceRate > 0) {
+      items.push({
+        icon: Shield,
+        title: 'SLA compliance needs attention',
+        description: `Current compliance rate is ${slaComplianceRate.toFixed(0)}%. Review approval bottlenecks`,
+        action: 'View Analytics',
+        href: '/procurement/reports',
+        color: 'red',
+      });
+    }
+
+
+    if (items.length === 0) {
+      items.push({
+        icon: ThumbsUp,
+        title: 'Everything looks great!',
+        description: 'Your procurement activities are on track. Keep up the good work!',
+        action: 'View Dashboard',
+        href: '#',
+        color: 'emerald',
+      });
+    }
+
+    return items;
+  }, [pendingApprovals, totalRequisitions, totalSuppliers, slaComplianceRate]);
+
+  // ============================================
+  // QUICK ACTIONS - Modern Icon Card Style (same as procurement)
+  // ============================================
+
+  const quickActions = [
+    {
+      title: 'New Requisition',
+      icon: PlusCircle,
+      href: '/requisitions/create',
+      color: 'from-blue-500 to-blue-600',
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+      description: 'Create and submit',
+      count: totalRequisitions,
+    },
+    {
+      title: 'Pending Approvals',
+      icon: Clock,
+      href: '/requisitions/pending',
+      color: 'from-amber-500 to-amber-600',
+      bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+      description: `${pendingApprovals} awaiting`,
+      count: pendingApprovals,
+    },
+    {
+      title: 'Manage Suppliers',
+      icon: Users,
+      href: '/procurement/suppliers',
+      color: 'from-purple-500 to-purple-600',
+      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+      iconColor: 'text-purple-600 dark:text-purple-400',
+      description: `${totalSuppliers} suppliers`,
+      count: totalSuppliers,
+    },
+    {
+      title: 'Purchase Orders',
+      icon: Package,
+      href: '/procurement/purchase-orders/manage-orders',
+      color: 'from-emerald-500 to-emerald-600',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      description: `${purchaseOrders.length} orders`,
+      count: purchaseOrders.length,
+    },
+    {
+      title: 'Invoices',
+      icon: Receipt,
+      href: '/procurement/invoices',
+      color: 'from-rose-500 to-rose-600',
+      bgColor: 'bg-rose-50 dark:bg-rose-900/20',
+      iconColor: 'text-rose-600 dark:text-rose-400',
+      description: 'Process payments',
+    },
+    {
+      title: 'Reports',
+      icon: BarChart3,
+      href: '/procurement/reports',
+      color: 'from-indigo-500 to-indigo-600',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+      iconColor: 'text-indigo-600 dark:text-indigo-400',
+      description: 'Analytics & insights',
+    },
+  ];
+
+  // ============================================
+  // RECENT ACTIVITIES
+  // ============================================
+
+  const recentActivities = useMemo(() => {
+    const activities: any[] = [];
+
+    requisitions.slice(0, 3).forEach((r: Requisition) => {
+      const statusStyle = getStatusStyle(r.status, 'requisition');
+      activities.push({
+        id: `req-${r.id}`,
+        icon: FileText,
+        title: `Requisition ${r.reference_number || r.id} ${r.status === 'submitted' ? 'submitted' : 'updated'}`,
+        description: `${r.title} - ${r.department?.name || 'Unknown department'}`,
+        time: formatTimeAgo(r.created_at),
+        color: 'bg-blue-500',
+        status: r.status,
+        type: 'requisition',
+        statusStyle,
+      });
+    });
+
+    purchaseOrders.slice(0, 2).forEach((p: PurchaseOrder) => {
+      const supplierName = p.supplier_id ? getSupplierName(supplierMap.get(p.supplier_id)) : 'Unknown';
+      const statusStyle = getStatusStyle(p.status, 'po');
+      activities.push({
+        id: `po-${p.id}`,
+        icon: ShoppingCart,
+        title: `Order ${p.po_number} ${p.status}`,
+        description: `Supplier: ${supplierName}`,
+        time: formatTimeAgo(p.created_at),
+        color: 'bg-emerald-500',
+        status: p.status,
+        type: 'po',
+        statusStyle,
+      });
+    });
+
+    return activities.slice(0, 6);
+  }, [requisitions, purchaseOrders, supplierMap]);
+
+  // ============================================
+  // REFRESH FUNCTION
+  // ============================================
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchRequisitions(),
+        refetchStats(),
+        refetchQuotes(),
+        refetchOrders(),
+        refetchSuppliers(),
+        refetchGrns(),
+        refetchSans(),
+        refetchRequisitionAnalytics(),
+        refetchRequisitionTrends(),
+        refetchApprovalFunnel(),
+        refetchApprovalCycle(),
+        refetchSlaCompliance(),
+        refetchBudgetUtilization(),
+        refetchTopSuppliers(),
+        refetchOverduePOs(),
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    refetchRequisitions,
+    refetchStats,
+    refetchQuotes,
+    refetchOrders,
+    refetchSuppliers,
+    refetchGrns,
+    refetchSans,
+    refetchRequisitionAnalytics,
+    refetchRequisitionTrends,
+    refetchApprovalFunnel,
+    refetchApprovalCycle,
+    refetchSlaCompliance,
+    refetchBudgetUtilization,
+    refetchTopSuppliers,
+    refetchOverduePOs,
+  ]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 300000);
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  if (!user) {
+    return (
+      <PageTemplate
+        title="Dashboard"
+        description="Please log in to view your dashboard"
+        icon={<LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        background="gradient"
+        variant="default"
+      >
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400" />
+          <p className="mt-4 text-muted-foreground">Redirecting to login...</p>
+        </div>
+      </PageTemplate>
+    );
   }
 
-  const recentActivities: Activity[] = [
-    {
-      id: '1',
-      icon: FileText,
-      title: 'Requisition MR-2026-0045 submitted',
-      description: 'Submitted by John Doe (Mathematics Department)',
-      time: '5 min ago',
-      color: 'bg-blue-500',
-      type: 'requisition'
-    },
-    {
-      id: '2',
-      icon: CheckCircle,
-      title: 'LPO-2026-0032 approved',
-      description: 'Approved by Principal',
-      time: '25 min ago',
-      color: 'bg-green-500',
-      type: 'order'
-    },
-    {
-      id: '3',
-      icon: AlertCircle,
-      title: 'Requisition MR-2026-0043 returned',
-      description: 'Returned by Accountant for revision',
-      time: '1 hour ago',
-      color: 'bg-red-500',
-      type: 'approval'
-    },
-    {
-      id: '4',
-      icon: Users,
-      title: 'New supplier registered',
-      description: 'ABC Supplies Ltd - Approved',
-      time: '2 hours ago',
-      color: 'bg-purple-500',
-      type: 'supplier'
-    },
-    {
-      id: '5',
-      icon: CreditCard,
-      title: 'Payment voucher PV-2026-0018 generated',
-      description: 'For supplier XYZ Services - KSh 45,000',
-      time: '3 hours ago',
-      color: 'bg-green-500',
-      type: 'payment'
-    },
-    {
-      id: '6',
-      icon: Truck,
-      title: 'GRN-2026-0024 confirmed',
-      description: 'Goods received from Tech Solutions Ltd',
-      time: '4 hours ago',
-      color: 'bg-blue-500',
-      type: 'order'
-    }
-  ]
-
-  const requisitions: Requisition[] = [
-    {
-      id: '1',
-      number: 'MR-2026-0045',
-      title: 'Laboratory Equipment',
-      department: 'Science Department',
-      type: 'goods',
-      amount: 'KSh 78,500',
-      status: 'pending_hod',
-      date: '2026-06-15',
-      requester: 'John Doe',
-      isEmergency: false
-    },
-    {
-      id: '2',
-      number: 'MR-2026-0044',
-      title: 'Computer Lab Maintenance',
-      department: 'ICT Department',
-      type: 'service',
-      amount: 'KSh 45,000',
-      status: 'pending_accountant',
-      date: '2026-06-14',
-      requester: 'Jane Smith',
-      isEmergency: false
-    },
-    {
-      id: '3',
-      number: 'MR-2026-0043',
-      title: 'Classroom Furniture',
-      department: 'Administration',
-      type: 'goods',
-      amount: 'KSh 120,000',
-      status: 'returned',
-      date: '2026-06-13',
-      requester: 'Mike Johnson',
-      isEmergency: false
-    },
-    {
-      id: '4',
-      number: 'MR-2026-0042',
-      title: 'Network Infrastructure Upgrade',
-      department: 'ICT Department',
-      type: 'service',
-      amount: 'KSh 250,000',
-      status: 'pending_principal',
-      date: '2026-06-12',
-      requester: 'Jane Smith',
-      isEmergency: true
-    },
-    {
-      id: '5',
-      number: 'MR-2026-0041',
-      title: 'Science Lab Chemicals',
-      department: 'Science Department',
-      type: 'goods',
-      amount: 'KSh 34,200',
-      status: 'approved',
-      date: '2026-06-11',
-      requester: 'John Doe',
-      isEmergency: false
-    }
-  ]
-
-  const orders: Order[] = [
-    {
-      id: '1',
-      number: 'LPO-2026-0032',
-      type: 'lpo',
-      supplier: 'ABC Supplies Ltd',
-      amount: 'KSh 78,500',
-      status: 'issued',
-      date: '2026-06-14',
-      department: 'Science Department'
-    },
-    {
-      id: '2',
-      number: 'LSO-2026-0018',
-      type: 'lso',
-      supplier: 'Tech Solutions Ltd',
-      amount: 'KSh 45,000',
-      status: 'approved',
-      date: '2026-06-13',
-      department: 'ICT Department'
-    },
-    {
-      id: '3',
-      number: 'LPO-2026-0031',
-      type: 'lpo',
-      supplier: 'ABC Supplies Ltd',
-      amount: 'KSh 120,000',
-      status: 'completed',
-      date: '2026-06-10',
-      department: 'Administration'
-    },
-    {
-      id: '4',
-      number: 'LSO-2026-0017',
-      type: 'lso',
-      supplier: 'Tech Solutions Ltd',
-      amount: 'KSh 250,000',
-      status: 'issued',
-      date: '2026-06-12',
-      department: 'ICT Department'
-    }
-  ]
-
-  const suppliers: Supplier[] = [
-    {
-      id: '1',
-      name: 'ABC Supplies Ltd',
-      company: 'ABC Supplies Ltd',
-      email: 'info@abcsupplies.com',
-      phone: '+254 700 000 000',
-      rating: 4.5,
-      status: 'active',
-      orders: 12
-    },
-    {
-      id: '2',
-      name: 'Tech Solutions Ltd',
-      company: 'Tech Solutions Ltd',
-      email: 'info@techsolutions.com',
-      phone: '+254 700 000 001',
-      rating: 4.0,
-      status: 'active',
-      orders: 8
-    },
-    {
-      id: '3',
-      name: 'XYZ Services',
-      company: 'XYZ Services',
-      email: 'info@xyzservices.com',
-      phone: '+254 700 000 002',
-      rating: 3.5,
-      status: 'active',
-      orders: 5
-    },
-    {
-      id: '4',
-      name: 'Global Supplies',
-      company: 'Global Supplies Ltd',
-      email: 'info@globalsupplies.com',
-      phone: '+254 700 000 003',
-      rating: 2.0,
-      status: 'blacklisted',
-      orders: 3
-    }
-  ]
-
-  const notifications: Notification[] = [
-    {
-      id: '1',
-      title: 'Requisition MR-2026-0045 requires approval',
-      message: 'John Doe submitted a requisition for Laboratory Equipment',
-      time: '5 min ago',
-      read: false,
-      type: 'info'
-    },
-    {
-      id: '2',
-      title: 'LPO-2026-0032 was approved',
-      message: 'The purchase order was approved by the Principal',
-      time: '25 min ago',
-      read: false,
-      type: 'success'
-    },
-    {
-      id: '3',
-      title: 'Requisition MR-2026-0043 was returned',
-      message: 'Accountant requested revision for Classroom Furniture',
-      time: '1 hour ago',
-      read: true,
-      type: 'warning'
-    },
-    {
-      id: '4',
-      title: 'Payment due in 3 days',
-      message: 'Invoice INV-2026-0015 is due for payment',
-      time: '2 hours ago',
-      read: true,
-      type: 'error'
-    }
-  ]
-
-  // ============================================================
-  // FILTERED DATA
-  // ============================================================
-
-  const filteredRequisitions = requisitions.filter(req => {
-    const matchesSearch = req.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.department.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = selectedFilter === 'all' || req.status === selectedFilter
-    return matchesSearch && matchesFilter
-  })
-
-  // ============================================================
-  // RENDER
-  // ============================================================
+  if (isLoading && !isRefreshing) {
+    return (
+      <PageTemplate
+        title="Dashboard"
+        description={`Welcome back, ${user.full_name || 'User'}! Loading your personalized dashboard...`}
+        icon={<LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+        background="gradient"
+        variant="default"
+      >
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400" />
+          <p className="mt-4 text-muted-foreground">Loading your data...</p>
+        </div>
+      </PageTemplate>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <PageTemplate
+      title="Dashboard"
+      description={`Welcome back, ${user.full_name || 'User'}! Here's your personalized procurement overview`}
+      icon={<LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />}
+      background="gradient"
+      variant="default"
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="h-9 gap-2 rounded-xl"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => router.push('/requisitions/create')}
+            className="gap-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/20 rounded-xl"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            New Requisition
+          </Button>
+        </div>
+      }
+    >
+      {/* ============================================ */}
+      {/* TIPS & SUGGESTIONS - Alert Banner */}
+      {/* ============================================ */}
 
-        {/* ============================================================
-             PAGE HEADER
-             ============================================================ */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Welcome back, {user?.full_name || 'User'}!
-              </h1>
-            </div>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Here's what's happening with your requisitions and purchases today.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <Download className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Export Report</span>
-            </button>
-            <Link
-              href="/requisitions/create"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow"
+      <div className="space-y-3 mb-6">
+        {tips.map((tip, index) => {
+          const colorMap = {
+            amber: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300',
+            blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300',
+            purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300',
+            red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300',
+            orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300',
+            emerald: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300',
+          };
+          const iconColorMap = {
+            amber: 'text-amber-500',
+            blue: 'text-blue-500',
+            purple: 'text-purple-500',
+            red: 'text-red-500',
+            orange: 'text-orange-500',
+            emerald: 'text-emerald-500',
+          };
+          return (
+            <div
+              key={index}
+              className={cn(
+                "flex items-center justify-between p-4 rounded-xl border",
+                colorMap[tip.color as keyof typeof colorMap]
+              )}
             >
-              <PlusCircle className="h-5 w-5" />
-              <span className="text-sm font-medium">New Requisition</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* ============================================================
-             QUICK STATS GRID
-             ============================================================ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Requisitions"
-            value={stats.totalRequisitions}
-            icon={FileText}
-            color="bg-blue-500"
-            href="/requisitions/my"
-            trend="up"
-            trendValue="+12% from last month"
-          />
-          <StatCard
-            title="Pending Approvals"
-            value={stats.pendingApprovals}
-            icon={Clock}
-            color="bg-yellow-500"
-            href="/requisitions/pending"
-            trend="down"
-            trendValue="-3 from last week"
-          />
-          <StatCard
-            title="Active Orders"
-            value={stats.activeOrders}
-            icon={ShoppingCart}
-            color="bg-green-500"
-            href="/orders"
-            trend="up"
-            trendValue="+5 new this week"
-          />
-          <StatCard
-            title="Total Spent"
-            value={stats.totalSpent}
-            icon={TrendingUp}
-            color="bg-purple-500"
-            href="/reports/spending"
-            trend="up"
-            trendValue="+8% from last month"
-          />
-        </div>
-
-        {/* ============================================================
-             SECONDARY STATS
-             ============================================================ */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Approved</p>
-            <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.approvedRequisitions}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Declined</p>
-            <p className="text-lg font-bold text-red-600 dark:text-red-400">{stats.declinedRequisitions}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Suppliers</p>
-            <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{stats.totalSuppliers}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Pending Invoices</p>
-            <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.pendingInvoices}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Budget Used</p>
-            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats.budgetUtilization}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">On-Time Delivery</p>
-            <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.onTimeDeliveries}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Approval Time</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">{stats.averageApprovalTime}</p>
-          </div>
-        </div>
-
-        {/* ============================================================
-             MAIN CONTENT: TWO COLUMN LAYOUT
-             ============================================================ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* LEFT COLUMN - Quick Actions & Notifications */}
-          <div className="lg:col-span-1 space-y-6">
-
-            {/* Quick Actions */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Zap className="h-5 w-5 text-yellow-500" />
-                Quick Actions
-              </h2>
-              <div className="space-y-2">
-                <QuickAction
-                  title="Create Requisition"
-                  icon={PlusCircle}
-                  href="/requisitions/create"
-                  color="bg-blue-500"
-                  description="Submit new requisition"
-                />
-                <QuickAction
-                  title="View Pending Approvals"
-                  icon={Clock}
-                  href="/requisitions/pending"
-                  color="bg-yellow-500"
-                  description="Review pending requisitions"
-                />
-                <QuickAction
-                  title="Manage Suppliers"
-                  icon={Users}
-                  href="/procurement/suppliers"
-                  color="bg-purple-500"
-                  description="Add or edit suppliers"
-                />
-                <QuickAction
-                  title="Generate LPO/LSO"
-                  icon={Package}
-                  href="/orders/lpo/create"
-                  color="bg-green-500"
-                  description="Create purchase orders"
-                />
-                <QuickAction
-                  title="Submit Invoice"
-                  icon={Receipt}
-                  href="/invoices"
-                  color="bg-red-500"
-                  description="Process supplier invoices"
-                />
-              </div>
-            </div>
-
-            {/* Notifications */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-blue-500" />
-                  Notifications
-                  <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                    {notifications.filter(n => !n.read).length}
-                  </span>
-                </h2>
-                <button className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                  Mark all read
-                </button>
-              </div>
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                {notifications.map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
-                ))}
-              </div>
-              <Link
-                href="/notifications"
-                className="mt-3 block text-center text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View all notifications
-              </Link>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN - Activity & Charts */}
-          <div className="lg:col-span-2 space-y-6">
-
-            {/* Recent Activity */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-blue-500" />
-                  Recent Activity
-                </h2>
-                <div className="flex items-center gap-2">
-                  <button className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
-                  <Link
-                    href="/reports/audit"
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    View all
-                  </Link>
+              <div className="flex items-center gap-3 flex-1">
+                <div className={cn("p-2 rounded-lg bg-white/50 dark:bg-white/5", iconColorMap[tip.color as keyof typeof iconColorMap])}>
+                  <tip.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{tip.title}</p>
+                  <p className="text-sm opacity-80">{tip.description}</p>
                 </div>
               </div>
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                {recentActivities.map((activity) => (
-                  <ActivityItem
-                    key={activity.id}
-                    icon={activity.icon}
-                    title={activity.title}
-                    description={activity.description}
-                    time={activity.time}
-                    color={activity.color}
-                  />
-                ))}
-              </div>
+              {tip.href !== '#' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 rounded-xl border-2 bg-white/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10"
+                  onClick={() => router.push(tip.href)}
+                >
+                  {tip.action}
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
             </div>
+          );
+        })}
+      </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ChartPlaceholder title="Requisitions by Department" height={200} />
-              <ChartPlaceholder title="Monthly Spending Trend" height={200} />
-            </div>
+      {/* ============================================ */}
+      {/* STATS CARDS */}
+      {/* ============================================ */}
+
+      <StatsCards
+        stats={statsItems}
+        isLoading={isLoading}
+        columns={8}
+        variant="default"
+        formatCompact={true}
+        tagOrientation="none"
+      />
+
+      {/* ============================================ */}
+      {/* QUICK ACTIONS - Modern Icon Card Style (same as procurement) */}
+      {/* ============================================ */}
+
+      <div className="mt-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Quick Actions</h3>
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
         </div>
-
-        {/* ============================================================
-             REQUISITIONS TABLE
-             ============================================================ */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-blue-500" />
-              Recent Requisitions
-              <span className="ml-1 text-sm font-normal text-gray-500 dark:text-gray-400">
-                ({requisitions.length} total)
-              </span>
-            </h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search requisitions..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-48"
-                />
-              </div>
-              <select
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="pending_hod">Pending HOD</option>
-                <option value="pending_accountant">Pending Accountant</option>
-                <option value="pending_principal">Pending Principal</option>
-                <option value="pending_final_approval">Pending Final</option>
-                <option value="approved">Approved</option>
-                <option value="declined">Declined</option>
-                <option value="returned">Returned</option>
-              </select>
-              <Link
-                href="/requisitions/all"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Requisition No.</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title / Department</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRequisitions.length > 0 ? (
-                  filteredRequisitions.map((req) => (
-                    <RequisitionRow key={req.id} requisition={req} />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search className="h-8 w-8 text-gray-300 dark:text-gray-600" />
-                        <p>No requisitions found</p>
-                        <p className="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search or filter</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* ============================================================
-             ORDERS & SUPPLIERS GRID
-             ============================================================ */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Recent Orders */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Package className="h-5 w-5 text-green-500" />
-                Recent Orders
-              </h2>
-              <Link
-                href="/orders"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {orders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))}
-            </div>
-          </div>
-
-          {/* Suppliers */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Users className="h-5 w-5 text-purple-500" />
-                Top Suppliers
-              </h2>
-              <Link
-                href="/procurement/suppliers"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {suppliers.slice(0, 3).map((supplier) => (
-                <SupplierCard key={supplier.id} supplier={supplier} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ============================================================
-             QUICK LINKS FOOTER
-             ============================================================ */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {[
-            { name: 'My Requisitions', href: '/requisitions/my', icon: FileText },
-            { name: 'Quotations', href: '/procurement/quotations', icon: FileText },
-            { name: 'LPO/LSO', href: '/orders', icon: ShoppingCart },
-            { name: 'Invoices', href: '/invoices', icon: CreditCard },
-            { name: 'Reports', href: '/reports/requisitions', icon: TrendingUp },
-            { name: 'Settings', href: '/admin/settings', icon: Settings },
-          ].map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {quickActions.map((action) => (
+            <button
+              key={action.title}
+              onClick={() => router.push(action.href)}
+              className="group relative p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-lg hover:border-transparent transition-all duration-300 hover:-translate-y-1 text-left overflow-hidden"
             >
-              <link.icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{link.name}</span>
-            </Link>
+              <div className={cn(
+                "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl",
+                `bg-gradient-to-br ${action.color}`
+              )} />
+              <div className="relative z-10">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-all duration-300 group-hover:scale-110",
+                  action.bgColor
+                )}>
+                  <action.icon className={cn("h-6 w-6", action.iconColor, "group-hover:text-white transition-colors duration-300")} />
+                </div>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-white transition-colors duration-300">
+                  {action.title}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 group-hover:text-white/80 transition-colors duration-300 mt-0.5">
+                  {action.description}
+                </p>
+                {action.count !== undefined && action.count > 0 && (
+                  <Badge className="mt-2 bg-white/20 text-white border-0 text-[10px]">
+                    {action.count}
+                  </Badge>
+                )}
+              </div>
+            </button>
           ))}
         </div>
+      </div>
 
-        {/* ============================================================
-             SYSTEM STATUS
-             ============================================================ */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">System Operational</span>
+      {/* ============================================ */}
+      {/* REQUISITION STATUS & TREND */}
+      {/* ============================================ */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Requisition Status Distribution */}
+        <Card className="border-0 shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden hover:shadow-md transition-all duration-300">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                    <PieChart className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  My Requisition Status
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">Distribution by status for your requisitions</CardDescription>
               </div>
-              <span className="text-xs text-gray-400 dark:text-gray-500">|</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500">Last updated: 2 min ago</span>
+              <Badge variant="outline" className="text-xs rounded-full px-3 py-1 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                {totalRequisitions} Total
+              </Badge>
             </div>
-            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-              <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                12 online
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Peak hours: 8AM - 5PM
-              </span>
-              <Link href="/help" className="text-blue-600 dark:text-blue-400 hover:underline">
-                Need help?
-              </Link>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <div style={{ height: 260 }} className="w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={requisitionStatusDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {requisitionStatusDistribution.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.color}
+                        strokeWidth={0}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => router.push(`/requisitions/manage?status=${entry.status}`)}
+                      />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload) return null;
+                      return (
+                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 min-w-[180px]">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{payload[0]?.payload?.name}</p>
+                          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{payload[0]?.value}</p>
+                          <p className="text-xs text-muted-foreground">Click to filter</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} iconType="circle" iconSize={8} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Trend */}
+        <Card className="border-0 shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden hover:shadow-md transition-all duration-300">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                    <Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  My Activity Trend
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">Daily activity over {timeRange}</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs rounded-full px-3 py-1 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                {dailyTrend.reduce((acc, item) => acc + item.requisitions, 0)} Total
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <div style={{ height: 260 }} className="w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dailyTrend}>
+                  <defs>
+                    <linearGradient id="colorReqs" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <RechartsTooltip
+                    content={({ active, payload, label }: any) => {
+                      if (!active || !payload) return null;
+                      return (
+                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 min-w-[180px]">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{label}</p>
+                          {payload.map((item: any, index: number) => (
+                            <div key={index} className="flex items-center justify-between gap-4 py-1">
+                              <div className="flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color || item.stroke }} />
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{item.name}</span>
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend />
+                  <Area type="monotone" dataKey="requisitions" name="My Requisitions" stroke="#3b82f6" fillOpacity={1} fill="url(#colorReqs)" />
+                  <Area type="monotone" dataKey="orders" name="My Orders" stroke="#10b981" fillOpacity={1} fill="url(#colorOrders)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ============================================ */}
+      {/* RECENT ACTIVITY with Enhanced Badges */}
+      {/* ============================================ */}
+
+      <Card className="border-0 shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden mt-6">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                  <Activity className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                My Recent Activity
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">Latest actions I've taken</CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/reports/audit')}
+              className="gap-1 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              View All
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-5 pt-0">
+          <ScrollArea className="h-[300px] pr-4">
+            <div className="space-y-1">
+              {recentActivities.length > 0 ? (
+                recentActivities.map((activity) => {
+                  const statusStyle = activity.statusStyle || getStatusStyle(activity.status, activity.type);
+                  return (
+                    <div
+                      key={activity.id}
+                      className="flex items-start gap-3 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/30 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <div className={`p-2 rounded-lg ${activity.color} mt-0.5 flex-shrink-0`}>
+                        <activity.icon className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.title}</p>
+                          <Badge
+                            className="text-[10px] rounded-full px-2 py-0.5 border-0"
+                            style={{
+                              backgroundColor: statusStyle.bg,
+                              color: statusStyle.text,
+                              borderColor: statusStyle.border,
+                            }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full inline-block mr-1" style={{ backgroundColor: statusStyle.dot }} />
+                            {activity.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{activity.description}</p>
+                      </div>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap flex-shrink-0">{activity.time}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-full mb-4">
+                    <Activity className="h-8 w-8 text-gray-400 dark:text-gray-600" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">No recent activity</p>
+                  <p className="text-xs text-muted-foreground mt-1">Start by creating your first requisition</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* ============================================ */}
+      {/* RECENT REQUISITIONS & ORDERS with Enhanced Status Colors */}
+      {/* ============================================ */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Recent Requisitions */}
+        <Card className="border-0 shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <ClipboardList className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                My Recent Requisitions
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">Latest 5 requisitions I created</CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/requisitions/manage')}
+              className="gap-1 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              View All
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-800/50">
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Reference</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Title</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>
+                    <th className="text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requisitions
+                    .sort((a: Requisition, b: Requisition) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .slice(0, 5)
+                    .map((req: Requisition) => {
+                      const statusStyle = getStatusStyle(req.status, 'requisition');
+                      return (
+                        <tr
+                          key={req.id}
+                          className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors"
+                          onClick={() => router.push(`/requisitions/${req.id}`)}
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                            {req.reference_number || req.id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                            {req.title}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              className="flex items-center gap-1.5 px-3 py-1 font-medium rounded-full border"
+                              style={{
+                                backgroundColor: statusStyle.bg,
+                                color: statusStyle.text,
+                                borderColor: statusStyle.border,
+                              }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusStyle.dot }} />
+                              {getRequisitionStatusLabel(req.status)}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {formatCurrency(req.total_amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/requisitions/${req.id}`);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {requisitions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No requisitions found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Orders with Enhanced Status Colors */}
+        <Card className="border-0 shadow-sm rounded-2xl bg-white dark:bg-gray-900 overflow-hidden">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                <div className="p-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                  <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                My Recent Orders
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">Latest 5 purchase orders I created</CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/procurement/purchase-orders/manage-orders')}
+              className="gap-1 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              View All
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-800/50">
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">PO #</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Supplier</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
+                    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>
+                    <th className="text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseOrders
+                    .sort((a: PurchaseOrder, b: PurchaseOrder) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .slice(0, 5)
+                    .map((order: PurchaseOrder) => {
+                      const supplierName = order.supplier_id ? getSupplierName(supplierMap.get(order.supplier_id)) : 'Unknown';
+                      const statusStyle = getStatusStyle(order.status, 'po');
+                      return (
+                        <tr
+                          key={order.id}
+                          className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors"
+                          onClick={() => router.push(`/procurement/purchase-orders/${order.id}`)}
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                            {order.po_number}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                            {supplierName}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              className="flex items-center gap-1.5 px-3 py-1 font-medium rounded-full border"
+                              style={{
+                                backgroundColor: statusStyle.bg,
+                                color: statusStyle.text,
+                                borderColor: statusStyle.border,
+                              }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusStyle.dot }} />
+                              {order.status_label || order.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {formatCurrency(order.total_amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/procurement/purchase-orders/${order.id}`);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {purchaseOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No orders found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ============================================ */}
+      {/* SYSTEM STATUS */}
+      {/* ============================================ */}
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-600 dark:text-gray-300">System Operational</span>
+            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500">|</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">Last updated: {formatTimeAgo(new Date())}</span>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <span className="flex items-center gap-1">
+              <User className="h-3 w-3" />
+              {user.full_name || 'User'} online
+            </span>
+            <span className="flex items-center gap-1">
+              <Building2 className="h-3 w-3" />
+              {user.department?.name || 'No department'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {totalSuppliers} suppliers
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Peak hours: 8AM - 5PM
+            </span>
+            <Link href="/help" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Need help?
+            </Link>
           </div>
         </div>
-
       </div>
-    </div>
-  )
+    </PageTemplate>
+  );
 }

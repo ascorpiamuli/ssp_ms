@@ -54,7 +54,9 @@ export default function RootLayout({
               <ProgressBarProvider>
                 <ScrollRestoration>
                   <ToastProvider>
-                    <main className="min-h-screen bg-white dark:bg-gray-900">
+                    {/* CHANGED: Use bg-background instead of hardcoded colors.
+                        This will now respect the black background defined in globals.css for dark mode. */}
+                    <main className="min-h-screen bg-background text-foreground">
                       {children}
                     </main>
                     <GlobalModals />
@@ -70,7 +72,8 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
+      {/* Added bg-background here as well to ensure full coverage */}
+      <body className="antialiased bg-background text-foreground">
         {isDevelopment ? (
           <ErrorBoundary>{content}</ErrorBoundary>
         ) : (

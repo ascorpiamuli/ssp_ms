@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { tokenManager } from '@/services/api'
@@ -145,22 +145,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ✅ Track if we're in the middle of a redirect to avoid loops
   const isRedirectingRef = useRef(false)
 
-  // ✅ Track previous path to detect if we just came from a public path
-  const previousPathRef = useRef<string | null>(null)
+  // ✅ Track if auth has been checked once
+  const hasCheckedAuthRef = useRef(false)
 
-  // Check auth on mount
+  // ============================================
+  // ✅ FIX: Memoize refetchUser to prevent re-creation
+  // ============================================
+
+  const refetchUser = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await refetchUserRaw()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [refetchUserRaw])
+
+  // ============================================
+  // ✅ FIX: Check auth ONLY ONCE on mount
+  // ============================================
+
   useEffect(() => {
+    // ✅ Only run once on mount
+    if (hasCheckedAuthRef.current) return
+
     const checkAuth = async () => {
       const token = tokenManager.get()
       if (token) {
-        await refetchUserRaw()
+        await refetchUser()
       }
       setIsInitialized(true)
+      hasCheckedAuthRef.current = true
     }
-    checkAuth()
-  }, [refetchUserRaw])
 
-  // ✅ Handle redirects based on auth state - WITH SAFEGUARDS
+    checkAuth()
+    // ✅ Empty dependency array - ONLY runs on mount
+  }, [])
+
+  // ============================================
+  // ✅ FIX: Handle redirects based on auth state
+  // ============================================
+
   useEffect(() => {
     // Don't redirect if not initialized or still loading
     if (!isInitialized || isLoading) return
@@ -170,21 +195,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const isPublicPath = publicPaths.some(path => pathname?.startsWith(path))
 
-    // ✅ Special case: If we're on a public path and have a token but no user,
-    // wait for the user to load before redirecting
-    if (isPublicPath && tokenManager.get() && !user) {
-      // User is loading, don't redirect
-      return
-    }
-
-    // ✅ Redirect to login if not authenticated and on protected page
+    // Redirect to login if not authenticated and on protected page
     if (!user && !isPublicPath) {
       isRedirectingRef.current = true
       router.push('/login')
       return
     }
 
-    // ✅ Redirect to dashboard if authenticated and on public page
+    // Redirect to dashboard if authenticated and on public page
     if (user && isPublicPath) {
       isRedirectingRef.current = true
       router.push('/dashboard')
@@ -201,19 +219,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ============================================
 
   const login = useCallback(async (email: string, password: string, rememberMe: boolean = false) => {
-    // Reset redirect flag before login
     isRedirectingRef.current = false
     await loginMutation({ email, password, rememberMe })
   }, [loginMutation])
 
   const logout = useCallback(async () => {
-    // Reset redirect flag before logout
     isRedirectingRef.current = false
     await logoutMutation()
   }, [logoutMutation])
 
   const register = useCallback(async (userData: any) => {
-    // ✅ Reset redirect flag before registration
     isRedirectingRef.current = false
     await registerMutation(userData)
   }, [registerMutation])
@@ -223,7 +238,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [forgotPasswordMutation])
 
   const resetPassword = useCallback(async (data: { email: string; token: string; password: string; password_confirmation: string }) => {
-    // ✅ Reset redirect flag before password reset
     isRedirectingRef.current = false
     return await resetPasswordMutation(data)
   }, [resetPasswordMutation])
@@ -245,21 +259,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refetchCompletionStatusRaw()
   }, [refetchCompletionStatusRaw])
 
-  // Wrap refetchUser with loading state
-  const refetchUser = useCallback(async () => {
-    setIsRefreshing(true)
-    try {
-      await refetchUserRaw()
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [refetchUserRaw])
-
   // ============================================
-  // CONTEXT VALUE
+  // MEMOIZED CONTEXT VALUE
   // ============================================
 
-  const value: AuthContextType = {
+  const value = useMemo((): AuthContextType => ({
     // User state
     user,
     isLoading: isLoading || !isInitialized || isRefreshing,
@@ -305,7 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuditor,
     isProcurement,
 
-    // NEW: Role label and description helpers
+    // Role label and description helpers
     getRoleLabel,
     getRoleDescription,
     getRoleName,
@@ -320,7 +324,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Refetch user data
     refetchUser,
-  }
+  }), [
+    user,
+    isLoading,
+    isInitialized,
+    isRefreshing,
+    isAuthenticated,
+    login,
+    logout,
+    register,
+    forgotPassword,
+    resetPassword,
+    updateProfile,
+    uploadAvatar,
+    changePassword,
+    isProfileComplete,
+    profilePercentage,
+    refetchCompletionStatus,
+    departments,
+    availableRoles,
+    supplierCategories,
+    refreshDropdownData,
+    hasPermission,
+    hasRole,
+    isAdmin,
+    isSupplier,
+    isHOD,
+    isAccountant,
+    isPrincipal,
+    isFinalApprover,
+    isStaff,
+    isAuditor,
+    isProcurement,
+    getRoleLabel,
+    getRoleDescription,
+    getRoleName,
+    getRoleDisplayName,
+    getUserRolesWithDetails,
+    hasRoleByNameOrLabel,
+    isUpdatingProfile,
+    isChangingPassword,
+    isUploadingAvatar,
+    refetchUser,
+  ])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

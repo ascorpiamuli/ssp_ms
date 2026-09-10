@@ -26,14 +26,13 @@ return Application::configure(basePath: dirname(__DIR__))
       'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
       'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
       'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
-      'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+      'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,  // Can keep or remove
       'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
       'role' => \App\Http\Middleware\CheckRole::class,
       'permission' => \App\Http\Middleware\CheckPermission::class,
     ]);
 
     // Trust Proxies - Allow all proxies and forward all headers
-    // This tells Laravel to trust the X-Forwarded-* headers
     $middleware->trustProxies(
       at: [
         '172.20.0.0/16',
@@ -52,9 +51,9 @@ return Application::configure(basePath: dirname(__DIR__))
       \App\Http\Middleware\ForceJsonResponse::class,
     ]);
 
-    // API Middleware Group - Append
+    // API Middleware Group - REMOVE THROTTLE
     $middleware->api(append: [
-      \Illuminate\Routing\Middleware\ThrottleRequests::class . ':api',
+      // REMOVED: \Illuminate\Routing\Middleware\ThrottleRequests::class . ':api',
       \Illuminate\Routing\Middleware\SubstituteBindings::class,
     ]);
   })

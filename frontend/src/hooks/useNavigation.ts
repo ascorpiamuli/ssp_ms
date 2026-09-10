@@ -1,17 +1,19 @@
 // hooks/useNavigation.ts
 
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { navigationSections } from '@/lib/navigation/sections'
 import { NavItem, NavigationSection } from '@/lib/types/navigation.types'
 
 const ACTIVE_TAB_STORAGE_KEY = 'sspms_active_tab'
 const OPEN_SECTIONS_STORAGE_KEY = 'sspms_open_sections'
+const COMING_SOON_ROUTE = '/coming-soon'
 
 export function useNavigation() {
   const { user, isAuthenticated, roles } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
 
   // Initialize open sections from localStorage - FIXED: explicit Set<string> return type
   const getInitialOpenSections = useCallback((): Set<string> => {
@@ -206,6 +208,57 @@ export function useNavigation() {
     return item.badge || ''
   }, [dynamicBadges])
 
+  // ✅ Check if an item is disabled
+  const isItemDisabled = useCallback((item: NavItem): boolean => {
+    return item.disabled === true
+  }, [])
+
+  // ✅ Get the appropriate href for an item (coming soon if disabled)
+  const getItemHref = useCallback((item: NavItem): string => {
+    if (item.disabled) {
+      return COMING_SOON_ROUTE
+    }
+    return item.href
+  }, [])
+
+  // ✅ Navigate to an item, handling disabled items
+  const navigateTo = useCallback((item: NavItem) => {
+    if (item.disabled) {
+      // Store the original path for reference
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('redirected_from', item.href)
+        sessionStorage.setItem('redirected_item_name', item.name)
+        sessionStorage.setItem('redirected_item_id', item.id)
+      }
+      router.push(COMING_SOON_ROUTE)
+    } else {
+      router.push(item.href)
+    }
+  }, [router])
+
+  // ✅ Check if current page is the coming soon page
+  const isComingSoonPage = useCallback(() => {
+    return pathname === COMING_SOON_ROUTE
+  }, [pathname])
+
+  // ✅ Get redirected from info
+  const getRedirectedFrom = useCallback(() => {
+    if (typeof window === 'undefined') return null
+    return {
+      path: sessionStorage.getItem('redirected_from'),
+      name: sessionStorage.getItem('redirected_item_name'),
+      id: sessionStorage.getItem('redirected_item_id')
+    }
+  }, [])
+
+  // ✅ Clear redirected info
+  const clearRedirectedInfo = useCallback(() => {
+    if (typeof window === 'undefined') return
+    sessionStorage.removeItem('redirected_from')
+    sessionStorage.removeItem('redirected_item_name')
+    sessionStorage.removeItem('redirected_item_id')
+  }, [])
+
   // Update active tab when path changes
   useEffect(() => {
     if (navigation.length === 0) {
@@ -374,9 +427,16 @@ export function useNavigation() {
       setActiveTabId(tabId)
       saveActiveTab(tabId)
     },
-    // ✅ New methods for dynamic badges
+    // ✅ Dynamic badge methods
     updateBadge,
     getBadgeValue,
     dynamicBadges,
+    // ✅ Disabled item handling methods
+    isItemDisabled,
+    getItemHref,
+    navigateTo,
+    isComingSoonPage,
+    getRedirectedFrom,
+    clearRedirectedInfo,
   }
 }

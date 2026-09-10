@@ -24,25 +24,36 @@ import { ProfileService } from '@/services/profile.service';
 import { DepartmentService } from '@/services/department.service';
 import { RoleService } from '@/services/role.service';
 import { SupplierService } from '@/services/supplier.service';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
 export function useAuth() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { success, error } = useToast();
+
+  // ✅ Use ref to track initialization to prevent double calls
+  const isInitializedRef = useRef(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // ============================================
-  // INITIALIZATION - Check session on mount
+  // ✅ FIX 1: INITIALIZATION - Only runs ONCE on mount
   // ============================================
 
   useEffect(() => {
+    // ✅ Prevent double initialization
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     const initAuth = async () => {
       const token = tokenManager.get();
 
       if (token) {
         try {
-          await refetchUser();
+          // ✅ Only refetch if we have a token and user data doesn't exist
+          const existingUser = queryClient.getQueryData(['user']);
+          if (!existingUser) {
+            await refetchUser();
+          }
         } catch (err) {
           tokenManager.remove();
           if (typeof window !== 'undefined') {
@@ -55,15 +66,12 @@ export function useAuth() {
     };
 
     initAuth();
-  }, []);
+  }, []); // ✅ Empty dependency array - runs once
 
   // ============================================
-  // QUERIES
+  // ✅ FIX 2: USER QUERY - Proper caching to prevent repeated calls
   // ============================================
 
-  /**
-   * Get current user - with session validation
-   */
   const {
     data: userData,
     refetch: refetchUser,
@@ -92,58 +100,92 @@ export function useAuth() {
         throw error;
       }
     },
-    enabled: typeof window !== 'undefined' && !!tokenManager.get() && isInitialized,
+    // ✅ Only enable when we have a token AND initialized
+    enabled: !!(typeof window !== 'undefined' && tokenManager.get() && isInitialized),
+
+    // ✅ IMPORTANT: Prevent retries on auth errors
     retry: false,
-    staleTime: 5 * 60 * 1000,
+
+    // ✅ CRITICAL: Long stale time to prevent refetches
+    staleTime: 30 * 60 * 1000, // 30 minutes
+
+    // ✅ Long cache time
+    gcTime: 60 * 60 * 1000, // 60 minutes
+
+    // ✅ Prevent refetch on window focus
+    refetchOnWindowFocus: false,
+
+    // ✅ Prevent refetch on reconnect
+    refetchOnReconnect: false,
+
+    // ✅ Don't refetch on mount if data exists
+    refetchOnMount: true,
+
+    // ✅ Prevent automatic refetching
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
 
   const user = userData?.data?.user || null;
   const permissions = userData?.data?.permissions || [];
   const roles = userData?.data?.roles || [];
-  const isAuthenticated = !!user;
 
-  /**
-   * Get profile completion status
-   */
+  // ✅ Memoize authentication state to prevent unnecessary re-renders
+  const isAuthenticated = useMemo(() => !!user, [user]);
+
+  // ============================================
+  // ✅ FIX 3: PROFILE COMPLETION - Only runs when authenticated
+  // ============================================
+
   const { data: completionStatus, refetch: refetchCompletionStatus } = useQuery({
     queryKey: ['profile', 'completion'],
     queryFn: () => ProfileService.getCompletionStatus(),
     enabled: isAuthenticated,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  /**
-   * Get active departments (for dropdowns)
-   */
+  // ============================================
+  // ✅ FIX 4: DROPDOWN DATA - Long cache times
+  // ============================================
+
   const { data: departmentsResponse, refetch: refetchDepartments, isLoading: isLoadingDepartments } = useQuery({
     queryKey: ['departments', 'active'],
     queryFn: () => DepartmentService.getActiveDepartments(),
-    staleTime: 5 * 60 * 1000,
+    enabled: isAuthenticated,
+    staleTime: 60 * 60 * 1000, // 60 minutes
+    gcTime: 120 * 60 * 1000, // 120 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  /**
-   * Get available roles (for dropdowns) - now includes label and description
-   */
   const { data: rolesResponse, refetch: refetchRoles, isLoading: isLoadingRoles } = useQuery({
     queryKey: ['roles', 'available'],
     queryFn: () => RoleService.getAvailableRoles(),
-    staleTime: 10 * 60 * 1000,
+    enabled: isAuthenticated,
+    staleTime: 60 * 60 * 1000, // 60 minutes
+    gcTime: 120 * 60 * 1000, // 120 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  /**
-   * Get supplier categories (for dropdowns)
-   */
   const { data: categoriesResponse, refetch: refetchCategories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['supplier', 'categories'],
     queryFn: () => SupplierService.getCategories(),
-    staleTime: 10 * 60 * 1000,
+    enabled: isAuthenticated,
+    staleTime: 60 * 60 * 1000, // 60 minutes
+    gcTime: 120 * 60 * 1000, // 120 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // ============================================
-  // DROPDOWN DATA HELPERS
+  // DROPDOWN DATA HELPERS (memoized)
   // ============================================
 
-  const getDepartments = () => {
+  const getDepartments = useCallback(() => {
     if (Array.isArray(departmentsResponse)) {
       return departmentsResponse;
     }
@@ -151,9 +193,9 @@ export function useAuth() {
       return departmentsResponse.data;
     }
     return [];
-  };
+  }, [departmentsResponse]);
 
-  const getAvailableRoles = () => {
+  const getAvailableRoles = useCallback(() => {
     if (Array.isArray(rolesResponse)) {
       return rolesResponse;
     }
@@ -161,9 +203,9 @@ export function useAuth() {
       return rolesResponse.data;
     }
     return [];
-  };
+  }, [rolesResponse]);
 
-  const getSupplierCategories = () => {
+  const getSupplierCategories = useCallback(() => {
     if (Array.isArray(categoriesResponse)) {
       return categoriesResponse;
     }
@@ -171,69 +213,47 @@ export function useAuth() {
       return categoriesResponse.data;
     }
     return [];
-  };
+  }, [categoriesResponse]);
 
   // ============================================
-  // USER ROLE HELPERS (with labels)
+  // ✅ FIX 5: USER ROLE HELPERS (memoized)
   // ============================================
 
-  /**
-   * Get the user's primary role label
-   */
-  const getRoleLabel = (): string | null => {
+  const getRoleLabel = useCallback((): string | null => {
     if (!user) return null;
     return user.role_label || null;
-  };
+  }, [user]);
 
-  /**
-   * Get the user's primary role description
-   */
-  const getRoleDescription = (): string | null => {
+  const getRoleDescription = useCallback((): string | null => {
     if (!user) return null;
     return user.role_description || null;
-  };
+  }, [user]);
 
-  /**
-   * Get the user's primary role name
-   */
-  const getRoleName = (): string | null => {
+  const getRoleName = useCallback((): string | null => {
     if (!user) return null;
     return user.role || null;
-  };
+  }, [user]);
 
-  /**
-   * Get the user's display name (label with fallback to formatted name)
-   */
-  const getRoleDisplayName = (): string => {
+  const getRoleDisplayName = useCallback((): string => {
     if (!user) return 'No Role Assigned';
     if (user.role_label) return user.role_label;
     if (user.role) return user.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     return 'No Role Assigned';
-  };
+  }, [user]);
 
-  /**
-   * Get all user roles with labels and descriptions
-   */
-  const getUserRolesWithDetails = (): Role[] => {
+  const getUserRolesWithDetails = useCallback((): Role[] => {
     if (!user || !user.role_details) return [];
     return user.role_details;
-  };
+  }, [user]);
 
-  /**
-   * Check if user has a specific role by name or label
-   */
-  const hasRoleByNameOrLabel = (roleNameOrLabel: string): boolean => {
+  const hasRoleByNameOrLabel = useCallback((roleNameOrLabel: string): boolean => {
     if (!user) return false;
     if (user.role === 'ADMIN') return true;
 
-    // Check by role name
     if (user.role === roleNameOrLabel) return true;
     if (roles.includes(roleNameOrLabel)) return true;
-
-    // Check by role label
     if (user.role_label === roleNameOrLabel) return true;
 
-    // Check in role_details
     if (user.role_details) {
       return user.role_details.some(role =>
         role.name === roleNameOrLabel ||
@@ -242,10 +262,130 @@ export function useAuth() {
     }
 
     return false;
-  };
+  }, [user, roles]);
 
   // ============================================
-  // MUTATIONS
+  // ✅ FIX 6: ROLE HELPERS (memoized)
+  // ============================================
+
+  const hasPermission = useCallback((permission: string): boolean => {
+    if (!permissions.length) return false;
+    if (user?.role === 'ADMIN') return true;
+    return permissions.includes(permission);
+  }, [permissions, user]);
+
+  const hasRole = useCallback((rolesToCheck: string | string[]): boolean => {
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+    if (typeof rolesToCheck === 'string') {
+      return user.role === rolesToCheck || roles.includes(rolesToCheck);
+    }
+    return rolesToCheck.some((role) => user.role === role || roles.includes(role));
+  }, [user, roles]);
+
+  const isAdmin = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'ADMIN' ||
+      user.roles?.includes('ADMIN') ||
+      user.role_label?.toUpperCase() === 'ADMIN' ||
+      user.role_label?.toUpperCase() === 'ADMINISTRATOR' ||
+      false;
+  }, [user]);
+
+  const isSupplier = useCallback((): boolean => {
+    if (!user) return false;
+    return user.roles?.includes('SUPPLIER') ||
+      user.role_label?.toUpperCase() === 'SUPPLIER' ||
+      false;
+  }, [user]);
+
+  const isHOD = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'HOD' ||
+      user.roles?.includes('HOD') ||
+      user.role_label?.toUpperCase() === 'HEAD OF DEPARTMENT' ||
+      user.role_label?.toUpperCase() === 'HOD' ||
+      false;
+  }, [user]);
+
+  const isAccountant = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'ACCOUNTANT' ||
+      user.roles?.includes('ACCOUNTANT') ||
+      user.role_label?.toUpperCase() === 'ACCOUNTANT' ||
+      false;
+  }, [user]);
+
+  const isPrincipal = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'PRINCIPAL' ||
+      user.roles?.includes('PRINCIPAL') ||
+      user.role_label?.toUpperCase() === 'PRINCIPAL' ||
+      false;
+  }, [user]);
+
+  const isFinalApprover = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'FINAL_APPROVER' ||
+      user.roles?.includes('FINAL_APPROVER') ||
+      user.role_label?.toUpperCase() === 'FINAL APPROVER' ||
+      user.role_label?.toUpperCase() === 'FINAL_APPROVER' ||
+      false;
+  }, [user]);
+
+  const isStaff = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'STAFF' ||
+      user.roles?.includes('STAFF') ||
+      user.role_label?.toUpperCase() === 'STAFF' ||
+      false;
+  }, [user]);
+
+  const isAuditor = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'AUDITOR' ||
+      user.roles?.includes('AUDITOR') ||
+      user.role_label?.toUpperCase() === 'AUDITOR' ||
+      false;
+  }, [user]);
+
+  const isProcurement = useCallback((): boolean => {
+    if (!user) return false;
+    return user.role === 'PROCUREMENT' ||
+      user.roles?.includes('PROCUREMENT') ||
+      user.role_label?.toUpperCase() === 'PROCUREMENT' ||
+      user.role_label?.toUpperCase() === 'PROCUREMENT OFFICER' ||
+      false;
+  }, [user]);
+
+  // ============================================
+  // PROFILE COMPLETION HELPERS (memoized)
+  // ============================================
+
+  const getCompletionStatus = useCallback(() => {
+    return completionStatus || { percentage: 0, is_complete: false, missing_fields: [] };
+  }, [completionStatus]);
+
+  const isProfileComplete = useCallback((): boolean => {
+    return (completionStatus as { is_complete: boolean } | undefined)?.is_complete || false;
+  }, [completionStatus]);
+
+  const getProfilePercentage = useCallback((): number => {
+    return (completionStatus as { percentage: number } | undefined)?.percentage || 0;
+  }, [completionStatus]);
+
+  // ============================================
+  // REFRESH METHODS (memoized)
+  // ============================================
+
+  const refreshDropdownData = useCallback(() => {
+    refetchDepartments();
+    refetchRoles();
+    refetchCategories();
+  }, [refetchDepartments, refetchRoles, refetchCategories]);
+
+  // ============================================
+  // MUTATIONS (unchanged but with proper callbacks)
   // ============================================
 
   const loginMutation = useMutation({
@@ -256,15 +396,12 @@ export function useAuth() {
     onSuccess: (response: AuthResponse) => {
       console.log('✅ Login response:', response);
 
-      // Extract auth data - handles both single and double nested responses
       let authData: AuthData | null = null;
 
       if (response?.data) {
-        // Check if response.data has the token (single nested)
         if ('token' in response.data) {
           authData = response.data;
         }
-        // Check if response.data has a data property (double nested)
         else if (response.data && typeof response.data === 'object' && 'data' in response.data) {
           const nestedData = response.data as any;
           if (nestedData.data && 'token' in nestedData.data) {
@@ -278,26 +415,19 @@ export function useAuth() {
         const user = authData.user;
         const permissions = authData.permissions || [];
 
-        console.log('💾 Saving token...');
-
-        // Save token
         tokenManager.set(token, false);
         localStorage.setItem('token', token);
         sessionStorage.setItem('token', token);
 
-        // Save user with role labels
         if (user) {
-          // Ensure user has role_label and role_description fields
           const userWithLabels = {
             ...user,
             role_label: user.role_label || null,
             role_description: user.role_description || null,
           };
           localStorage.setItem('user', JSON.stringify(userWithLabels));
-          console.log('✅ User saved:', user.email, 'Role:', user.role_label || user.role);
         }
 
-        // Update query cache
         queryClient.setQueryData(['user'], {
           data: {
             user: user,
@@ -307,9 +437,9 @@ export function useAuth() {
         });
 
         success(response.message || 'Login successful');
-
+        // ✅ Navigate after successful login
+        router.push('/dashboard');
       } else {
-        console.error('❌ No token found in response!');
         error('Login failed: No token received');
       }
     },
@@ -319,9 +449,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Register mutation
-   */
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterRequest) => {
       await csrf.getCookie();
@@ -340,9 +467,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Logout mutation
-   */
   const logoutMutation = useMutation({
     mutationFn: async () => {
       try {
@@ -360,10 +484,7 @@ export function useAuth() {
       }
       queryClient.clear();
 
-      // Show toast first, then redirect after delay
       success(response?.message || 'Logged out successfully');
-
-      // Delay redirect to allow toast to be seen
       setTimeout(() => {
         router.push('/login');
       }, 1500);
@@ -376,22 +497,13 @@ export function useAuth() {
       }
       queryClient.clear();
 
-      // Show error toast first, then redirect after delay
       error('Failed to logout properly. Redirecting...');
-
       setTimeout(() => {
         router.push('/login');
       }, 1500);
     },
   });
 
-  // ============================================
-  // PASSWORD RESET MUTATIONS
-  // ============================================
-
-  /**
-   * Forgot password mutation
-   */
   const forgotPasswordMutation = useMutation({
     mutationFn: async (data: ForgotPasswordRequest) => {
       await csrf.getCookie();
@@ -409,9 +521,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Reset password mutation
-   */
   const resetPasswordMutation = useMutation({
     mutationFn: async (data: ResetPasswordRequest) => {
       await csrf.getCookie();
@@ -430,9 +539,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Update profile mutation
-   */
   const updateProfileMutation = useMutation({
     mutationFn: (data: UpdateProfileRequest) => AuthService.updateProfile(data),
     onSuccess: (response) => {
@@ -449,24 +555,18 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Upload avatar mutation - Updated to handle response from /profile/photo
-   */
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => AuthService.uploadAvatar(file),
     onSuccess: (response) => {
       if (response?.success) {
-        // Update user with new avatar
         if (user && response.data?.avatar) {
           const updatedUser = {
             ...user,
             avatar: response.data.avatar,
             profile_photo: response.data.avatar,
           };
-          // Update local storage
           localStorage.setItem('user', JSON.stringify(updatedUser));
           sessionStorage.setItem('user', JSON.stringify(updatedUser));
-          // Update query cache
           queryClient.setQueryData(['user'], {
             data: {
               user: updatedUser,
@@ -486,9 +586,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Change password mutation
-   */
   const changePasswordMutation = useMutation({
     mutationFn: (data: ChangePasswordRequest) => AuthService.changePassword(data),
     onSuccess: (response) => {
@@ -507,9 +604,6 @@ export function useAuth() {
   // TWO FACTOR AUTH MUTATIONS
   // ============================================
 
-  /**
-   * Enable 2FA mutation
-   */
   const enableTwoFactorMutation = useMutation({
     mutationFn: (data: TwoFactorEnableRequest) => AuthService.enableTwoFactor(data),
     onSuccess: (response) => {
@@ -525,9 +619,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Disable 2FA mutation
-   */
   const disableTwoFactorMutation = useMutation({
     mutationFn: () => AuthService.disableTwoFactor(),
     onSuccess: (response) => {
@@ -543,9 +634,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Verify 2FA mutation
-   */
   const verifyTwoFactorMutation = useMutation({
     mutationFn: (data: TwoFactorVerifyRequest) => AuthService.verifyTwoFactor(data),
     onSuccess: (response) => {
@@ -560,9 +648,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Generate recovery codes mutation
-   */
   const generateRecoveryCodesMutation = useMutation({
     mutationFn: () => AuthService.generateRecoveryCodes(),
     onSuccess: (response) => {
@@ -578,9 +663,6 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Verify recovery code mutation
-   */
   const verifyRecoveryCodeMutation = useMutation({
     mutationFn: (data: TwoFactorRecoveryRequest) => AuthService.verifyRecoveryCode(data),
     onSuccess: (response) => {
@@ -595,142 +677,18 @@ export function useAuth() {
     },
   });
 
-  /**
-   * Get 2FA status query
-   */
   const { data: twoFactorStatus, refetch: refetchTwoFactorStatus } = useQuery({
     queryKey: ['twoFactorStatus'],
     queryFn: () => AuthService.getTwoFactorStatus(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // ============================================
-  // HELPER METHODS
-  // ============================================
-
-  const hasPermission = (permission: string): boolean => {
-    if (!permissions.length) return false;
-    if (user?.role === 'ADMIN') return true;
-    return permissions.includes(permission);
-  };
-
-  const hasRole = (rolesToCheck: string | string[]): boolean => {
-    if (!user) return false;
-    if (user.role === 'ADMIN') return true;
-    if (typeof rolesToCheck === 'string') {
-      return user.role === rolesToCheck || roles.includes(rolesToCheck);
-    }
-    return rolesToCheck.some((role) => user.role === role || roles.includes(role));
-  };
-
-  // ============================================
-  // ROLE HELPERS (Updated with label support)
-  // ============================================
-
-  const isAdmin = (): boolean => {
-    if (!user) return false;
-    return user.role === 'ADMIN' ||
-      user.roles?.includes('ADMIN') ||
-      user.role_label?.toUpperCase() === 'ADMIN' ||
-      user.role_label?.toUpperCase() === 'ADMINISTRATOR' ||
-      false;
-  };
-
-  const isSupplier = (): boolean => {
-    if (!user) return false;
-    return user.roles?.includes('SUPPLIER') ||
-      user.role_label?.toUpperCase() === 'SUPPLIER' ||
-      false;
-  };
-
-  const isHOD = (): boolean => {
-    if (!user) return false;
-    return user.role === 'HOD' ||
-      user.roles?.includes('HOD') ||
-      user.role_label?.toUpperCase() === 'HEAD OF DEPARTMENT' ||
-      user.role_label?.toUpperCase() === 'HOD' ||
-      false;
-  };
-
-  const isAccountant = (): boolean => {
-    if (!user) return false;
-    return user.role === 'ACCOUNTANT' ||
-      user.roles?.includes('ACCOUNTANT') ||
-      user.role_label?.toUpperCase() === 'ACCOUNTANT' ||
-      false;
-  };
-
-  const isPrincipal = (): boolean => {
-    if (!user) return false;
-    return user.role === 'PRINCIPAL' ||
-      user.roles?.includes('PRINCIPAL') ||
-      user.role_label?.toUpperCase() === 'PRINCIPAL' ||
-      false;
-  };
-
-  const isFinalApprover = (): boolean => {
-    if (!user) return false;
-    return user.role === 'FINAL_APPROVER' ||
-      user.roles?.includes('FINAL_APPROVER') ||
-      user.role_label?.toUpperCase() === 'FINAL APPROVER' ||
-      user.role_label?.toUpperCase() === 'FINAL_APPROVER' ||
-      false;
-  };
-
-  const isStaff = (): boolean => {
-    if (!user) return false;
-    return user.role === 'STAFF' ||
-      user.roles?.includes('STAFF') ||
-      user.role_label?.toUpperCase() === 'STAFF' ||
-      false;
-  };
-
-  const isAuditor = (): boolean => {
-    if (!user) return false;
-    return user.role === 'AUDITOR' ||
-      user.roles?.includes('AUDITOR') ||
-      user.role_label?.toUpperCase() === 'AUDITOR' ||
-      false;
-  };
-
-  const isProcurement = (): boolean => {
-    if (!user) return false;
-    return user.role === 'PROCUREMENT' ||
-      user.roles?.includes('PROCUREMENT') ||
-      user.role_label?.toUpperCase() === 'PROCUREMENT' ||
-      user.role_label?.toUpperCase() === 'PROCUREMENT OFFICER' ||
-      false;
-  };
-
-  // ============================================
-  // PROFILE COMPLETION HELPERS
-  // ============================================
-
-  const getCompletionStatus = () => {
-    return completionStatus || { percentage: 0, is_complete: false, missing_fields: [] };
-  };
-
-  const isProfileComplete = (): boolean => {
-    return (completionStatus as { is_complete: boolean } | undefined)?.is_complete || false;
-  };
-
-  const getProfilePercentage = (): number => {
-    return (completionStatus as { percentage: number } | undefined)?.percentage || 0;
-  };
-
-  // ============================================
-  // REFRESH METHODS
-  // ============================================
-
-  const refreshDropdownData = () => {
-    refetchDepartments();
-    refetchRoles();
-    refetchCategories();
-  };
-
-  // ============================================
-  // RETURN
+  // RETURN - All values are memoized or stable
   // ============================================
 
   return {
@@ -741,7 +699,7 @@ export function useAuth() {
     isAuthenticated,
     isLoading: isLoadingUser || loginMutation.isPending || registerMutation.isPending || isLoadingDepartments || isLoadingRoles || isLoadingCategories || !isInitialized,
 
-    // User role helpers (new)
+    // User role helpers
     getRoleLabel,
     getRoleDescription,
     getRoleName,
@@ -792,7 +750,7 @@ export function useAuth() {
     hasPermission,
     hasRole,
 
-    // Role helpers (updated with label support)
+    // Role helpers
     isAdmin,
     isSupplier,
     isHOD,

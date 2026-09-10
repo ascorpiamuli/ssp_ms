@@ -228,9 +228,9 @@ const NotificationItem = ({
         }
       default:
         return {
-          bg: 'bg-gray-50 dark:bg-gray-800/50',
-          border: 'border-gray-200 dark:border-gray-700',
-          iconBg: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+          bg: 'bg-gray-50 dark:bg-white/5',
+          border: 'border-gray-200 dark:border-white/10',
+          iconBg: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400',
           dot: 'bg-gray-500',
         }
     }
@@ -245,7 +245,7 @@ const NotificationItem = ({
       animate="animate"
       exit="exit"
       className={cn(
-        "px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-all duration-200 border-l-4",
+        "px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-all duration-200 border-l-4",
         !notification.read ? `border-l-blue-500 ${styles.bg}` : "border-l-transparent",
         "hover:scale-[1.01] hover:shadow-sm"
       )}
@@ -289,10 +289,6 @@ const NotificationItem = ({
 // ROLE HELPERS
 // ============================================
 
-/**
- * Get role color based on role name (not label)
- * Role names are used for matching/colors as they won't be modified
- */
 const getRoleColorByName = (roleName: string) => {
   const name = roleName?.toUpperCase() || ''
 
@@ -307,19 +303,15 @@ const getRoleColorByName = (roleName: string) => {
     case 'PROCUREMENT': return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400'
     case 'SUPPLIER': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
     case 'AUDITOR': return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400'
-    case 'STAFF': return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+    case 'STAFF': return 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'
     case 'BISHOP': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-    default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+    default: return 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'
   }
 }
 
-/**
- * Get display label for a role (use label if available, fallback to formatted name)
- */
 const getDisplayLabel = (roleName: string, roleLabel: string | null) => {
   if (roleLabel) return roleLabel
 
-  // Fallback: format the role name
   const name = roleName?.toUpperCase() || ''
   switch (name) {
     case 'ADMIN': return 'Administrator'
@@ -338,9 +330,6 @@ const getDisplayLabel = (roleName: string, roleLabel: string | null) => {
   }
 }
 
-/**
- * Check if user has a specific role by name
- */
 const hasRoleByName = (roles: string[], roleName: string) => {
   return roles.some(r => r.toUpperCase() === roleName.toUpperCase())
 }
@@ -373,7 +362,6 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
   const supplier = supplierData as unknown as Supplier | null
 
-  // Demo notifications
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: '1',
@@ -517,32 +505,20 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
     markAsRead(notification.id)
   }
 
-  // ============================================
-  // ROLE DATA EXTRACTION - Using role names for matching
-  // ============================================
-
   const avatarColors = getAvatarColors()
   const avatarUrl = getAvatarUrl()
 
-  // Get user's roles from the user object
   const userRoles = user?.roles || []
   const primaryRoleName = userRoles.length > 0 ? userRoles[0] : ''
   const primaryRoleLabel = (user as any)?.role_label || null
   const primaryRoleDescription = (user as any)?.role_description || null
 
-  // Get role details if available
   const roleDetails = (user as any)?.role_details || []
 
-  // Determine if user is a supplier by role name
   const isSupplier = hasRoleByName(userRoles, 'SUPPLIER')
-
-  // Get the role color based on role name (not label)
   const roleColor = getRoleColorByName(primaryRoleName)
-
-  // Get display label (use label if available, fallback to formatted name)
   const displayName = getDisplayLabel(primaryRoleName, primaryRoleLabel)
 
-  // Build all roles with their labels and descriptions
   const allRolesWithDetails = roleDetails.length > 0
     ? roleDetails.map((role: any) => ({
       name: role.name,
@@ -561,15 +537,15 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
   if (!mounted) {
     return (
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white/95 dark:border-gray-700 dark:bg-gray-800/95 px-4 shadow-sm">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-background/95 dark:border-white/10 px-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-          <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse" />
+          <div className="h-4 w-24 bg-gray-200 dark:bg-white/10 rounded animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-          <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-          <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
+          <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse" />
+          <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse" />
+          <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse" />
         </div>
       </header>
     )
@@ -580,7 +556,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
       initial="hidden"
       animate="visible"
       variants={headerVariants}
-      className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4 shadow-lg shadow-gray-200/20 dark:shadow-gray-900/20"
+      className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200/50 dark:border-white/10 bg-background/80 backdrop-blur-xl px-4 shadow-lg shadow-gray-200/20 dark:shadow-black/40"
     >
       {/* Left section - Logo/Brand and Menu button */}
       <motion.div
@@ -593,7 +569,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
               variant="ghost"
               size="icon"
               onClick={onMenuClick}
-              className="lg:hidden hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              className="lg:hidden hover:bg-blue-50 dark:hover:bg-white/5 transition-colors"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -635,7 +611,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
             className={cn(
-              "w-full pl-9 pr-4 h-9 rounded-xl border-gray-200/50 bg-gray-50/50 dark:bg-gray-800/50 dark:border-gray-700/50 transition-all duration-300",
+              "w-full pl-9 pr-4 h-9 rounded-xl border-gray-200/50 bg-gray-50/50 dark:bg-white/5 dark:border-white/10 transition-all duration-300",
               "focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500",
               "group-hover:shadow-md group-hover:shadow-blue-500/5",
               isSearchFocused && "shadow-lg shadow-blue-500/10 scale-[1.02]"
@@ -658,7 +634,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute top-full mt-2 left-0 right-0 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+              className="absolute top-full mt-2 left-0 right-0 bg-background rounded-xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden z-50"
             >
               <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
                 <p>Search results for "{searchQuery}"</p>
@@ -673,19 +649,17 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
         className="flex items-center gap-1 sm:gap-2 flex-shrink-0"
         variants={staggerContainer}
       >
-        {/* Search button for mobile */}
         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            className="md:hidden hover:bg-blue-50 dark:hover:bg-white/5 transition-colors"
             onClick={() => setShowSearch(!showSearch)}
           >
             <Search className="h-5 w-5" />
           </Button>
         </motion.div>
 
-        {/* Theme Toggler */}
         <ThemeToggler />
 
         {/* Notifications */}
@@ -697,7 +671,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             <Button
               variant="ghost"
               size="icon"
-              className="relative rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              className="relative rounded-full hover:bg-blue-50 dark:hover:bg-white/5 transition-colors"
               onClick={() => setShowNotifications(!showNotifications)}
             >
               <Bell className="h-5 w-5" />
@@ -724,14 +698,14 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                 exit="exit"
                 variants={fadeInDown}
                 className={cn(
-                  "absolute mt-2 rounded-2xl bg-white dark:bg-gray-900 shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 max-h-[500px] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50",
+                  "absolute mt-2 rounded-2xl bg-background shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 max-h-[500px] overflow-y-auto border border-gray-200/50 dark:border-white/10",
                   isMobile
                     ? "fixed left-4 right-4 top-auto w-auto"
                     : "right-0 w-[420px]"
                 )}
                 style={isMobile ? { top: '4rem' } : {}}
               >
-                <div className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+                <div className="sticky top-0 bg-background/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
                     {unreadCount > 0 && (
@@ -762,7 +736,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </div>
                 </div>
 
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-gray-100 dark:divide-white/5">
                   <AnimatePresence>
                     {notifications.length === 0 ? (
                       <motion.div
@@ -786,7 +760,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </AnimatePresence>
                 </div>
 
-                <div className="sticky bottom-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-gray-700 px-4 py-3 text-center">
+                <div className="sticky bottom-0 bg-background/80 backdrop-blur-xl border-t border-gray-200 dark:border-white/10 px-4 py-3 text-center">
                   <Link
                     href="/notifications"
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium hover:underline"
@@ -809,11 +783,11 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           >
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-2 sm:px-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+              className="flex items-center gap-2 px-2 sm:px-3 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors group"
               onClick={() => setShowProfile(!showProfile)}
             >
               <div className="relative">
-                <Avatar className="h-9 w-9 ring-2 ring-white dark:ring-gray-700 shadow-lg shadow-blue-500/10 group-hover:shadow-blue-500/20 transition-shadow">
+                <Avatar className="h-9 w-9 ring-2 ring-white dark:ring-white/10 shadow-lg shadow-blue-500/10 group-hover:shadow-blue-500/20 transition-shadow">
                   {avatarUrl ? (
                     <AvatarImage
                       src={avatarUrl}
@@ -829,7 +803,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                   </AvatarFallback>
                 </Avatar>
                 {profilePercentage < 100 && (
-                  <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-amber-400 border-2 border-white dark:border-gray-800 flex items-center justify-center">
+                  <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-amber-400 border-2 border-white dark:border-background flex items-center justify-center">
                     <span className="text-[6px] font-bold text-white">!</span>
                   </div>
                 )}
@@ -874,14 +848,14 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                 exit="exit"
                 variants={fadeInDown}
                 className={cn(
-                  "absolute mt-2 rounded-2xl bg-white dark:bg-gray-900 shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 border border-gray-200/50 dark:border-gray-700/50 overflow-hidden",
+                  "absolute mt-2 rounded-2xl bg-background shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 border border-gray-200/50 dark:border-white/10 overflow-hidden",
                   isMobile
                     ? "fixed left-4 right-4 top-auto w-auto"
                     : "right-0 w-96"
                 )}
                 style={isMobile ? { top: '4rem' } : {}}
               >
-                <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-5">
+                <div className="border-b border-gray-200 dark:border-white/10 px-4 py-5">
                   <div className="flex items-center gap-3">
                     <motion.div
                       whileHover={{ scale: 1.05, rotate: -5 }}
@@ -911,7 +885,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                         {user?.email || 'user@example.com'}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {allRolesWithDetails.map((role:any, index: number) => (
+                        {allRolesWithDetails.map((role: any, index: number) => (
                           <motion.div
                             key={role.name}
                             initial={{ scale: 0 }}
@@ -936,12 +910,11 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                     </div>
                   </div>
 
-                  {/* Primary Role Description */}
                   {primaryRoleDescription && (
                     <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="mt-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700"
+                      className="mt-2 p-2 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <Tag className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
@@ -952,7 +925,6 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                     </motion.div>
                   )}
 
-                  {/* Supplier Company Info */}
                   {isSupplier && supplierExists && supplier && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -973,7 +945,6 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                     </motion.div>
                   )}
 
-                  {/* Profile completion */}
                   <div className="mt-4">
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="text-gray-500 dark:text-gray-400">Profile Completion</span>
@@ -986,7 +957,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                         {profilePercentage}%
                       </motion.span>
                     </div>
-                    <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${profilePercentage}%` }}
@@ -1014,7 +985,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                     >
                       <Link
                         href={item.href}
-                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800 transition-all duration-200"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-white/5 transition-all duration-200"
                         onClick={() => setShowProfile(false)}
                       >
                         <item.icon className={cn("h-4 w-4", item.color)} />
@@ -1024,7 +995,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                     </motion.div>
                   ))}
 
-                  <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+                  <div className="border-t border-gray-200 dark:border-white/10 my-2" />
 
                   <motion.div
                     whileHover={{ scale: 1.02, x: 5 }}
@@ -1053,7 +1024,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-0 top-16 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl p-4 shadow-2xl border-b border-gray-200 dark:border-gray-700"
+            className="fixed inset-x-0 top-16 z-50 bg-background/95 backdrop-blur-xl p-4 shadow-2xl border-b border-gray-200 dark:border-white/10"
           >
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -1062,7 +1033,7 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick?: () => void }) {
                 placeholder="Search for tenders, suppliers, documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 h-12 rounded-xl border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-base"
+                className="w-full pl-9 pr-4 h-12 rounded-xl border-gray-200 bg-gray-50 dark:bg-white/5 dark:border-white/10 text-base"
                 autoFocus
               />
               <button

@@ -12,6 +12,7 @@ import {
   X,
   Settings,
   Loader2,
+  Clock,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -58,12 +59,12 @@ const sectionVariants = {
 }
 
 // ============================================
-// SIDEBAR LOADING SPINNER
+// SIDEBAR LOADING SPINNER - UPDATED for black bg
 // ============================================
 
 const SidebarLoading = () => (
-  <div className="flex flex-col h-full bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30">
-    <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-center px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50">
+  <div className="flex flex-col h-full bg-background/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30">
+    <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-center px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-blue-950/30">
       <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500/20 to-indigo-500/20 animate-pulse" />
     </div>
 
@@ -89,7 +90,7 @@ const SidebarLoading = () => (
       </div>
     </div>
 
-    <div className="flex-shrink-0 border-t border-blue-200/30 dark:border-blue-800/30 p-3 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50">
+    <div className="flex-shrink-0 border-t border-blue-200/30 dark:border-blue-800/30 p-3 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-blue-950/30">
       <div className="flex items-center gap-2.5">
         <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500/30 to-indigo-500/30 animate-pulse" />
         <div className="flex-1 space-y-1">
@@ -123,11 +124,13 @@ function NavItem({
   collapsed = false
 }: NavItemProps) {
   const pathname = usePathname()
+  const { navigateTo, isItemDisabled, getItemHref } = useNavigation()
   const hasChildren = item.children && item.children.length > 0
   const [isOpen, setIsOpen] = useState(false)
   const ItemIcon = item.icon
+  const isDisabled = isItemDisabled(item)
+  const href = getItemHref(item)
 
-  // Check if any child is active
   const hasActiveChild = useMemo(() => {
     if (!hasChildren) return false
     return item.children.some((child: any) => {
@@ -144,7 +147,6 @@ function NavItem({
     })
   }, [hasChildren, item.children, pathname])
 
-  // Auto-open if child is active
   useEffect(() => {
     if (hasActiveChild) {
       setIsOpen(true)
@@ -156,13 +158,16 @@ function NavItem({
     setIsOpen(!isOpen)
   }
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    if (isDisabled) {
+      e.preventDefault()
+      navigateTo(item)
+    }
     if (onItemClick) {
       onItemClick()
     }
   }
 
-  // Render child items
   const renderChildren = () => {
     if (!hasChildren || !isOpen || collapsed) return null
 
@@ -185,6 +190,8 @@ function NavItem({
             ))
 
           const ChildIcon = child.icon
+          const isChildDisabled = isItemDisabled(child)
+          const childHref = getItemHref(child)
 
           if (child.children && child.children.length > 0) {
             return (
@@ -209,41 +216,65 @@ function NavItem({
               transition={{ delay: index * 0.05 }}
             >
               <Link
-                href={child.href}
-                onClick={handleClick}
+                href={childHref}
+                onClick={(e) => {
+                  if (isChildDisabled) {
+                    e.preventDefault()
+                    navigateTo(child)
+                  }
+                  if (onItemClick) onItemClick()
+                }}
                 className={cn(
                   "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group relative",
-                  isChildActive
+                  isChildActive && !isChildDisabled
                     ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
-                    : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+                    : isChildDisabled
+                      ? "text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+                      : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
                   isMobile && "py-3 text-base",
                   depth > 0 && "pl-8"
                 )}
+                aria-disabled={isChildDisabled}
               >
                 {ChildIcon && (
                   <ChildIcon
                     className={cn(
                       "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                      isChildActive && "text-blue-600 dark:text-blue-400"
+                      isChildActive && !isChildDisabled && "text-blue-600 dark:text-blue-400",
+                      isChildDisabled && "opacity-50"
                     )}
                   />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{child.label || child.name}</span>
-                    {child.badge && (
+                    <span className={cn(
+                      "truncate",
+                      isChildDisabled && "line-through decoration-gray-300 dark:decoration-gray-600"
+                    )}>
+                      {child.label || child.name}
+                    </span>
+                    {child.badge && !isChildDisabled && (
                       <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
                         {child.badge}
                       </span>
                     )}
+                    {isChildDisabled && (
+                      <span className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400">
+                        <Clock className="h-2.5 w-2.5" />
+                        Soon
+                      </span>
+                    )}
                   </div>
                   {child.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                    <p className={cn(
+                      "text-xs truncate mt-0.5",
+                      isChildDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"
+                    )}>
                       {child.description}
                     </p>
                   )}
                 </div>
-                {!collapsed && isChildActive && (
+                {!collapsed && isChildActive && !isChildDisabled && (
                   <motion.div
                     className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
                     layoutId="activeIndicator"
@@ -257,23 +288,39 @@ function NavItem({
     )
   }
 
-  // If collapsed, render as icon only
   if (collapsed) {
     return (
       <motion.div variants={itemVariants}>
         <Link
-          href={item.href}
-          onClick={handleClick}
+          href={href}
+          onClick={(e) => {
+            if (isDisabled) {
+              e.preventDefault()
+              navigateTo(item)
+            }
+            if (onItemClick) onItemClick()
+          }}
           className={cn(
             "flex items-center justify-center rounded-xl p-2.5 transition-all duration-200 group relative",
-            isActive || hasActiveChild
+            (isActive || hasActiveChild) && !isDisabled
               ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm"
-              : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+              : isDisabled
+                ? "text-gray-300 dark:text-gray-600 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+                : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
           )}
-          title={item.label || item.name}
+          title={`${item.label || item.name}${isDisabled ? ' (Coming Soon)' : ''}`}
+          aria-disabled={isDisabled}
         >
-          {ItemIcon && <ItemIcon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />}
-          {isActive && (
+          {ItemIcon && (
+            <ItemIcon className={cn(
+              "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+              isDisabled && "opacity-50"
+            )} />
+          )}
+          {isDisabled && (
+            <div className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 dark:bg-amber-500 shadow-sm" />
+          )}
+          {isActive && !isDisabled && (
             <motion.div
               className="absolute -right-1 w-0.5 h-6 bg-blue-500 rounded-full shadow-lg shadow-blue-500/30"
               layoutId="activeIndicator"
@@ -284,46 +331,69 @@ function NavItem({
     )
   }
 
-  // If this is a child item (depth > 0) without children, render as simple link
   if (depth > 0 && !hasChildren) {
     return (
       <motion.div variants={itemVariants}>
         <Link
-          href={item.href}
-          onClick={handleClick}
+          href={href}
+          onClick={(e) => {
+            if (isDisabled) {
+              e.preventDefault()
+              navigateTo(item)
+            }
+            if (onItemClick) onItemClick()
+          }}
           className={cn(
             "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group",
-            isActive
+            isActive && !isDisabled
               ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
-              : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+              : isDisabled
+                ? "text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+                : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
             isMobile && "py-3 text-base",
             depth > 0 && "pl-8"
           )}
+          aria-disabled={isDisabled}
         >
           {ItemIcon && (
             <ItemIcon
               className={cn(
                 "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                isActive && "text-blue-600 dark:text-blue-400"
+                isActive && !isDisabled && "text-blue-600 dark:text-blue-400",
+                isDisabled && "opacity-50"
               )}
             />
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate">{item.label || item.name}</span>
-              {item.badge && (
+              <span className={cn(
+                "truncate",
+                isDisabled && "line-through decoration-gray-300 dark:decoration-gray-600"
+              )}>
+                {item.label || item.name}
+              </span>
+              {item.badge && !isDisabled && (
                 <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
                   {item.badge}
                 </span>
               )}
+              {isDisabled && (
+                <span className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400">
+                  <Clock className="h-2.5 w-2.5" />
+                  Soon
+                </span>
+              )}
             </div>
             {item.description && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+              <p className={cn(
+                "text-xs truncate mt-0.5",
+                isDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"
+              )}>
                 {item.description}
               </p>
             )}
           </div>
-          {isActive && !collapsed && (
+          {isActive && !isDisabled && !collapsed && (
             <motion.div
               className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
               layoutId="activeIndicator"
@@ -334,42 +404,59 @@ function NavItem({
     )
   }
 
-  // Render parent item with children
   return (
     <div className="space-y-0.5">
       <button
         onClick={handleToggle}
         className={cn(
           "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group w-full",
-          isActive || hasActiveChild
+          (isActive || hasActiveChild) && !isDisabled
             ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
-            : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+            : isDisabled
+              ? "text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+              : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
           isMobile && "py-3 text-base",
           depth > 0 && "pl-8"
         )}
+        disabled={isDisabled}
+        aria-disabled={isDisabled}
       >
         <div className="flex items-center flex-1 min-w-0">
           {ItemIcon && (
             <ItemIcon
               className={cn(
                 "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                (isActive || hasActiveChild) && "text-blue-600 dark:text-blue-400"
+                (isActive || hasActiveChild) && !isDisabled && "text-blue-600 dark:text-blue-400",
+                isDisabled && "opacity-50"
               )}
             />
           )}
-          <span className="truncate">{item.label || item.name}</span>
-          {item.badge && (
+          <span className={cn(
+            "truncate",
+            isDisabled && "line-through decoration-gray-300 dark:decoration-gray-600"
+          )}>
+            {item.label || item.name}
+          </span>
+          {item.badge && !isDisabled && (
             <span className="flex-shrink-0 ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
               {item.badge}
             </span>
           )}
-        </div>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 flex-shrink-0 transition-transform duration-200 ml-2",
-            isOpen && "rotate-180"
+          {isDisabled && (
+            <span className="flex-shrink-0 ml-2 flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400">
+              <Clock className="h-2.5 w-2.5" />
+              Soon
+            </span>
           )}
-        />
+        </div>
+        {!isDisabled && (
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 flex-shrink-0 transition-transform duration-200 ml-2",
+              isOpen && "rotate-180"
+            )}
+          />
+        )}
       </button>
       {renderChildren()}
     </div>
@@ -402,9 +489,9 @@ function NavSection({
   onItemClick
 }: NavSectionProps) {
   const pathname = usePathname()
+  const { isItemDisabled, navigateTo, getItemHref } = useNavigation()
   const isOpen = openSections.has(section.id)
 
-  // Check if section has any visible items for this role and permissions
   const visibleItems = section.items.filter((item: any) => {
     if (item.roles) {
       const hasRole = item.roles.some((role: string) =>
@@ -435,16 +522,18 @@ function NavSection({
     return true
   })
 
-  // Check if any item in this section is active
   const hasActiveItem = visibleItems.some((item: any) => {
+    if (isItemDisabled(item)) return false
     if (item.href === pathname) return true
     if (item.href !== '/' && pathname.startsWith(item.href)) return true
     if (item.children) {
       return item.children.some((child: any) => {
+        if (isItemDisabled(child)) return false
         if (child.href === pathname) return true
         if (child.href !== '/' && pathname.startsWith(child.href)) return true
         if (child.children) {
           return child.children.some((gc: any) => {
+            if (isItemDisabled(gc)) return false
             if (gc.href === pathname) return true
             if (gc.href !== '/' && pathname.startsWith(gc.href)) return true
             return false
@@ -461,16 +550,18 @@ function NavSection({
   }
 
   const SectionIcon = section.icon
+  const isSectionComingSoon = section.comingSoon
 
-  // Collapsed view
   if (collapsed && !isMobile) {
     return (
       <div className="space-y-1">
         {visibleItems.map((item: any, index: number) => {
-          const isActive = activeTabId === item.id ||
+          const isDisabled = isItemDisabled(item)
+          const isActive = !isDisabled && (activeTabId === item.id ||
             item.href === pathname ||
-            (item.href !== '/' && pathname.startsWith(item.href))
+            (item.href !== '/' && pathname.startsWith(item.href)))
           const ItemIcon = item.icon
+          const href = getItemHref(item)
           return (
             <motion.div
               key={item.id || item.name}
@@ -480,18 +571,35 @@ function NavSection({
               transition={{ delay: index * 0.05 }}
             >
               <Link
-                href={item.href}
-                onClick={onItemClick}
+                href={href}
+                onClick={(e) => {
+                  if (isDisabled) {
+                    e.preventDefault()
+                    navigateTo(item)
+                  }
+                  if (onItemClick) onItemClick()
+                }}
                 className={cn(
                   "flex items-center justify-center rounded-xl p-2.5 transition-all duration-200 group relative",
-                  isActive
+                  isActive && !isDisabled
                     ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm"
-                    : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+                    : isDisabled
+                      ? "text-gray-300 dark:text-gray-600 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+                      : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
                 )}
-                title={`${item.label || item.name}${item.description ? ` - ${item.description}` : ''}`}
+                title={`${item.label || item.name}${isDisabled ? ' (Coming Soon)' : ''}${item.description ? ` - ${item.description}` : ''}`}
+                aria-disabled={isDisabled}
               >
-                {ItemIcon && <ItemIcon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />}
-                {isActive && (
+                {ItemIcon && (
+                  <ItemIcon className={cn(
+                    "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                    isDisabled && "opacity-50"
+                  )} />
+                )}
+                {isDisabled && (
+                  <div className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 dark:bg-amber-500 shadow-sm" />
+                )}
+                {isActive && !isDisabled && (
                   <motion.div
                     className="absolute -right-1 w-0.5 h-6 bg-blue-500 rounded-full shadow-lg shadow-blue-500/30"
                     layoutId="activeIndicator"
@@ -513,7 +621,9 @@ function NavSection({
           "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200",
           hasActiveItem
             ? "text-blue-700 dark:text-blue-400 bg-blue-500/10 dark:bg-blue-500/15 shadow-sm"
-            : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+            : isSectionComingSoon
+              ? "text-gray-400 dark:text-gray-500"
+              : "text-gray-500 hover:bg-blue-50/80 dark:text-gray-400 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
         )}
       >
         <div className="flex items-center space-x-2.5 min-w-0">
@@ -521,14 +631,26 @@ function NavSection({
             <SectionIcon
               className={cn(
                 "h-4 w-4 flex-shrink-0 transition-all duration-200",
-                hasActiveItem && "text-blue-600 dark:text-blue-400"
+                hasActiveItem && "text-blue-600 dark:text-blue-400",
+                isSectionComingSoon && "opacity-50"
               )}
             />
           )}
-          <span className="truncate font-medium text-xs">{section.title}</span>
+          <span className={cn(
+            "truncate font-medium text-xs",
+            isSectionComingSoon && "line-through decoration-gray-300 dark:decoration-gray-600"
+          )}>
+            {section.title}
+          </span>
           {section.department && (
             <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full flex-shrink-0">
               {section.department}
+            </span>
+          )}
+          {isSectionComingSoon && (
+            <span className="flex items-center gap-1 text-[10px] bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              <Clock className="h-2.5 w-2.5" />
+              Soon
             </span>
           )}
         </div>
@@ -554,9 +676,11 @@ function NavSection({
             className="space-y-0.5 pl-3 border-l-2 border-blue-200/30 dark:border-blue-500/30 ml-3"
           >
             {visibleItems.map((item: any) => {
-              const isActive = activeTabId === item.id ||
+              const isDisabled = isItemDisabled(item)
+              const isActive = !isDisabled && (activeTabId === item.id ||
                 item.href === pathname ||
-                (item.href !== '/' && pathname.startsWith(item.href))
+                (item.href !== '/' && pathname.startsWith(item.href)))
+              const href = getItemHref(item)
 
               if (item.children && item.children.length > 0) {
                 return (
@@ -582,40 +706,64 @@ function NavSection({
                   animate="visible"
                 >
                   <Link
-                    href={item.href}
-                    onClick={onItemClick}
+                    href={href}
+                    onClick={(e) => {
+                      if (isDisabled) {
+                        e.preventDefault()
+                        navigateTo(item)
+                      }
+                      if (onItemClick) onItemClick()
+                    }}
                     className={cn(
                       "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 group hover:scale-[1.02]",
-                      isActive
+                      isActive && !isDisabled
                         ? "bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm shadow-blue-500/10"
-                        : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+                        : isDisabled
+                          ? "text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/5"
+                          : "text-gray-600 hover:bg-blue-50/80 dark:text-gray-300 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
                       isMobile && "py-3 text-base"
                     )}
+                    aria-disabled={isDisabled}
                   >
                     {ItemIcon && (
                       <ItemIcon
                         className={cn(
                           "mr-3 h-4 w-4 flex-shrink-0 transition-all duration-200 group-hover:scale-110",
-                          isActive && "text-blue-600 dark:text-blue-400"
+                          isActive && !isDisabled && "text-blue-600 dark:text-blue-400",
+                          isDisabled && "opacity-50"
                         )}
                       />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate">{item.label || item.name}</span>
-                        {item.badge && (
+                        <span className={cn(
+                          "truncate",
+                          isDisabled && "line-through decoration-gray-300 dark:decoration-gray-600"
+                        )}>
+                          {item.label || item.name}
+                        </span>
+                        {item.badge && !isDisabled && (
                           <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
                             {item.badge}
                           </span>
                         )}
+                        {isDisabled && (
+                          <span className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400">
+                            <Clock className="h-2.5 w-2.5" />
+                            Soon
+                          </span>
+                        )}
                       </div>
                       {item.description && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                        <p className={cn(
+                          "text-xs truncate mt-0.5",
+                          isDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"
+                        )}>
                           {item.description}
                         </p>
                       )}
                     </div>
-                    {isActive && (
+                    {isActive && !isDisabled && (
                       <motion.div
                         className="absolute right-1 w-0.5 h-6 bg-blue-500 rounded-full"
                         layoutId="activeIndicator"
@@ -654,14 +802,12 @@ export function DashboardSidebar() {
 
   const { user } = useAuthContext()
 
-  // Check if user is a supplier
   const isSupplier = user?.roles?.some(
     (r: any) => r.toLowerCase() === 'supplier'
   ) || false
 
   const { useSupplierProfileExists } = useSuppliers()
 
-  // Properly handle the hook return value
   let supplierResult;
   try {
     const result = useSupplierProfileExists();
@@ -681,7 +827,6 @@ export function DashboardSidebar() {
   const initialLoadDone = useRef(false)
   const previousPathname = useRef(pathname)
 
-  // Get the company logo URL from supplier data
   const getCompanyLogo = (): string | null => {
     if (!isSupplier || !supplierResult?.exists || !supplierResult?.supplier) return null
     const supplier = supplierResult.supplier as any
@@ -692,7 +837,6 @@ export function DashboardSidebar() {
 
   useEffect(() => {
     setIsInitialized(true)
-    // Simulate loading of navigation items
     const timer = setTimeout(() => {
       setIsLoading(false)
     }, 500)
@@ -711,7 +855,6 @@ export function DashboardSidebar() {
     }
   }, [openSections, isInitialized])
 
-  // Load saved collapsed state
   useEffect(() => {
     const savedCollapsed = localStorage.getItem('sidebarCollapsed')
     if (savedCollapsed !== null) {
@@ -719,7 +862,6 @@ export function DashboardSidebar() {
     }
   }, [])
 
-  // Save collapsed state
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(collapsed))
   }, [collapsed])
@@ -842,7 +984,6 @@ export function DashboardSidebar() {
     setCollapsed(prev => !prev)
   }, [])
 
-  // Show loading spinner while navigation is loading
   if (isLoading || !isInitialized) {
     return <SidebarLoading />
   }
@@ -855,8 +996,8 @@ export function DashboardSidebar() {
 
   const sidebarContent = (
     <>
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-between px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-blue-950/50 backdrop-blur-xl">
+      {/* Header - UPDATED: black dark bg */}
+      <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 items-center justify-between px-3 border-b border-blue-200/30 dark:border-blue-800/30 bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-blue-50/90 dark:from-blue-950/30 dark:via-background dark:to-blue-950/30 backdrop-blur-xl">
         <div className={cn(
           "flex items-center",
           isCollapsed ? "justify-center w-full" : "flex-1"
@@ -873,7 +1014,6 @@ export function DashboardSidebar() {
           />
         </div>
 
-        {/* Toggle Button */}
         {!isMobile && (
           <button
             onClick={toggleCollapse}
@@ -883,7 +1023,7 @@ export function DashboardSidebar() {
               "transition-all duration-200 flex-shrink-0",
               "text-blue-600 dark:text-blue-400",
               isCollapsed
-                ? "absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 shadow-lg border border-blue-200/50 dark:border-blue-800/50 z-20"
+                ? "absolute -right-3 top-1/2 -translate-y-1/2 bg-background shadow-lg border border-blue-200/50 dark:border-blue-800/50 z-20"
                 : "relative",
               "hover:scale-110 active:scale-95"
             )}
@@ -900,7 +1040,7 @@ export function DashboardSidebar() {
         {isMobile && (
           <button
             onClick={() => setMobileOpen(false)}
-            className="rounded-lg p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors flex-shrink-0"
+            className="rounded-lg p-2 hover:bg-white/50 dark:hover:bg-white/5 transition-colors flex-shrink-0"
             aria-label="Close menu"
           >
             <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
@@ -908,8 +1048,8 @@ export function DashboardSidebar() {
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2.5 bg-gradient-to-b from-blue-50/20 via-white to-indigo-50/20 dark:from-blue-950/10 dark:via-gray-900/50 dark:to-indigo-950/10">
+      {/* Content - UPDATED: black dark bg */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2.5 bg-gradient-to-b from-blue-50/20 via-background to-indigo-50/20 dark:from-blue-950/10 dark:via-background dark:to-indigo-950/10">
         <div className={cn(
           "space-y-2",
           isCollapsed ? "flex flex-col items-center" : ""
@@ -935,11 +1075,11 @@ export function DashboardSidebar() {
 
   return (
     <>
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button - UPDATED: black dark bg */}
       {isMobile && !mobileOpen && (
         <button
           onClick={() => setMobileOpen(true)}
-          className="fixed top-4 left-4 z-[100] md:hidden bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2.5 rounded-lg shadow-lg border border-blue-200/50 dark:border-blue-800/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+          className="fixed top-4 left-4 z-[100] md:hidden bg-background/90 backdrop-blur-sm p-2.5 rounded-lg shadow-lg border border-blue-200/50 dark:border-blue-800/50 hover:bg-background transition-colors"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
@@ -959,13 +1099,13 @@ export function DashboardSidebar() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* Sidebar - UPDATED: black dark bg */}
       <motion.div
         initial={false}
         animate={isCollapsed ? 'collapsed' : 'expanded'}
         variants={sidebarVariants}
         className={cn(
-          "flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30 shadow-xl relative overflow-hidden",
+          "flex flex-col bg-background/95 backdrop-blur-sm border-r border-blue-200/30 dark:border-blue-800/30 shadow-xl relative overflow-hidden",
           !isMobile && "h-screen sticky top-0",
           isMobile && cn(
             "fixed top-0 left-0 h-screen shadow-2xl z-[200]",

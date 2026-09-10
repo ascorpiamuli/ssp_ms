@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Supplier extends Model
@@ -275,5 +276,22 @@ class Supplier extends Model
     }
 
     return array_map('trim', explode(',', $this->certifications));
+  }
+
+  /**
+   * Get the quotations for this supplier
+   * ✅ FIX: Add the missing relationship
+   */
+  public function quotations(): HasMany
+  {
+    return $this->hasMany(SupplierQuotation::class, 'supplier_id');
+  }
+
+  /**
+   * Alias for quotations() - for backward compatibility
+   */
+  public function supplierQuotations(): HasMany
+  {
+    return $this->quotations();
   }
 }

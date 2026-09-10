@@ -68,6 +68,9 @@ import {
   Target,
   Database,
   History,
+  FileSignature,
+  Handshake,
+  Signature,
   type LucideIcon
 } from 'lucide-react'
 import { NavigationSection } from '@/lib/types/navigation.types'
@@ -141,6 +144,9 @@ const iconMap: Record<string, LucideIcon> = {
   Target,
   Database,
   History,
+  FileSignature,
+  Handshake,
+  Signature,
 }
 
 // Helper to get icon component
@@ -181,7 +187,7 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 9. ADMINISTRATION
+  // 2. ADMINISTRATION
   {
     id: 'administration',
     title: 'Administration',
@@ -214,9 +220,6 @@ export const navigationSections: NavigationSection[] = [
         badge: 'Pending',
         badgeColor: 'warning'
       },
-      // ==========================================
-      // ➕ NEW: SIGNATURE VERIFICATION LOGS TAB
-      // ==========================================
       {
         id: 'signature-verification-logs',
         name: 'Signature Verification Logs',
@@ -225,7 +228,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'View audit trail for all signature actions',
         roles: ['admin']
       },
-      // ==========================================
       {
         id: 'permissions',
         name: 'Permission Matrix',
@@ -276,7 +278,8 @@ export const navigationSections: NavigationSection[] = [
       }
     ]
   },
-  // 2. REQUISITIONS
+
+  // 3. REQUISITIONS
   {
     id: 'requisitions',
     title: 'Requisitions',
@@ -318,7 +321,7 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 3. APPROVALS
+  // 4. APPROVALS
   {
     id: 'approvals',
     title: 'Approvals',
@@ -342,9 +345,9 @@ export const navigationSections: NavigationSection[] = [
         roles: ['accountant']
       },
       {
-        id: 'head of institution_approvals',
+        id: 'head_of_institution_approvals',
         name: 'Head of Institution Approvals',
-        href: '/approvals/head of institution',
+        href: '/approvals/head-of-institution',
         icon: getIcon('Building2'),
         description: 'Institutional approvals (Level 3)',
         roles: ['head of institution']
@@ -360,28 +363,21 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 4. PROCUREMENT - COMPLETE WORKFLOW WITH SUPPLIER TABS
+  // 5. QUOTATIONS
   {
     id: 'procurement-quotations',
     title: 'Quotations',
     icon: getIcon('ShoppingCart'),
     defaultOpen: false,
     items: [
-      // ============================================
-      // INTERNAL PROCUREMENT TABS (Staff/Admin)
-      // ============================================
-
-      // 2. CREATE RFQ
       {
         id: 'create-request-for-quotations',
         name: 'Create RFQ',
         href: '/procurement/request-for-quotations/create',
         icon: getIcon('FilePlus'),
         description: 'Create new Request for Quotations',
-        roles: ['admin', 'procurement','accountant']
+        roles: ['admin', 'procurement', 'accountant']
       },
-
-      // 3. RFQ MANAGEMENT
       {
         id: 'request-for-quotations-management',
         name: 'RFQ Management',
@@ -390,8 +386,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'Manage RFQs and supplier responses',
         roles: ['admin', 'procurement', 'accountant']
       },
-
-      // 4. RFQ RESPONSES
       {
         id: 'rfq-responses',
         name: 'RFQ Responses',
@@ -400,7 +394,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'View and evaluate supplier quotations',
         roles: ['admin', 'procurement', 'accountant', 'hod']
       },
-      // 16. APPROVED QUOTATIONS - View approved quotations and LPO/LSO
       {
         id: 'supplier_quotations',
         name: 'Supplier Quotations',
@@ -409,13 +402,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'View your suppliers quotations and awarded contracts',
         roles: ['admin', 'procurement', 'accountant']
       },
-
-
-      // ============================================
-      // SUPPLIER PORTAL TABS
-      // ============================================
-
-      // 13. SUPPLIER DASHBOARD - Overview
       {
         id: 'supplier_dashboard',
         name: 'Dashboard',
@@ -424,8 +410,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'Your RFQ and requisition overview',
         roles: ['supplier']
       },
-
-      // 14. RFQ INVITATIONS - View and respond to RFQs
       {
         id: 'supplier_rfq_invitations',
         name: 'RFQ Invitations',
@@ -434,8 +418,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'View and respond to RFQ invitations',
         roles: ['supplier']
       },
-
-      // 15. MY QUOTATIONS - Track submitted quotations
       {
         id: 'supplier_my_quotations',
         name: 'My Quotations',
@@ -446,14 +428,14 @@ export const navigationSections: NavigationSection[] = [
       },
     ]
   },
-  // 5. ORDERS
+
+  // 6. PURCHASE ORDERS
   {
     id: 'orders',
     title: 'Purchase Orders',
     icon: getIcon('Package'),
     defaultOpen: false,
     items: [
-      // 1. MANAGE ORDERS - Main dashboard for all orders
       {
         id: 'manage_orders',
         name: 'Manage Orders',
@@ -462,8 +444,6 @@ export const navigationSections: NavigationSection[] = [
         description: 'Create and manage LPO/LSO, GRN/SAN',
         roles: ['admin', 'procurement', 'accountant', 'head of institution', 'final_approver', 'hod', 'auditor', 'storekeeper']
       },
-
-      // 2. PENDING CHECK - HOD review dashboard
       {
         id: 'pending_check',
         name: 'Pending Check (HOD)',
@@ -474,8 +454,6 @@ export const navigationSections: NavigationSection[] = [
         badge: 'HOD',
         badgeColor: 'amber'
       },
-
-      // 3. PENDING ENDORSEMENT - Accountant review dashboard
       {
         id: 'pending_endorsement',
         name: 'Pending Endorsement',
@@ -486,8 +464,6 @@ export const navigationSections: NavigationSection[] = [
         badge: 'Accountant',
         badgeColor: 'blue'
       },
-
-      // 4. PENDING APPROVAL - Director review dashboard
       {
         id: 'pending_approval',
         name: 'Pending Approval',
@@ -498,31 +474,24 @@ export const navigationSections: NavigationSection[] = [
         badge: 'Director',
         badgeColor: 'purple'
       },
-
-      // 5. SUPPLIER ACKNOWLEDGMENTS - Supplier view LPOs (NEW)
       {
         id: 'supplier_acknowledgments',
         name: 'Supplier Acknowledgments',
         href: '/procurement/purchase-orders/supplier-acknowledgments',
         icon: getIcon('Handshake'),
-        description: 'LPOs sent for Aknowledgement',
+        description: 'LPOs sent for Acknowledgement',
         roles: ['admin', 'supplier'],
         badge: 'Supplier',
         badgeColor: 'indigo'
       },
-
-
-      // 8. TRACK ORDERS - Order tracking dashboard
       {
         id: 'track_orders',
         name: 'Track Orders',
         href: '/procurement/purchase-orders/track-orders',
         icon: getIcon('Target'),
         description: 'Track order status and delivery progress',
-        roles: ['admin', 'procurement', 'accountant','head of institution',]
+        roles: ['admin', 'procurement', 'accountant', 'head of institution']
       },
-
-      // 9. ORDER HISTORY - Historical orders
       {
         id: 'order_history',
         name: 'Order History',
@@ -533,7 +502,8 @@ export const navigationSections: NavigationSection[] = [
       }
     ]
   },
-  // DELIVERY NOTES (to be added as a parent tab)
+
+  // 7. DELIVERY NOTES
   {
     id: 'delivery-notes',
     title: 'Delivery Notes',
@@ -567,54 +537,200 @@ export const navigationSections: NavigationSection[] = [
     ]
   },
 
-  // 6. INVOICES & PAYMENTS
+  // 8. INVOICES (COMING SOON)
   {
     id: 'invoices',
-    title: 'Invoices & Payments',
-    icon: getIcon('CreditCard'),
+    title: 'Invoices',
+    icon: getIcon('Receipt'),
     defaultOpen: false,
+    comingSoon: true,
     items: [
       {
-        id: 'invoices',
-        name: 'Invoices',
-        href: '/invoices',
+        id: 'invoices_management',
+        name: 'Manage Invoices',
+        href: '/procurement/invoices',
         icon: getIcon('Receipt'),
         description: 'View, verify, and manage invoices',
-        roles: ['admin', 'accountant', 'procurement', 'auditor', 'supplier']
+        roles: ['admin', 'accountant', 'procurement', 'auditor', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       },
       {
-        id: 'payment_vouchers',
-        name: 'Payment Vouchers',
-        href: '/payments/vouchers',
-        icon: getIcon('FileCheck'),
-        description: 'Create, manage, and endorse payment vouchers',
-        roles: ['admin', 'accountant', 'head of institution']
+        id: 'invoice_verification',
+        name: 'Invoice Verification',
+        href: '/procurement/invoices/verify',
+        icon: getIcon('ShieldCheck'),
+        description: 'Verify and approve supplier invoices',
+        roles: ['admin', 'accountant', 'procurement', 'auditor'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       },
       {
-        id: 'cheque_management',
-        name: 'Cheque Management',
-        href: '/payments/cheques',
-        icon: getIcon('Wallet'),
-        description: 'Track and record cheques',
-        roles: ['admin', 'accountant']
-      },
-      {
-        id: 'payment_analytics',
-        name: 'Payment Analytics',
-        href: '/payments/analytics',
-        icon: getIcon('TrendingUp'),
-        description: 'Payment history, reconciliation, and outstanding payments',
-        roles: ['admin', 'accountant', 'auditor', 'head of institution', 'supplier']
+        id: 'invoice_history',
+        name: 'Invoice History',
+        href: '/procurement/invoices/history',
+        icon: getIcon('History'),
+        description: 'View historical invoices and payment status',
+        roles: ['admin', 'accountant', 'procurement', 'auditor', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       }
     ]
   },
 
-  // 7. BUDGET & FINANCE
+  // 9. PAYMENTS (COMING SOON)
+  {
+    id: 'payments',
+    title: 'Payments',
+    icon: getIcon('DollarSign'),
+    defaultOpen: false,
+    comingSoon: true,
+    items: [
+      {
+        id: 'payment_vouchers',
+        name: 'Payment Vouchers',
+        href: '/procurement/payments/vouchers',
+        icon: getIcon('FileCheck'),
+        description: 'Create, manage, and endorse payment vouchers',
+        roles: ['admin', 'accountant', 'head of institution'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'cheque_management',
+        name: 'Cheque Management',
+        href: '/procurement/payments/cheques',
+        icon: getIcon('Wallet'),
+        description: 'Track and record cheques',
+        roles: ['admin', 'accountant'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'payment_analytics',
+        name: 'Payment Analytics',
+        href: '/procurement/payments/analytics',
+        icon: getIcon('TrendingUp'),
+        description: 'Payment history, reconciliation, and outstanding payments',
+        roles: ['admin', 'accountant', 'auditor', 'head of institution', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'payment_approvals',
+        name: 'Payment Approvals',
+        href: '/procurement/payments/approvals',
+        icon: getIcon('Shield'),
+        description: 'Approve pending payments',
+        roles: ['admin', 'accountant', 'head of institution', 'final_approver'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      }
+    ]
+  },
+
+  // 10. CONTRACTS (COMING SOON)
+  {
+    id: 'contracts',
+    title: 'Contracts',
+    icon: getIcon('FileCheck'),
+    defaultOpen: false,
+    comingSoon: true,
+    items: [
+      {
+        id: 'contracts_management',
+        name: 'Manage Contracts',
+        href: '/procurement/contracts',
+        icon: getIcon('FileCheck'),
+        description: 'Create and manage contracts',
+        roles: ['admin', 'procurement'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'contracts_approvals',
+        name: 'Contract Approvals',
+        href: '/procurement/contracts/approvals',
+        icon: getIcon('ShieldCheck'),
+        description: 'Review and approve contracts',
+        roles: ['admin', 'head of institution', 'final_approver'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'contracts_tracking',
+        name: 'Contract Tracking',
+        href: '/procurement/contracts/tracking',
+        icon: getIcon('Target'),
+        description: 'Track contract status and renewals',
+        roles: ['admin', 'procurement', 'accountant'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      }
+    ]
+  },
+
+  // 11. TENDERS (COMING SOON)
+  {
+    id: 'tenders',
+    title: 'Tenders',
+    icon: getIcon('Award'),
+    defaultOpen: false,
+    comingSoon: true,
+    items: [
+      {
+        id: 'tenders_management',
+        name: 'Manage Tenders',
+        href: '/procurement/tenders',
+        icon: getIcon('Award'),
+        description: 'Create and manage tender notices',
+        roles: ['admin', 'procurement'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'tenders_bidders',
+        name: 'Bidder Management',
+        href: '/procurement/tenders/bidders',
+        icon: getIcon('Users'),
+        description: 'Manage tender bidders and responses',
+        roles: ['admin', 'procurement'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      },
+      {
+        id: 'tenders_evaluation',
+        name: 'Tender Evaluation',
+        href: '/procurement/tenders/evaluation',
+        icon: getIcon('BarChart3'),
+        description: 'Evaluate and award tenders',
+        roles: ['admin', 'procurement', 'accountant'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
+      }
+    ]
+  },
+
+  // 12. BUDGET & FINANCE (COMING SOON)
   {
     id: 'budget',
     title: 'Budget & Finance',
     icon: getIcon('DollarSign'),
     defaultOpen: false,
+    comingSoon: true,
     items: [
       {
         id: 'budget_overview',
@@ -622,7 +738,10 @@ export const navigationSections: NavigationSection[] = [
         href: '/budget',
         icon: getIcon('PieChart'),
         description: 'Budget allocation, planning, and utilization',
-        roles: ['admin', 'accountant', 'head of institution']
+        roles: ['admin', 'accountant', 'head of institution'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       },
       {
         id: 'expenditure',
@@ -630,17 +749,21 @@ export const navigationSections: NavigationSection[] = [
         href: '/budget/expenditure',
         icon: getIcon('TrendingUp'),
         description: 'Track expenditures',
-        roles: ['admin', 'accountant', 'head of institution', 'hod', 'auditor']
+        roles: ['admin', 'accountant', 'head of institution', 'hod', 'auditor'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       }
     ]
   },
 
-  // 8. REPORTS
+  // 13. REPORTS & ANALYTICS (COMING SOON)
   {
     id: 'reports',
     title: 'Reports & Analytics',
     icon: getIcon('BarChart3'),
     defaultOpen: false,
+    comingSoon: true,
     items: [
       {
         id: 'reports',
@@ -648,7 +771,10 @@ export const navigationSections: NavigationSection[] = [
         href: '/reports',
         icon: getIcon('FileText'),
         description: 'Requisition, approval, spending, supplier, audit, and financial reports',
-        roles: ['admin', 'accountant', 'head of institution', 'hod', 'procurement', 'auditor', 'supplier']
+        roles: ['admin', 'accountant', 'head of institution', 'hod', 'procurement', 'auditor', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       },
       {
         id: 'custom_reports',
@@ -656,70 +782,21 @@ export const navigationSections: NavigationSection[] = [
         href: '/reports/custom',
         icon: getIcon('Filter'),
         description: 'Build custom reports',
-        roles: ['admin', 'accountant', 'auditor']
+        roles: ['admin', 'accountant', 'auditor'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       }
     ]
   },
 
-
-  // 10. COMMUNICATION
-  {
-    id: 'communication',
-    title: 'Communication',
-    icon: getIcon('MessageSquare'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'notifications',
-        name: 'Notifications',
-        href: '/notifications',
-        icon: getIcon('Bell'),
-        description: 'View notifications',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
-      },
-      {
-        id: 'messages',
-        name: 'Messages',
-        href: '/messages',
-        icon: getIcon('MessageSquare'),
-        description: 'Internal messages',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'procurement', 'staff', 'supplier']
-      },
-      {
-        id: 'announcements',
-        name: 'Announcements',
-        href: '/announcements',
-        icon: getIcon('Megaphone'),
-        description: 'View and create announcements',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
-      }
-    ]
-  },
-
-  // 11. PROFILE
-  {
-    id: 'department-settings',
-    title: 'Department Settings',
-    icon: getIcon('Settings'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'staff-management',
-        name: 'Staff Management',
-        href: '/department/staff-management',
-        icon: getIcon('FIle'),
-        description: 'Manage and assign staff to Depts',
-        roles: ['admin', 'hod']
-      }
-    ]
-  },
-
-  // 12. HELP & SUPPORT
+  // 14. HELP & SUPPORT (COMING SOON)
   {
     id: 'support',
     title: 'Help & Support',
     icon: getIcon('HelpCircle'),
     defaultOpen: false,
+    comingSoon: true,
     items: [
       {
         id: 'support_tickets',
@@ -727,7 +804,10 @@ export const navigationSections: NavigationSection[] = [
         href: '/help/tickets',
         icon: getIcon('MessageSquare'),
         description: 'Support ticket management',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'procurement', 'staff', 'supplier']
+        roles: ['admin', 'hod', 'accountant', 'head of institution', 'procurement', 'staff', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       },
       {
         id: 'knowledge_base',
@@ -735,69 +815,10 @@ export const navigationSections: NavigationSection[] = [
         href: '/help',
         icon: getIcon('BookOpen'),
         description: 'Documentation, FAQ, and knowledge base',
-        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier']
-      }
-    ]
-  },
-
-  // 13. HUMAN RESOURCES
-  {
-    id: 'hr',
-    title: 'Human Resources',
-    icon: getIcon('Users2'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'staff',
-        name: 'Staff Management',
-        href: '/hr',
-        icon: getIcon('Users'),
-        description: 'Staff directory, attendance, and leave management',
-        roles: ['admin', 'hod', 'head of institution', 'staff']
-      },
-      {
-        id: 'performance',
-        name: 'Performance & Training',
-        href: '/hr/performance',
-        icon: getIcon('Award'),
-        description: 'Performance reviews and training programs',
-        roles: ['admin', 'head of institution', 'hod']
-      }
-    ]
-  },
-
-  // 14. ASSETS & INVENTORY
-  {
-    id: 'assets',
-    title: 'Assets & Inventory',
-    icon: getIcon('Package'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'assets',
-        name: 'Assets & Inventory',
-        href: '/assets',
-        icon: getIcon('Briefcase'),
-        description: 'Manage assets, inventory, and maintenance',
-        roles: ['admin', 'accountant', 'procurement', 'auditor']
-      }
-    ]
-  },
-
-  // 15. FACILITIES
-  {
-    id: 'facilities',
-    title: 'Facilities',
-    icon: getIcon('Building2'),
-    defaultOpen: false,
-    items: [
-      {
-        id: 'facilities',
-        name: 'Facilities & Rooms',
-        href: '/facilities',
-        icon: getIcon('Building2'),
-        description: 'Manage facilities, rooms, and maintenance',
-        roles: ['admin', 'head of institution', 'hod', 'staff']
+        roles: ['admin', 'hod', 'accountant', 'head of institution', 'final_approver', 'procurement', 'staff', 'auditor', 'supplier'],
+        disabled: true,
+        badge: 'Coming Soon',
+        badgeColor: 'gray'
       }
     ]
   }

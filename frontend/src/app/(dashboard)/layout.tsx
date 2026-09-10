@@ -24,7 +24,7 @@ import { cn } from '../../lib/utils'
 // ============================================
 
 const CenteredLoading = () => (
-  <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-950">
+  <div className="flex items-center justify-center min-h-screen bg-background">
     <div className="relative flex flex-col items-center gap-5">
       {/* Multi-ring loader */}
       <div className="relative">
@@ -151,21 +151,13 @@ function DashboardContent({
   const { useSupplierProfileExists } = useSuppliers()
 
   // Local state
-  const [isSupplier, setIsSupplier] = useState(false)
-  const [isCheckingRole, setIsCheckingRole] = useState(true)
   const [isNavigating, setIsNavigating] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  // Check if supplier profile exists
-  const {
-    exists: supplierProfileExists,
-    isLoading: isCheckingSupplierProfile,
-    isError: isProfileCheckError,
-    error: profileCheckError,
-    refetch: refetchProfile,
-  } = useSupplierProfileExists()
+  // ============================================
+  // ✅ FIX 1: Memoize path checks
+  // ============================================
 
-  // Memoized values
   const currentPath = useMemo(() => pathname || '', [pathname])
 
   const isOnProfileSetupPage = useMemo(() =>
@@ -181,32 +173,70 @@ function DashboardContent({
     [currentPath]
   )
 
-  // Check if user is a supplier
-  useEffect(() => {
-    if (user) {
-      const isSupplierRole = user.roles?.some((role: string) =>
-        role.toLowerCase() === 'supplier'
-      ) || false
-      setIsSupplier(isSupplierRole)
-    }
-    setIsCheckingRole(false)
+  // ============================================
+  // ✅ FIX 2: Memoize supplier check (NO API CALL YET)
+  // ============================================
+
+  const isUserSupplier = useMemo(() => {
+    if (!user) return false
+    return user.roles?.some((role: string) =>
+      role.toLowerCase() === 'supplier'
+    ) || false
   }, [user])
 
-  // Redirect to login if not authenticated
+  // ============================================
+  // ✅ FIX 3: Only call API if user is a supplier
+  // ============================================
+
+  const shouldCheckProfile = useMemo(() => {
+    // Only check if:
+    // 1. User is authenticated
+    // 2. User is a supplier
+    // 3. Not on auth pages
+    return isAuthenticated && isUserSupplier && !isOnAuthPage
+  }, [isAuthenticated, isUserSupplier, isOnAuthPage])
+
+  // ============================================
+  // ✅ FIX 4: Conditional hook with enabled option
+  // ============================================
+
+  const {
+    exists: supplierProfileExists,
+    isLoading: isCheckingSupplierProfile,
+    isError: isProfileCheckError,
+    error: profileCheckError,
+    refetch: refetchProfile,
+  } = useSupplierProfileExists({
+    enabled: shouldCheckProfile,
+  })
+
+  // ============================================
+  // ✅ FIX 5: Redirect to login if not authenticated
+  // ============================================
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/login')
     }
   }, [authLoading, isAuthenticated, router])
 
-  // Handle supplier profile redirects
+  // ============================================
+  // ✅ FIX 6: Handle supplier profile redirects (with proper guards)
+  // ============================================
+
   useEffect(() => {
-    if (authLoading || isCheckingRole || isCheckingSupplierProfile || !isAuthenticated || !user || !isSupplier) {
+    // Don't run while loading or on auth pages
+    if (authLoading || isCheckingSupplierProfile || !isAuthenticated || !user) {
       return
     }
 
+    // Don't run on auth pages
     if (isOnAuthPage) return
 
+    // Only check for suppliers
+    if (!isUserSupplier) return
+
+    // If supplier profile doesn't exist and we're not on profile setup page
     if (!supplierProfileExists && !isOnProfileSetupPage) {
       setIsNavigating(true)
       router.push('/profile-setup')
@@ -214,6 +244,7 @@ function DashboardContent({
       return
     }
 
+    // If supplier profile exists and we're on profile setup page
     if (supplierProfileExists && isOnProfileSetupPage) {
       setIsNavigating(true)
       router.push('/dashboard')
@@ -222,40 +253,67 @@ function DashboardContent({
     }
   }, [
     authLoading,
-    isCheckingRole,
     isCheckingSupplierProfile,
     isAuthenticated,
     user,
-    isSupplier,
+    isUserSupplier,
     supplierProfileExists,
     isOnProfileSetupPage,
     isOnAuthPage,
     router,
   ])
 
-  // Handle retry
-  const handleRetryProfileCheck = useCallback(() => {
-    refetchProfile()
+  // ============================================
+  // ✅ FIX 7: Handle retry with proper loading state
+  // ============================================
+
+  const handleRetryProfileCheck = useCallback(async () => {
+    try {
+      await refetchProfile()
+    } catch (error) {
+      console.error('Profile check retry failed:', error)
+    }
   }, [refetchProfile])
 
-  // Handle sidebar toggle
-  const toggleSidebar = useCallback(() => {
+  // ============================================
+  // ✅ FIX 8: Handle sidebar toggle
+  // ============================================
+
+  const handleSidebarToggle = useCallback(() => {
     setSidebarCollapsed(prev => !prev)
   }, [])
 
-  // Loading states
-  if (authLoading || isCheckingRole || isCheckingSupplierProfile || isNavigating) {
+  // ============================================
+  // ✅ FIX 9: Loading states with proper conditions
+  // ============================================
+
+  // Auth loading
+  if (authLoading) {
     return <CenteredLoading />
   }
 
+  // Not authenticated
   if (!isAuthenticated) {
     return null
   }
 
-  // Error state
-  if (isProfileCheckError && isSupplier && !isOnAuthPage) {
+  // Checking supplier profile (only for suppliers)
+  if (isUserSupplier && isCheckingSupplierProfile) {
+    return <CenteredLoading />
+  }
+
+  // Navigation in progress
+  if (isNavigating) {
+    return <CenteredLoading />
+  }
+
+  // ============================================
+  // ✅ FIX 10: Error state - only for suppliers
+  // ============================================
+
+  if (isProfileCheckError && isUserSupplier && !isOnAuthPage) {
     return (
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="flex h-screen bg-background">
         <DashboardSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <DashboardHeader />
@@ -272,11 +330,14 @@ function DashboardContent({
     )
   }
 
-  // Profile setup required
-  const isSupplierWithMissingProfile = isSupplier && !supplierProfileExists && !isOnProfileSetupPage
+  // ============================================
+  // ✅ FIX 11: Profile setup required - only for suppliers
+  // ============================================
+
+  const isSupplierWithMissingProfile = isUserSupplier && !supplierProfileExists && !isOnProfileSetupPage
   if (isSupplierWithMissingProfile) {
     return (
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="flex h-screen bg-background">
         <DashboardSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <DashboardHeader />
@@ -289,9 +350,12 @@ function DashboardContent({
     )
   }
 
-  // Full dashboard
+  // ============================================
+  // ✅ FULL DASHBOARD - Render children
+  // ============================================
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <DashboardSidebar />
 
@@ -337,7 +401,7 @@ function DashboardContent({
               rotateX: { duration: 0.4, ease: "easeOut" },
               filter: { duration: 0.35, ease: "easeOut" },
             }}
-            className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-950 relative"
+            className="flex-1 overflow-y-auto overflow-x-hidden bg-background relative"
           >
             {/* Ambient glow effect */}
             <motion.div
@@ -384,7 +448,7 @@ function DashboardContent({
             />
 
             {/* Bottom gradient fade */}
-            <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none bg-gradient-to-t from-gray-50 dark:from-gray-950 via-transparent to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none bg-gradient-to-t from-background via-transparent to-transparent" />
           </motion.main>
         </AnimatePresence>
       </div>

@@ -11,27 +11,64 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Cache & Stale Time
-            staleTime: 5 * 60 * 1000, // 5 minutes (increased from 1 min)
-            gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
+            // ============================================
+            // CACHE & STALE TIME - PREVENT UNNECESSARY REFETCHES
+            // ============================================
 
-            // Retry Logic
+            // ✅ INCREASED: Data stays fresh for 5 minutes
+            // No network requests for 5 minutes after fetch
+            staleTime: 5 * 60 * 1000, // 5 minutes
+
+            // ✅ INCREASED: Data stays in cache for 30 minutes
+            // Even after becoming stale, it stays in cache
+            gcTime: 30 * 60 * 1000, // 30 minutes (was 10 min)
+
+            // ============================================
+            // RETRY LOGIC - Only for legitimate failures
+            // ============================================
+
             retry: (failureCount, error) => {
-              // Don't retry on 404 or 403
-              if ((error as any)?.response?.status === 404) return false
+              // Don't retry on client errors (4xx)
+              if ((error as any)?.response?.status === 400) return false
+              if ((error as any)?.response?.status === 401) return false
               if ((error as any)?.response?.status === 403) return false
-              return failureCount < 3 // Retry up to 3 times
+              if ((error as any)?.response?.status === 404) return false
+              // Retry up to 2 times for server errors (5xx)
+              return failureCount < 2
             },
-            retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+            retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 
-            // Refetching Behavior
-            refetchOnWindowFocus: false, // Good for performance
+            // ============================================
+            // REFETCHING BEHAVIOR - MINIMIZE NETWORK CALLS
+            // ============================================
+
+            // ❌ DISABLED: Don't refetch on window focus (prevents unwanted calls)
+            refetchOnWindowFocus: false,
+
+            // ✅ ENABLED: Only fetch on mount when data is stale
             refetchOnMount: true,
-            refetchOnReconnect: true,
 
-            // Performance
+            // ❌ DISABLED: Don't refetch on reconnect (prevents network churn)
+            refetchOnReconnect: false,
+
+            // ❌ DISABLED: No automatic refetch interval
+            refetchInterval: false,
+
+            // ❌ DISABLED: Don't refetch in background
+            refetchIntervalInBackground: false,
+
+            // ============================================
+            // PERFORMANCE OPTIMIZATIONS
+            // ============================================
+
             enabled: true,
-            throwOnError: false, // Let components handle errors
+            throwOnError: false,
+
+            // ✅ ENABLED: Keep previous data while fetching new data
+            placeholderData: (previousData: any) => previousData,
+
+            // ✅ ENABLED: Use cached data immediately
+            initialData: undefined,
           },
           mutations: {
             retry: 1,
@@ -47,7 +84,6 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       {/* Show devtools only in development */}
       {process.env.NODE_ENV === 'development' && (
         <ReactQueryDevtools
-
           initialIsOpen={false}
           buttonPosition="bottom-right"
           position="bottom"

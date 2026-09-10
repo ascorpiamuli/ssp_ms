@@ -40,6 +40,7 @@
     36 => 'App\\Providers\\ProcurementServiceProvider',
     37 => 'App\\Providers\\RateLimiterServiceProvider',
     38 => 'App\\Providers\\SignatureServiceProvider',
+    39 => 'App\\Providers\\AnalyticsServiceProvider',
   ),
   'eager' => 
   array (
@@ -67,6 +68,7 @@
     21 => 'App\\Providers\\ProcurementServiceProvider',
     22 => 'App\\Providers\\RateLimiterServiceProvider',
     23 => 'App\\Providers\\SignatureServiceProvider',
+    24 => 'App\\Providers\\AnalyticsServiceProvider',
   ),
   'deferred' => 
   array (

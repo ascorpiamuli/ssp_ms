@@ -96,7 +96,9 @@ export function useSuppliers() {
   };
 
   // Hook to check if supplier profile exists
-  const useSupplierProfileExists = () => {
+  const useSupplierProfileExists = (options?: { enabled?: boolean }) => {
+    const { enabled = true } = options || {}
+
     const { data, isLoading, isError, error: queryError, refetch, isFetching } = useQuery({
       queryKey: ['supplier', 'profile-exists'],
       queryFn: async () => {
@@ -131,8 +133,24 @@ export function useSuppliers() {
           throw err;
         }
       },
-      staleTime: 2 * 60 * 1000,
-      gcTime: 5 * 60 * 1000,
+      // ✅ FIX 1: Respect the enabled option
+      enabled: enabled,
+
+      // ✅ FIX 2: Increased stale time to prevent unnecessary refetches
+      staleTime: 10 * 60 * 1000, // 10 minutes (was 2 min)
+
+      // ✅ FIX 3: Increased cache time
+      gcTime: 30 * 60 * 1000, // 30 minutes (was 5 min)
+
+      // ✅ FIX 4: Don't refetch on window focus
+      refetchOnWindowFocus: false,
+
+      // ✅ FIX 5: Don't refetch on reconnect
+      refetchOnReconnect: false,
+
+      // ✅ FIX 6: Only refetch on mount when data is stale
+      refetchOnMount: true,
+
       retry: (failureCount, error: any) => {
         if (error?.response?.status === 404) {
           return false;
@@ -146,7 +164,6 @@ export function useSuppliers() {
         }
         return true;
       },
-      enabled: true,
     });
 
     return {
@@ -159,7 +176,6 @@ export function useSuppliers() {
       refetch,
     };
   };
-
   // Helper function to extract error messages from API response
   const extractErrorMessage = (err: any): string => {
     // Check for validation errors (422)

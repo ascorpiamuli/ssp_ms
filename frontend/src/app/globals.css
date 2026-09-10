@@ -1,3 +1,5 @@
+/* app/globals.css */
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -49,39 +51,59 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* ============================================
+   DARK MODE - STRICT BLACK BACKGROUND
+   ============================================ */
 .dark {
-  --color-background: #0A0F1F;
+  /* Force pure black background */
+  --color-background: #000000;
   --color-foreground: #f3f4f6;
+
   --brand-blue: #2E4DA8;
   --brand-purple: #8B3FD9;
-  --background: oklch(0.145 0 0);
+
+  /* Override shadcn variables for dark mode */
+  --background: oklch(0 0 0);
+  /* Pure Black */
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  /* White */
+
+  --card: oklch(0.1 0 0);
+  /* Very dark gray for cards to stand out slightly from black */
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+
+  --popover: oklch(0.1 0 0);
   --popover-foreground: oklch(0.985 0 0);
+
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+
+  --secondary: oklch(0.15 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
+
+  --muted: oklch(0.15 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+
+  --accent: oklch(0.15 0 0);
   --accent-foreground: oklch(0.985 0 0);
+
   --destructive: oklch(0.704 0.191 22.216);
+
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+
+  --sidebar: oklch(0.1 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.15 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
@@ -116,6 +138,7 @@ body {
 .dark .bg-brand-gradient-light {
   background: linear-gradient(135deg, #1E3A8A20 0%, #6B21A820 100%);
 }
+
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -129,6 +152,7 @@ body {
 .animate-shimmer {
   animation: shimmer 2s infinite;
 }
+
 @keyframes progress {
   0% {
     width: 0%;
@@ -141,20 +165,6 @@ body {
 
 .animate-progress {
   animation: progress 3s linear;
-}
-/* Add to frontend/src/app/globals.css */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite;
 }
 
 @theme inline {
@@ -204,20 +214,25 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
 }
+
 @keyframes gradient {
   0% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0% 50%;
   }
@@ -232,9 +247,11 @@ body {
   0% {
     box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7);
   }
+
   70% {
     box-shadow: 0 0 0 10px rgba(139, 92, 246, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
   }
@@ -244,144 +261,9 @@ body {
   animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }
 
+/* ========== ACCESSIBILITY STYLES ========== */
 
-/* src/app/globals.css - Add these at the end */
-
-/* ========== ACCESSIBILITY STYLES - ONLY APPLIED WHEN TOGGLED ========== */
-
-/* High Contrast Mode - Only when .high-contrast class is present */
-.high-contrast {
-  --brand-blue: #0000FF;
-  --brand-purple: #800080;
-}
-
-.high-contrast body {
-  background-color: #000000 !important;
-  color: #FFFFFF !important;
-}
-
-.high-contrast a {
-  color: #FFFF00 !important;
-  text-decoration: underline !important;
-}
-
-.high-contrast button:not(.no-accessibility),
-.high-contrast input,
-.high-contrast select,
-.high-contrast textarea {
-  border: 2px solid #FFFFFF !important;
-  background-color: #000000 !important;
-  color: #FFFFFF !important;
-}
-
-/* Large Text Mode - Only when .large-text class is present */
-.large-text body,
-.large-text button,
-.large-text input,
-.large-text select,
-.large-text textarea {
-  font-size: 1.2rem !important;
-}
-
-.large-text h1 {
-  font-size: 2.5rem !important;
-}
-
-.large-text h2 {
-  font-size: 2rem !important;
-}
-
-.large-text h3 {
-  font-size: 1.75rem !important;
-}
-
-.large-text p {
-  font-size: 1.2rem !important;
-}
-
-.large-text label {
-  font-size: 1.1rem !important;
-}
-
-/* Readable Font Mode - Only when .readable-font class is present */
-.readable-font body,
-.readable-font button,
-.readable-font input,
-.readable-font select,
-.readable-font textarea,
-.readable-font p,
-.readable-font h1,
-.readable-font h2,
-.readable-font h3,
-.readable-font h4,
-.readable-font h5,
-.readable-font h6,
-.readable-font label {
-  font-family: 'OpenDyslexic', 'Comic Sans MS', 'Chalkboard SE', -apple-system, BlinkMacSystemFont, sans-serif !important;
-  letter-spacing: 0.05em;
-  word-spacing: 0.1em;
-}
-
-/* Increase Line Height - Only when .increase-line-height class is present */
-.increase-line-height body,
-.increase-line-height p,
-.increase-line-height li,
-.increase-line-height .text-content {
-  line-height: 1.8 !important;
-}
-
-.increase-line-height h1,
-.increase-line-height h2,
-.increase-line-height h3,
-.increase-line-height h4 {
-  line-height: 1.4 !important;
-}
-
-/* Highlight Links - Only when .highlight-links class is present */
-.highlight-links a:not(.no-accessibility) {
-  text-decoration: underline !important;
-  text-decoration-thickness: 2px !important;
-  background-color: rgba(255, 255, 0, 0.2) !important;
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-/* Reduce Motion - Only when .reduce-motion class is present */
-.reduce-motion *,
-.reduce-motion *::before,
-.reduce-motion *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
-}
-
-/* Focus Outline for Keyboard Navigation - Always ON for accessibility */
-*:focus-visible {
-  outline: 3px solid var(--brand-blue);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* Skip to Content Link - Always present but hidden until focused */
-.skip-to-content {
-  position: absolute;
-  top: -40px;
-  left: 0;
-  background: var(--brand-blue);
-  color: white;
-  padding: 8px 16px;
-  z-index: 100;
-  text-decoration: none;
-  border-radius: 0 0 4px 0;
-}
-
-.skip-to-content:focus {
-  top: 0;
-}
-/* ========== ACCESSIBILITY STYLES - ONLY APPLIED WHEN TOGGLED ========== */
-
-/* High Contrast Mode - Only when .high-contrast class is present on html */
+/* High Contrast Mode */
 .high-contrast {
   --brand-blue: #0000FF;
   --brand-purple: #800080;
@@ -430,7 +312,7 @@ body {
   color: #FFFFFF !important;
 }
 
-/* Large Text Mode - Only when .large-text class is present */
+/* Large Text Mode */
 .large-text body,
 .large-text button,
 .large-text input,
@@ -470,7 +352,7 @@ body {
   font-size: 1rem !important;
 }
 
-/* Readable Font Mode - Only when .readable-font class is present */
+/* Readable Font Mode */
 .readable-font body,
 .readable-font button,
 .readable-font input,
@@ -491,7 +373,7 @@ body {
   word-spacing: 0.1em;
 }
 
-/* Increase Line Height - Only when .increase-line-height class is present */
+/* Increase Line Height */
 .increase-line-height body,
 .increase-line-height p,
 .increase-line-height li,
@@ -512,7 +394,7 @@ body {
   line-height: 1.5 !important;
 }
 
-/* Highlight Links - Only when .highlight-links class is present */
+/* Highlight Links */
 .highlight-links a:not(.no-accessibility):not(.brand-gradient):not(.rounded-full) {
   text-decoration: underline !important;
   text-decoration-thickness: 3px !important;
@@ -527,7 +409,7 @@ body {
   background-color: rgba(255, 255, 0, 0.3) !important;
 }
 
-/* Reduce Motion - Only when .reduce-motion class is present */
+/* Reduce Motion */
 .reduce-motion *,
 .reduce-motion *::before,
 .reduce-motion *::after {
@@ -544,14 +426,14 @@ body {
   animation: none !important;
 }
 
-/* Focus Outline for Keyboard Navigation - Always ON for accessibility */
+/* Focus Outline */
 *:focus-visible {
   outline: 3px solid var(--brand-blue);
   outline-offset: 3px;
   border-radius: 4px;
 }
 
-/* Skip to Content Link - Always present but hidden until focused */
+/* Skip to Content */
 .skip-to-content {
   position: absolute;
   top: -40px;
@@ -569,7 +451,7 @@ body {
   top: 0;
 }
 
-/* Ensure checkbox and radio inputs are not distorted when accessibility is OFF */
+/* Form Elements Base */
 input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--brand-blue);
@@ -583,7 +465,6 @@ body,
 * {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
-/* Additional Accessibility Styles */
 
 /* Extra Large Text */
 .extra-large-text body,
@@ -660,7 +541,7 @@ body,
 * {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
 }
-/* Add to your globals.css */
+
 @keyframes spin-slow {
   from {
     transform: rotate(0deg);
@@ -674,9 +555,6 @@ body,
 .animate-spin-slow {
   animation: spin-slow 20s linear infinite;
 }
-
-
-/* app/globals.css */
 
 @keyframes shrink {
   from {
@@ -710,4 +588,19 @@ body,
     transform: translateY(-100%) scale(0.95);
     opacity: 0;
   }
+}
+/* Force specific gray shades to pure black in dark mode */
+.dark {
+  --color-gray-950: #000000;
+  --color-gray-900: #000000;
+  --color-gray-800: #0a0a0a;
+  --color-slate-950: #000000;
+  --color-slate-900: #000000;
+  --color-slate-800: #0a0a0a;
+  --color-zinc-950: #000000;
+  --color-zinc-900: #000000;
+  --color-zinc-800: #0a0a0a;
+  --color-neutral-950: #000000;
+  --color-neutral-900: #000000;
+  --color-neutral-800: #0a0a0a;
 }

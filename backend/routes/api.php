@@ -11,6 +11,15 @@ use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\SystemStatusController;
 
+
+use App\Http\Controllers\Api\Analytics\DashboardController;
+use App\Http\Controllers\Api\Analytics\RequisitionAnalyticsController;
+use App\Http\Controllers\Api\Analytics\FinancialAnalyticsController;
+use App\Http\Controllers\Api\Analytics\SupplierAnalyticsController;
+use App\Http\Controllers\Api\Analytics\OperationAnalyticsController;
+use App\Http\Controllers\Api\Analytics\ApprovalAnalyticsController;
+use App\Http\Controllers\Api\Analytics\PurchaseOrderAnalyticsController;
+
 // ============================================
 // REQUISITION CONTROLLERS
 // ============================================
@@ -908,4 +917,102 @@ Route::prefix('v1')->group(function () {
       Route::get('/status', [AuthController::class, 'getTwoFactorStatus']);
     });
   });
+
+  Route::prefix('analytics')->middleware(['auth:sanctum'])->group(function () {
+    
+    // Dashboard Routes
+    Route::prefix('dashboard')->group(function () {
+        Route::get('executive', [DashboardController::class, 'executive']);
+        Route::get('procurement', [DashboardController::class, 'procurement']);
+        Route::get('financial', [DashboardController::class, 'financial']);
+        Route::get('operational', [DashboardController::class, 'operational']);
+        Route::get('supplier', [DashboardController::class, 'supplier']);
+        Route::get('department/{departmentId}', [DashboardController::class, 'department']);
+        Route::get('kpis', [DashboardController::class, 'kpis']);
+    });
+
+    // Requisition Analytics Routes
+    Route::prefix('requisitions')->group(function () {
+        Route::get('summary', [RequisitionAnalyticsController::class, 'summary']);
+        Route::get('volume', [RequisitionAnalyticsController::class, 'volume']);
+        Route::get('status-distribution', [RequisitionAnalyticsController::class, 'statusDistribution']);
+        Route::get('by-department', [RequisitionAnalyticsController::class, 'byDepartment']);
+        Route::get('trends', [RequisitionAnalyticsController::class, 'trends']);
+        Route::get('approval-funnel', [RequisitionAnalyticsController::class, 'approvalFunnel']);
+        Route::get('approval-cycle', [RequisitionAnalyticsController::class, 'approvalCycle']);
+        Route::get('sla-compliance', [RequisitionAnalyticsController::class, 'slaCompliance']);
+        Route::get('top-departments', [RequisitionAnalyticsController::class, 'topDepartments']);
+        Route::get('department-scorecard/{departmentId}', [RequisitionAnalyticsController::class, 'departmentScorecard']);
+    });
+
+    // Financial Analytics Routes
+    Route::prefix('financial')->group(function () {
+        Route::get('summary', [FinancialAnalyticsController::class, 'summary']);
+        Route::get('budget-vs-actual', [FinancialAnalyticsController::class, 'budgetVsActual']);
+        Route::get('spending-analysis', [FinancialAnalyticsController::class, 'spendingAnalysis']);
+        Route::get('invoice-metrics', [FinancialAnalyticsController::class, 'invoiceMetrics']);
+        Route::get('payment-cycle', [FinancialAnalyticsController::class, 'paymentCycle']);
+        Route::get('cost-savings', [FinancialAnalyticsController::class, 'costSavings']);
+        Route::get('spending-trends', [FinancialAnalyticsController::class, 'spendingTrends']);
+        Route::get('overdue-invoices', [FinancialAnalyticsController::class, 'overdueInvoices']);
+        Route::get('forecast', [FinancialAnalyticsController::class, 'forecast']);
+        Route::get('budget-utilization', [FinancialAnalyticsController::class, 'budgetUtilization']);
+    });
+
+    // Supplier Analytics Routes
+    Route::prefix('suppliers')->group(function () {
+        Route::get('summary', [SupplierAnalyticsController::class, 'summary']);
+        Route::get('performance/{supplierId}', [SupplierAnalyticsController::class, 'performance']);
+        Route::post('compare', [SupplierAnalyticsController::class, 'compare']);
+        Route::get('top', [SupplierAnalyticsController::class, 'topSuppliers']);
+        Route::get('quotation-response-rates', [SupplierAnalyticsController::class, 'quotationResponseRates']);
+        Route::get('delivery-performance', [SupplierAnalyticsController::class, 'deliveryPerformance']);
+        Route::get('quality-ratings', [SupplierAnalyticsController::class, 'qualityRatings']);
+        Route::get('risk-assessment/{supplierId}', [SupplierAnalyticsController::class, 'riskAssessment']);
+        Route::get('spend-analysis', [SupplierAnalyticsController::class, 'spendAnalysis']);
+        Route::get('category-distribution', [SupplierAnalyticsController::class, 'categoryDistribution']);
+    });
+
+    // Operation Analytics Routes
+    Route::prefix('operations')->group(function () {
+        Route::get('summary', [OperationAnalyticsController::class, 'summary']);
+        Route::get('system-health', [OperationAnalyticsController::class, 'systemHealth']);
+        Route::get('user-activity', [OperationAnalyticsController::class, 'userActivity']);
+        Route::get('bottlenecks', [OperationAnalyticsController::class, 'bottlenecks']);
+        Route::get('audit-summary', [OperationAnalyticsController::class, 'auditSummary']);
+        Route::get('notification-effectiveness', [OperationAnalyticsController::class, 'notificationEffectiveness']);
+        Route::get('signature-adoption', [OperationAnalyticsController::class, 'signatureAdoption']);
+        Route::get('usage-patterns', [OperationAnalyticsController::class, 'usagePatterns']);
+        Route::get('user-performance', [OperationAnalyticsController::class, 'userPerformance']);
+        Route::get('backup-status', [OperationAnalyticsController::class, 'backupStatus']);
+    });
+
+    // Approval Analytics Routes
+    Route::prefix('approvals')->group(function () {
+        Route::get('summary', [ApprovalAnalyticsController::class, 'summary']);
+        Route::get('volume', [ApprovalAnalyticsController::class, 'volume']);
+        Route::get('status-distribution', [ApprovalAnalyticsController::class, 'statusDistribution']);
+        Route::get('by-level', [ApprovalAnalyticsController::class, 'byLevel']);
+        Route::get('performance', [ApprovalAnalyticsController::class, 'performance']);
+        Route::get('pending', [ApprovalAnalyticsController::class, 'pending']);
+        Route::get('workload', [ApprovalAnalyticsController::class, 'workload']);
+        Route::get('delegation', [ApprovalAnalyticsController::class, 'delegation']);
+        Route::get('escalation', [ApprovalAnalyticsController::class, 'escalation']);
+        Route::get('bottlenecks', [ApprovalAnalyticsController::class, 'bottlenecks']);
+    });
+
+    // Purchase Order Analytics Routes
+    Route::prefix('purchase-orders')->group(function () {
+        Route::get('summary', [PurchaseOrderAnalyticsController::class, 'summary']);
+        Route::get('volume', [PurchaseOrderAnalyticsController::class, 'volume']);
+        Route::get('status-distribution', [PurchaseOrderAnalyticsController::class, 'statusDistribution']);
+        Route::get('by-type', [PurchaseOrderAnalyticsController::class, 'byType']);
+        Route::get('delivery-performance', [PurchaseOrderAnalyticsController::class, 'deliveryPerformance']);
+        Route::get('cycle-time', [PurchaseOrderAnalyticsController::class, 'cycleTime']);
+        Route::get('overdue', [PurchaseOrderAnalyticsController::class, 'overdue']);
+        Route::get('by-supplier', [PurchaseOrderAnalyticsController::class, 'bySupplier']);
+        Route::get('trends', [PurchaseOrderAnalyticsController::class, 'trends']);
+        Route::get('signature-workflow', [PurchaseOrderAnalyticsController::class, 'signatureWorkflow']);
+    });
+});
 });
