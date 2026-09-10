@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AnimatedCounter from '../components/ui/animated-counter';
+import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
 
 // ============================================
 // TYPES
@@ -886,10 +887,6 @@ const StepsSection = () => (
   </section>
 );
 
-
-
-import { WrappedCornerTag } from '@/components/ui/wrapped-corner-tag';
-
 // ============================================
 // PRICING
 // ============================================
@@ -925,7 +922,7 @@ const PricingSection = ({ handleGetStarted }: { handleGetStarted: () => void }) 
               )}
             >
 
-              {/* ─── Corner tag: MOST POPULAR on the middle plan ─── */}
+              {/* ─── Corner tag: RECOMMENDED on the middle plan ─── */}
               {isPopular && (
                 <WrappedCornerTag
                   label="BEST VALUE"
@@ -1178,7 +1175,7 @@ const Footer = ({ scrollToSection }: { scrollToSection: (href: string) => void }
             <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
               One workspace for requisitions, approvals, LPOs, payments, and supplier relationships.
             </p>
-            <p className="mt-4 text-xs text-gray-500">A product of Reatech Technologies</p>
+            <p className="mt-4 text-xs text-gray-500">A product of Pasbest Ventures Limited</p>
           </div>
 
           {cols.map((col) => (
@@ -1200,7 +1197,7 @@ const Footer = ({ scrollToSection }: { scrollToSection: (href: string) => void }
         </div>
 
         <div className="mt-10 sm:mt-12 pt-8 border-t border-white/10 text-xs text-gray-500">
-          © 2026 <span className="text-gray-300">Reatech Technologies</span>. All rights reserved.
+          © 2026 <span className="text-gray-300">Pasbest Ventures Limited</span>. All rights reserved.
         </div>
       </div>
     </footer>

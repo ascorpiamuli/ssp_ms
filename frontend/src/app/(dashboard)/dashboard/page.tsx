@@ -858,73 +858,7 @@ export default function DashboardPage() {
         </div>
       }
     >
-      {/* ============================================ */}
-      {/* TIPS & SUGGESTIONS - Alert Banner */}
-      {/* ============================================ */}
 
-      <div className="space-y-3 mb-6">
-        {tips.map((tip, index) => {
-          const colorMap = {
-            amber: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300',
-            blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300',
-            purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300',
-            red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300',
-            orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300',
-            emerald: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300',
-          };
-          const iconColorMap = {
-            amber: 'text-amber-500',
-            blue: 'text-blue-500',
-            purple: 'text-purple-500',
-            red: 'text-red-500',
-            orange: 'text-orange-500',
-            emerald: 'text-emerald-500',
-          };
-          return (
-            <div
-              key={index}
-              className={cn(
-                "flex items-center justify-between p-4 rounded-xl border",
-                colorMap[tip.color as keyof typeof colorMap]
-              )}
-            >
-              <div className="flex items-center gap-3 flex-1">
-                <div className={cn("p-2 rounded-lg bg-white/50 dark:bg-white/5", iconColorMap[tip.color as keyof typeof iconColorMap])}>
-                  <tip.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">{tip.title}</p>
-                  <p className="text-sm opacity-80">{tip.description}</p>
-                </div>
-              </div>
-              {tip.href !== '#' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 rounded-xl border-2 bg-white/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10"
-                  onClick={() => router.push(tip.href)}
-                >
-                  {tip.action}
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ============================================ */}
-      {/* STATS CARDS */}
-      {/* ============================================ */}
-
-      <StatsCards
-        stats={statsItems}
-        isLoading={isLoading}
-        columns={8}
-        variant="default"
-        formatCompact={true}
-        tagOrientation="none"
-      />
 
       {/* ============================================ */}
       {/* QUICK ACTIONS - Modern Icon Card Style (same as procurement) */}
